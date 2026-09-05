@@ -1,0 +1,1 @@
+IMPORTANT: After you call this tool, you MUST call get_screenshot to get a screenshot of the node for context.

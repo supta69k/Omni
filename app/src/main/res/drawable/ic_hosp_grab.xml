@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the Figma node's own SVG export; do not hand-edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="59dp"
+    android:height="5dp"
+    android:viewportWidth="59"
+    android:viewportHeight="5">
+    <path
+        android:pathData="M2.5 2.5H56.5"
+        android:strokeColor="#338D84F9"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeMiterLimit="3.99933" />
+</vector>

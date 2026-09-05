@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the Figma node's own SVG export; do not hand-edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+    <path
+        android:pathData="M7.82983 3.75H6.96177C4.50654 3.75 3.27892 3.75 2.51618 4.48223C1.75344 5.21447 1.75344 6.39297 1.75344 8.75V12.0833C1.75344 14.4403 1.75344 15.6188 2.51618 16.3511C3.27892 17.0833 4.50654 17.0833 6.96177 17.0833H10.4673C12.9225 17.0833 14.1501 17.0833 14.9129 16.3511C15.407 15.8767 15.581 15.2149 15.6423 14.1667"
+        android:strokeColor="#302E2E"
+        android:strokeWidth="1.25"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M13.4723 5.83333V3.21129C13.4723 3.04858 13.6097 2.91667 13.7792 2.91667C13.8605 2.91667 13.9386 2.94771 13.9962 3.00296L17.9396 6.78871C18.1362 6.97735 18.2465 7.23322 18.2465 7.5C18.2465 7.76678 18.1362 8.02265 17.9396 8.21129L13.9962 11.997C13.9386 12.0523 13.8605 12.0833 13.7792 12.0833C13.6097 12.0833 13.4723 11.9514 13.4723 11.7887V9.16667H10.9298C7.39583 9.16667 6.09375 12.0833 6.09375 12.0833V10C6.09375 7.69882 8.03696 5.83333 10.434 5.83333H13.4723Z"
+        android:strokeColor="#302E2E"
+        android:strokeWidth="1.25"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma: `ix:namur-ok-filled`, 22x22 — the terms checkbox in its checked state. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+    <path
+        android:pathData="M17.4165 3.66692C17.9228 3.66692 18.3332 4.07733 18.3332 4.58359V17.4169C18.3332 17.9232 17.9228 18.3336 17.4165 18.3336H4.58321C4.07694 18.3336 3.66654 17.9232 3.66654 17.4169V4.58359C3.66654 4.07733 4.07694 3.66692 4.58321 3.66692H17.4165ZM16.4999 7.33363C16.1417 6.97548 15.5588 6.97344 15.2009 7.33184L9.8157 12.7244C9.45741 13.0832 8.87591 13.0829 8.51791 12.7238L6.79887 10.9996C6.44105 10.6407 5.85808 10.642 5.49972 11.0004C5.14147 11.3586 5.13997 11.9414 5.4986 12.2993L8.51873 15.313C8.87667 15.6702 9.45626 15.67 9.81403 15.3127L16.5018 8.6326C16.8601 8.27468 16.858 7.69176 16.4999 7.33363Z"
+        android:fillColor="#6C6C6C"
+        android:fillType="evenOdd" />
+</vector>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma: `mail-01`, 22x22, 1.375 stroke. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+    <path
+        android:pathData="M1.83333 5.5L8.17027 9.09056C10.5065 10.4143 11.4935 10.4143 13.8298 9.09056L20.1667 5.5"
+        android:strokeWidth="1.375"
+        android:strokeColor="#ABABAB"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M1.84779 12.3526C1.90771 15.1628 1.93768 16.5677 2.97455 17.6086C4.01141 18.6494 5.45447 18.6856 8.34059 18.7581C10.1194 18.8029 11.8806 18.8029 13.6594 18.7581C16.5456 18.6856 17.9886 18.6494 19.0255 17.6086C20.0624 16.5677 20.0923 15.1628 20.1522 12.3526C20.1715 11.4491 20.1715 10.5509 20.1522 9.64737C20.0923 6.83729 20.0624 5.43225 19.0255 4.39144C17.9886 3.35063 16.5456 3.31437 13.6594 3.24186C11.8806 3.19716 10.1194 3.19716 8.34058 3.24185C5.45447 3.31436 4.01141 3.35061 2.97454 4.39143C1.93767 5.43224 1.90771 6.83728 1.84778 9.64737C1.82851 10.5509 1.82852 11.4491 1.84779 12.3526Z"
+        android:strokeWidth="1.375"
+        android:strokeColor="#ABABAB"
+        android:strokeLineJoin="round" />
+</vector>

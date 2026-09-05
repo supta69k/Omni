@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma: `view`, 22x22, 1.375 stroke — the password reveal toggle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="22"
+    android:viewportHeight="22">
+    <path
+        android:pathData="M19.7487 10.1246C20.0273 10.5154 20.1667 10.7108 20.1667 11C20.1667 11.2892 20.0273 11.4846 19.7487 11.8754C18.4964 13.6314 15.2984 17.4167 11 17.4167C6.70155 17.4167 3.50359 13.6314 2.25137 11.8754C1.97268 11.4846 1.83333 11.2892 1.83333 11C1.83333 10.7108 1.97268 10.5154 2.25137 10.1246C3.50359 8.36865 6.70155 4.58333 11 4.58333C15.2984 4.58333 18.4964 8.36865 19.7487 10.1246Z"
+        android:strokeWidth="1.375"
+        android:strokeColor="#ABABAB" />
+    <path
+        android:pathData="M13.75 11C13.75 9.48117 12.5188 8.25 11 8.25C9.48117 8.25 8.25 9.48117 8.25 11C8.25 12.5188 9.48117 13.75 11 13.75C12.5188 13.75 13.75 12.5188 13.75 11Z"
+        android:strokeWidth="1.375"
+        android:strokeColor="#ABABAB" />
+</vector>

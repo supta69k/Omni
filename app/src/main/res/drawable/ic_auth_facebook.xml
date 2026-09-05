@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma: `Frame 150` — `Ellipse 13` (35x35, #F5F5F5) with the Facebook mark inside it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="35dp"
+    android:height="35dp"
+    android:viewportWidth="35"
+    android:viewportHeight="35">
+    <path
+        android:pathData="M17.5 0C27.165 0 35 7.835 35 17.5C35 27.165 27.165 35 17.5 35C7.835 35 0 27.165 0 17.5C0 7.835 7.835 0 17.5 0Z"
+        android:fillColor="#F5F5F5" />
+    <path
+        android:pathData="M30.0764 17.5045C30.0764 10.5588 24.4457 4.92812 17.5 4.92812C10.5543 4.92812 4.92365 10.5588 4.92365 17.5045C4.92365 23.7817 9.52268 28.9847 15.535 29.9281V21.1399H12.3418V17.5045H15.535V14.7338C15.535 11.5818 17.4126 9.84077 20.2853 9.84077C21.6613 9.84077 23.1005 10.0864 23.1005 10.0864V13.1814H21.5147C19.9523 13.1814 19.4651 14.1508 19.4651 15.1455V17.5045H22.9531L22.3955 21.1399H19.4651V29.9281C25.4774 28.9847 30.0764 23.7818 30.0764 17.5045Z"
+        android:fillColor="#1877F2" />
+</vector>

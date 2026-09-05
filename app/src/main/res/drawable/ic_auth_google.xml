@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Figma: `Frame 149` — `Ellipse 13` (35x35, #F5F5F5) with the Google mark (`Frame 146`, 24x24.856)
+  placed at 5.5, 5 inside it. Shipped as one drawable so the button is a single 35dp icon.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="35dp"
+    android:height="35dp"
+    android:viewportWidth="35"
+    android:viewportHeight="35">
+    <path
+        android:pathData="M17.5 0C27.165 0 35 7.835 35 17.5C35 27.165 27.165 35 17.5 35C7.835 35 0 27.165 0 17.5C0 7.835 7.835 0 17.5 0Z"
+        android:fillColor="#F5F5F5" />
+    <group
+        android:translateX="5.5"
+        android:translateY="5">
+        <path
+            android:pathData="M10.5851 0.107902C11.8728 -0.0359672 12.6348 -0.0359672 14.0184 0.107902C16.4676 0.470407 18.7381 1.60251 20.5014 3.34051C19.3098 4.46683 18.1339 5.6096 16.974 6.76849C14.7526 4.88576 12.2731 4.4512 9.53542 5.46479C7.52718 6.38839 6.12875 7.8851 5.34014 9.95492C4.05143 8.99549 2.77951 8.01372 1.52495 7.01005C1.43776 6.96416 1.33818 6.94735 1.24077 6.96209C3.23361 3.11967 6.34781 0.83435 10.5834 0.106125Z"
+            android:fillColor="#F44336"
+            android:fillAlpha="0.987"
+            android:fillType="evenOdd" />
+        <path
+            android:pathData="M1.23665 6.96228C1.3373 6.94689 1.43262 6.96287 1.52261 7.01024C2.77717 8.01391 4.04909 8.99568 5.3378 9.9551C5.13501 10.7616 5.00717 11.5851 4.95593 12.4151C4.99974 13.2179 5.12703 14.0059 5.3378 14.7791L1.33257 17.9673C-0.411621 14.3227 -0.443592 10.6543 1.23665 6.96228Z"
+            android:fillColor="#FFC107"
+            android:fillAlpha="0.997"
+            android:fillType="evenOdd" />
+        <path
+            android:pathData="M20.3111 21.8279C19.064 20.7281 17.7584 19.6964 16.4 18.7374C17.7617 17.7759 18.5882 16.4568 18.8795 14.7801H12.2065V10.1462C16.0548 10.1142 19.9014 10.1467 23.7461 10.2438C24.4756 14.2047 23.6331 17.7759 21.2187 20.9576C20.9316 21.2628 20.6275 21.5533 20.3111 21.8279Z"
+            android:fillColor="#448AFF"
+            android:fillAlpha="0.999"
+            android:fillType="evenOdd" />
+        <path
+            android:pathData="M5.33851 14.7805C6.79496 18.4003 9.46511 20.09 13.349 19.8496C14.4392 19.7234 15.4845 19.3426 16.4004 18.7378C17.7598 19.6993 19.0635 20.7294 20.3115 21.8283C18.334 23.6053 15.8127 24.6596 13.1589 24.8193C12.556 24.8675 11.9502 24.8675 11.3472 24.8193C6.82634 24.2865 3.48834 22.0024 1.33327 17.9669L5.33851 14.7805Z"
+            android:fillColor="#43A047"
+            android:fillAlpha="0.993"
+            android:fillType="evenOdd" />
+    </group>
+</vector>

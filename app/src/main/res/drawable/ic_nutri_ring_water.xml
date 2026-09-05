@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the Figma node's own SVG export; do not hand-edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="99.8889dp"
+    android:height="100.604dp"
+    android:viewportWidth="99.8889"
+    android:viewportHeight="100.604">
+    <path
+        android:pathData="M76.0265 93.5419C52.5076 107.728 21.7644 99.8696 7.35969 75.9889C-7.04505 52.1082 0.343443 21.2486 23.8624 7.0621C47.3813 -7.12438 78.1245 0.734363 92.5292 24.6151C106.934 48.4958 99.5454 79.3554 76.0265 93.5419ZM29.0346 15.6368C10.1796 27.01 4.25628 51.75 15.8045 70.8951C27.3527 90.0401 51.9993 96.3404 70.8543 84.9672C89.7093 73.594 95.6326 48.854 84.0844 29.709C72.5362 10.5639 47.8896 4.26359 29.0346 15.6368Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="94.097"
+                android:startY="81.2317"
+                android:endX="54.5924"
+                android:endY="18.0116">
+                <item android:offset="0.87057" android:color="#EAE7E7" />
+                <item android:offset="0.87598" android:color="#B3E1E1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

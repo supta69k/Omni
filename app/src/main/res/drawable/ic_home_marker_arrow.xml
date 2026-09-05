@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the Figma node's own SVG export; do not hand-edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="10dp"
+    android:height="10dp"
+    android:viewportWidth="10"
+    android:viewportHeight="10">
+
+    <path
+        android:pathData="M1.24999 7.91671H8.74999C8.82592 7.91647 8.90035 7.89553 8.96527 7.85614C9.03019 7.81674 9.08313 7.76039 9.1184 7.69315C9.15368 7.6259 9.16994 7.55031 9.16545 7.47451C9.16096 7.39871 9.13588 7.32557 9.09291 7.26296L5.34291 1.84629C5.18749 1.62171 4.81332 1.62171 4.65749 1.84629L0.90749 7.26296C0.864084 7.32544 0.838629 7.39861 0.833892 7.47454C0.829155 7.55047 0.845316 7.62624 0.880621 7.69363C0.915925 7.76102 0.969021 7.81744 1.03414 7.85677C1.09926 7.8961 1.17391 7.91683 1.24999 7.91671Z"
+        android:fillColor="#C8C8C8"
+        />
+
+</vector>
