@@ -130,7 +130,7 @@ fun FeedScreen(
                 Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
             }
 
-            FeedHeader()
+            FeedHeader(onProfileClick = { onNavigate(OmniNavItem.Setting) })
 
             OmniBottomNav(
                 selected = OmniNavItem.Feed,
@@ -153,9 +153,9 @@ fun FeedScreen(
  * that becomes [SearchRowGap] below the greeting row.
  */
 @Composable
-private fun FeedHeader(modifier: Modifier = Modifier) {
+private fun FeedHeader(modifier: Modifier = Modifier, onProfileClick: () -> Unit = {}) {
     Column(modifier = modifier.background(OmniBackground)) {
-        OmniHeader()
+        OmniHeader(onProfileClick = onProfileClick)
 
         Spacer(Modifier.height(SearchRowGap))
 

@@ -1,8 +1,17 @@
 package com.example.omni.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +20,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -19,10 +27,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,7 +71,10 @@ import com.example.omni.ui.theme.OmniNavPill
  * with the padding first the strip stayed transparent and the content behind showed through it.
  */
 @Composable
-fun OmniHeader(modifier: Modifier = Modifier) {
+fun OmniHeader(
+    modifier: Modifier = Modifier,
+    onProfileClick: () -> Unit = {},
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -77,10 +92,11 @@ fun OmniHeader(modifier: Modifier = Modifier) {
         ) {
             Image(
                 painter = painterResource(R.drawable.home_avatar),
-                contentDescription = "Your profile",
+                contentDescription = "Your profile and settings",
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(CircleShape),
+                    .clip(CircleShape)
+                    .clickable(onClick = onProfileClick),
             )
             Column {
                 Text(
@@ -175,20 +191,10 @@ enum class OmniNavItem(val label: String) {
             Fitness -> "Activity"
             Setting -> "Settings"
         }
-
-    /**
-     * The icon is not quite vertically centred in the source — each sits one to three px high of
-     * the 21.5 a 24 icon would need in a 67 bar — so each carries the design's own offset.
-     */
-    internal val verticalNudge: Dp
-        get() = when (this) {
-            Home -> (-2.5).dp        // Figma top 19
-            Feed -> (-2.5).dp        // Figma top 19
-            Sos -> (-1.5).dp         // Figma top 20
-            Fitness -> (-3.5).dp     // Figma top 18
-            Setting -> (-2.5).dp     // Figma top 19
-        }
 }
+
+/** The four tabs the bar shows. `Setting` is reached from the header avatar, not the bar. */
+private val NavBarItems = listOf(OmniNavItem.Home, OmniNavItem.Feed, OmniNavItem.Sos, OmniNavItem.Fitness)
 
 /**
  * The floating bar — Figma `Bottom Navbar` (node 124:231 and its siblings), a 380 x 67 dark pill
@@ -198,9 +204,19 @@ enum class OmniNavItem(val label: String) {
  * `mix-blend-plus-lighter` and would render as invisible white on a white page; Figma's own render
  * of the node is a flat #302E2E, so that is what ships.
  *
- * The five slots are absolutely positioned in the source and the numbers differ per variant, so the
- * horizontal layout is computed rather than hardcoded — see [navSlotOffsets], which reproduces both
- * variants the design actually contains.
+ * ## Motion: a pill that grows, springs and reflows
+ *
+ * The bar shows four bare white icons and turns the selected one into a white pill (icon + label).
+ * The selected pill is *wider* than an icon, so on every tap the tapped pill **grows** its label out
+ * while the previous one **shrinks** back to an icon, and the remaining icons slide to take up the
+ * freed space. That growth and reflow is driven by a bouncy [spring] rather than a linear tween — the
+ * gentle overshoot is what makes it read as fluid instead of a flat fade — and the whole bar is laid
+ * out with [Arrangement.SpaceEvenly] so the redistribution happens every frame as the pill resizes.
+ *
+ * A bounded [ripple] fires from the tapped pill, echoing the reference's radial pulse.
+ *
+ * The `Setting` destination is deliberately absent: it lives on the header avatar now, which frees a
+ * fourth of the track and gives the pill room to breathe.
  */
 @Composable
 fun OmniBottomNav(
@@ -208,111 +224,113 @@ fun OmniBottomNav(
     modifier: Modifier = Modifier,
     onSelect: (OmniNavItem) -> Unit = {},
 ) {
-    val offsets = navSlotOffsets(selected.ordinal)
-
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = NavSideGutter)
             .height(NavHeight)
             .clip(RoundedCornerShape(35.dp))
-            .background(OmniNavBar),
+            .background(OmniNavBar)
+            .padding(horizontal = NavTrackPadding),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        NavBarItems.forEach { item ->
+            NavCell(
+                item = item,
+                selected = item == selected,
+                onClick = { onSelect(item) },
+            )
+        }
+    }
+}
+
+/**
+ * One tab. Unselected it is a bare white icon; selected it is a white pill whose label springs out of
+ * the icon. The pill's width is not fixed — it wraps its content, so [AnimatedVisibility] expanding
+ * the label is what grows the pill, and the parent's [Arrangement.SpaceEvenly] reflows the siblings
+ * around it on the same spring.
+ */
+@Composable
+private fun NavCell(
+    item: OmniNavItem,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val pillColor by animateColorAsState(
+        targetValue = if (selected) OmniNavPill else Color.Transparent,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "navPillColor",
+    )
+    val interaction = remember { MutableInteractionSource() }
+
+    Row(
+        modifier = Modifier
+            .height(NavPillHeight)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(pillColor)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(bounded = true),
+                onClick = onClick,
+            )
+            .padding(horizontal = if (selected) NavPillPadding else NavIconPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OmniNavItem.entries.forEachIndexed { index, item ->
-            Spacer(Modifier.width(offsets[index]))
-            if (item == selected) {
-                NavPill(item = item, onClick = { onSelect(item) })
-            } else {
-                Image(
-                    painter = painterResource(item.lightIcon),
-                    contentDescription = item.contentDescription,
-                    modifier = Modifier
-                        .offset(y = item.verticalNudge)
-                        .size(NavIconSize)
-                        .clickable { onSelect(item) },
+        Image(
+            painter = painterResource(if (selected) item.darkIcon else item.lightIcon),
+            contentDescription = item.contentDescription,
+            modifier = Modifier.size(NavIconSize),
+        )
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) +
+                expandHorizontally(
+                    spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+                    expandFrom = Alignment.Start,
+                ),
+            exit = fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
+                shrinkHorizontally(
+                    spring(stiffness = Spring.StiffnessMedium),
+                    shrinkTowards = Alignment.Start,
+                ),
+        ) {
+            // Left padding is inside the animated region so it grows with the label, keeping the icon
+            // centred while collapsed and giving the label its gap only once it is out.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.width(NavLabelGap))
+                Text(
+                    text = item.label,
+                    style = HomeType.NavLabel,
+                    color = OmniInk,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
     }
 }
 
-/** The selected slot — a 113 x 59 white pill holding the icon and the only visible label. */
-@Composable
-private fun NavPill(item: OmniNavItem, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .width(NavPillWidth)
-            .height(59.dp)
-            .clip(RoundedCornerShape(35.dp))
-            .background(OmniNavPill)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            modifier = Modifier.offset(x = 1.dp, y = 0.5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Image(
-                painter = painterResource(item.darkIcon),
-                contentDescription = null,
-                modifier = Modifier.size(NavIconSize),
-            )
-            Text(text = item.label, style = HomeType.NavLabel, color = OmniInk, maxLines = 1)
-        }
-    }
-}
-
-/**
- * The gap that precedes each of the five slots, for a given selection.
- *
- * Figma hand-places the slots and the numbers move when the selection does, so rather than hardcode
- * one variant this derives them from the two rules the source obeys:
- *
- *  - an unselected slot sits at its own fixed x ([NavIconX]);
- *  - the pill is right-aligned to the right edge of the slot it replaces, but never starts before
- *    [NavPillLead];
- *  - and nothing may crowd its predecessor closer than [NavMinGap].
- *
- * That reproduces both variants the design contains exactly. With Home selected the slots land on
- * 4 / 155 / 217 / 279 / 341, and with Feed selected on 16 / 66 / 217 / 279 / 341 — Figma's own
- * numbers in both cases. The three remaining selections do not appear in the source; the same rules
- * keep them evenly spaced and non-overlapping, which is the most the design can tell us.
- */
-private fun navSlotOffsets(selected: Int): List<Dp> {
-    val left = FloatArray(NavIconX.size)
-    var earliest = 0f
-    NavIconX.indices.forEach { i ->
-        val width = if (i == selected) NavPillWidthPx else NavIconSizePx
-        val wanted =
-            if (i == selected) maxOf(NavPillLeadPx, NavIconX[i] + NavIconSizePx - NavPillWidthPx)
-            else NavIconX[i]
-        left[i] = maxOf(wanted, earliest)
-        earliest = left[i] + width + NavMinGapPx
-    }
-    return NavIconX.indices.map { i ->
-        val previousEnd =
-            if (i == 0) 0f
-            else left[i - 1] + (if (i - 1 == selected) NavPillWidthPx else NavIconSizePx)
-        (left[i] - previousEnd).dp
-    }
-}
-
-/** Where each 24dp icon sits when it is *not* the selected pill. Figma's numbers. */
-private val NavIconX = floatArrayOf(16f, 155f, 217f, 279f, 341f)
-
-/** Figma never lets the pill start closer than this to the left end of the track. */
-private const val NavPillLeadPx = 4f
-
-/** The tightest breathing room the design allows between two slots. */
-private const val NavMinGapPx = 26f
-
 private const val NavIconSizePx = 24f
-private const val NavPillWidthPx = 113f
-
 private val NavIconSize = NavIconSizePx.dp
-private val NavPillWidth = NavPillWidthPx.dp
+
+/** The pill's height inside the 67 track — the source pill was 59. */
+private val NavPillHeight = 59.dp
+
+/** Inner inset at each end of the *selected* pill so the icon and label clear its rounded edge. */
+private val NavPillPadding = 18.dp
+
+/** Inset around a bare icon, which doubles as its tap target's breathing room. */
+private val NavIconPadding = 10.dp
+
+/** Icon-to-label gap once the pill is open — the source used 6. */
+private val NavLabelGap = 8.dp
+
+/** Small inset so the leftmost/rightmost pill never kisses the rounded end of the track. */
+private val NavTrackPadding = 6.dp
 
 val OmniNavHeight = 67.dp
 private val NavHeight = OmniNavHeight

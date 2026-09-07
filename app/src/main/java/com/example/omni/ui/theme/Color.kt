@@ -94,13 +94,14 @@ val OmniFeedPostBody = Color(0xFF041F1E)
 
 // ---- Nutrition / food log (Figma `iPhone 14 & 15 Pro - 35`) ----
 
-val OmniNutriDayIdle = OmniBody           // #6C6C6C — the six unselected weekday chips
+val OmniNutriDaySurface = OmniFieldSurface  // #F5F5F5 — the six unselected weekday chips
+val OmniNutriDayIdle = OmniBody           // #6C6C6C — their letter and date
 val OmniNutriDaySelected = OmniAuthHeading  // #8D84F9 — the "W 04" chip
 val OmniNutriDayShadow = Color(0x408D84F9)  // rgba(141,132,249,0.25) under that chip
 val OmniNutriGaugeLabel = OmniStatLabel   // #3E3C3C — "You're 20% away to hit your daily goal."
 val OmniNutriMacroLabel = Color(0xFF787878)  // "Protein" / "Carbs" / "Fat"
 val OmniNutriUnit = Color(0xFF5A5A5A)     // the "kg"/"foot" suffixes, and "404cal"
-val OmniNutriFoodName = Color(0xFF444444) // "Eggs & Toast"
+val OmniNutriFoodName = OmniInk           // #302E2E — "Eggs & Toast"
 
 /** The three macro chips on each food-log row, in Figma's own order. */
 val OmniNutriChipProtein = Color(0xFFF996D3)
@@ -119,3 +120,34 @@ val OmniSheetDetail = OmniNutriUnit       // #5A5A5A — drive time and rating
 val OmniSheetShadow = Color(0x33000000)   // rgba(0,0,0,0.2), the sheet's lift off the map
 val OmniSheetGrab = Color(0x338D84F9)     // the grab handle, #8D84F9 at 20%
 val OmniCallButton = Color(0xFFB3E1E1)    // "Call the Hospital"
+
+val OmniMapSearchShadow = Color(0x40000000)  // rgba(0,0,0,0.25) under the search pill
+val OmniHospitalCard = OmniFieldSurface   // #F5F5F5 — the tray each hospital's photo and details sit in
+val OmniHospitalName = OmniInk            // #302E2E — "City Central Hospital"
+val OmniRouteButton = OmniInk             // #302E2E — "Find the Route"
+
+// ---- Settings (Figma `iPhone 14 & 15 Pro - 36`) ----
+//
+// The frame introduces no new hex: every value it uses is already in the palette above, so this
+// section is named aliases only. They exist so the screen reads in its own vocabulary and so a later
+// change to, say, the settings row title cannot silently repaint the feed.
+
+val OmniSetName = OmniHomeName            // #21241D — "Sayed Mahir", the same as in the header
+val OmniSetEmail = OmniNutriUnit          // #5A5A5A — "sayedmahir69@gmail.com"
+val OmniSetGroupLabel = OmniNutriMacroLabel  // #787878 — "Account Details" / "Preferences"
+val OmniSetRowTitle = OmniCardInk         // #000000 — "Personal Information"
+val OmniSetRowSubtitle = OmniNutriMacroLabel  // #787878 — "Name, DOB, Gender"
+val OmniSetRowAction = OmniCardInk        // #000000 — the "Edit" and "Change" links
+val OmniSetCardSurface = OmniFieldSurface  // #F5F5F5 — the "Healthcare Professional?" card
+val OmniSetCardTitle = OmniInk            // #302E2E — its heading
+val OmniSetCardBody = OmniNutriUnit       // #5A5A5A — its paragraph
+val OmniSetApply = OmniNutriChipCarbs     // #B184E1 — "Apply for Verification"
+val OmniSetLogOut = OmniInk               // #302E2E — the log-out button
+
+/** The two preference switches. Both are drawn on in the source, each with its own track colour. */
+val OmniSetTogglePush = OmniAuthHeading   // #8D84F9 — "Push Notifications"
+val OmniSetToggleCache = OmniHeroPink     // #F1BBDC — "Offline First Aid Cache"
+val OmniSetToggleKnob = OmniBackground    // the 21 white knob riding in both tracks
+
+/** Off is drawn nowhere in the source, so a switch that can be turned off borrows the idle grey. */
+val OmniSetToggleOff = OmniIndicatorInactive  // #E3E1E4

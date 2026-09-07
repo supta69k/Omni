@@ -126,7 +126,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
             }
 
-            OmniHeader()
+            OmniHeader(onProfileClick = { onNavigate(OmniNavItem.Setting) })
 
             OmniBottomNav(
                 selected = OmniNavItem.Home,

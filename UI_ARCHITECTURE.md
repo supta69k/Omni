@@ -36,17 +36,58 @@ MainActivity  (enableEdgeToEdge, setContent)
     │
     └─ OmniTheme                      // Material theme: fixed light color scheme + Typography
          │
-         └─ when(screen) { … }        // the app's simple top-level navigation
+         └─ Crossfade(screen)         // the app's top-level navigation + its page transition
               │
-              └─ Top-level screen      // OnboardingScreen / SignUpScreen / SignInScreen / HomeScreen
+              └─ when(screen) { … }
                    │
-                   └─ DesignFrame { }  // ← THE scaling boundary. Exactly one per screen, at the root.
-                        │
-                        └─ Screen content (Column / Box / verticalScroll, systemBarsPadding, …)
+                   └─ Top-level screen  // OnboardingScreen / SignUpScreen / SignInScreen / HomeScreen
+                        │              // FeedScreen / SosScreen / NutritionScreen / SettingScreen
+                        └─ DesignFrame { }  // ← THE scaling boundary. Exactly one per screen, at the root.
                              │
-                             └─ Reusable components (cards, fields, nav, bento tiles, …)
-                                  // These NEVER create their own DesignFrame or override density.
+                             └─ Screen content (Column / Box / verticalScroll, systemBarsPadding, …)
+                                  │
+                                  └─ Reusable components (cards, fields, nav, bento tiles, …)
+                                       // These NEVER create their own DesignFrame or override density.
 ```
+
+### 2a. Navigation and page transitions
+
+Navigation is a single `AppScreen` enum plus a `when` in `MainActivity` — deliberately no navigation
+library. Three rules keep it honest:
+
+1. **Pages crossfade; the motion lives in the navbar, not the page.** `Crossfade` fades one whole
+   page into the next (`PageFadeMillis`, ~200ms) with no directional slide — an earlier horizontal
+   slide fought the bottom bar's morph-in-place animation and was removed. `AppScreen`'s declaration
+   order therefore no longer drives any direction, but it is still declared in the order the user
+   moves through it (entry flow, then the five bottom-bar destinations in `OmniNavItem`'s own
+   left-to-right order) so the enum reads as the app's map; adding a tab means placing it at the
+   position it occupies in the bar.
+2. **Every screen keeps its own `DesignFrame` and its own `OmniBottomNav`.** The transition crossfades
+   whole pages, so the bar is redrawn per screen rather than hoisted into a shared scaffold. This is
+   what keeps §3's "exactly one frame per screen" rule true — do not hoist the nav without
+   revisiting that rule. The bar shows **four** tabs (`Home`, `Feed`, `Sos`, `Fitness`) spaced with
+   `SpaceEvenly`; the selected one becomes a white pill whose label springs out of the icon while the
+   siblings reflow, all on a bouncy `spring` (plus a `ripple` on tap) — that overshoot is the "fluid"
+   quality, so keep the springs, not linear tweens. The pill wraps its content rather than sitting in
+   a fixed cell, which is what lets it grow and the others slide.
+3. **`Setting` opens from the header avatar, not the bar.** Tapping the `OmniHeader` avatar calls
+   `onNavigate(OmniNavItem.Setting)`, so every screen that hosts the header passes that through. This
+   keeps the bar to four tabs (more room for the pill animation) and matches the reference UX. The
+   `Setting` enum entry still exists — it routes to `SettingScreen` — it just is not one of the four
+   `NavBarItems` the bar renders. `SettingScreen` therefore lights no pill (it passes the bar-absent
+   `OmniNavItem.Setting` as `selected`), which is the honest read: it is not a bottom-bar destination.
+4. **A nav destination must never route to a different screen than the tab it lights.** Each screen
+   hardcodes its own `OmniBottomNav(selected = …)`, so pointing a tab at another screen lights the
+   wrong pill. **Figma is not the authority on which pill is lit.** Several frames were duplicated
+   from an earlier one and still draw the *previous* screen's selection — both SOS frames draw Home's
+   pill. The tab that opens a screen is the tab that lights, whatever the mock shows. A future
+   destination that lands before its design does gets a neutral stub carrying its own tab — never a
+   stand-in screen, and never a no-op tap.
+5. **Two frames that are two states of one page stay one screen.** SOS is drawn twice in Figma (the
+   swipe track, then the hospitals sheet over the same map), and `SosScreen` renders both from one
+   internal `activated` flag. Splitting them into two `AppScreen` entries would crossfade the whole
+   page between two states of the same page and make the SOS pill fight itself, so a state change
+   inside a screen is animated inside that screen.
 
 Key files:
 
@@ -56,10 +97,13 @@ Key files:
 | `ui/DevicePreviews.kt` | The **only** approved multi-width `@Preview` set (`@DevicePreviews`). |
 | `ui/theme/Type.kt` | `Typography` (Material slots) + font families (`PlusJakartaSans`, `BodyFont`). |
 | `ui/theme/HomeType.kt` | `HomeType` — the ~20 named styles the dashboard needs beyond Material's slots. |
+| `ui/theme/ScreenTypes.kt` | `FeedType` / `NutritionType` / `MapType` / `SettingsType` — the same contract, per later frame. |
 | `ui/theme/Color.kt` | The palette. **Single source of truth for color** — never hardcode hex in a screen. |
 | `ui/theme/Theme.kt` | `OmniTheme` — fixed light scheme, dynamic color disabled, no dark theme yet. |
 | `ui/auth/AuthCommon.kt` | Shared auth pieces (logo, field, button, footer). |
+| `ui/components/OmniChrome.kt` | The shared sticky header + floating bottom bar, and `OmniNavItem`. |
 | `ui/home/HomeScreen.kt`, `HomeBento.kt`, `HomeUpdates.kt` | Home screen + its components. |
+| `ui/feed/FeedScreen.kt`, `ui/sos/SosScreen.kt`, `ui/nutrition/NutritionScreen.kt`, `ui/settings/SettingScreen.kt` | The other four bottom-bar screens. |
 | `ui/onboarding/OnboardingScreen.kt`, `OnboardingPage.kt` | Onboarding carousel + page data. |
 
 ---

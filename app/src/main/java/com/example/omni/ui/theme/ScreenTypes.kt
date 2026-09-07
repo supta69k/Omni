@@ -5,9 +5,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Text styles for the five frames added after the dashboard: the community feed
- * (`iPhone 14 & 15 Pro - 28`), the nutrition log (`- 35`), and the three map screens
- * (`- 31`, `- 30`, `- 33`).
+ * Text styles for the six frames added after the dashboard: the community feed
+ * (`iPhone 14 & 15 Pro - 28`), the nutrition log (`- 35`), the three map screens
+ * (`- 31`, `- 30`, `- 33`) and settings (`- 36`).
  *
  * Same contract as [HomeType]: sizes, leadings and letter spacings are Figma's own numbers with the
  * fractions kept, colour is never baked in, and every value is applied at the call site from
@@ -261,4 +261,87 @@ object MapType {
         lineHeight = 20.sp,
         letterSpacing = (-0.16).sp,
     )
+}
+
+// ---- Settings -----------------------------------------------------------------------------------
+
+object SettingsType {
+
+    /** "Sayed Mahir" at the top of the page. Two points larger than the header's own name. */
+    val ProfileName = TextStyle(
+        fontFamily = PlusJakartaSans,
+        fontWeight = FontWeight.Medium,
+        fontSize = 20.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.2).sp,
+    )
+
+    /** "sayedmahir69@gmail.com" under it. */
+    val ProfileEmail = TextStyle(
+        fontFamily = BodyFont,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.14).sp,
+    )
+
+    /** "Account Details" / "Emergency & Medical" / "Preferences" — the three group headings. */
+    val GroupLabel = TextStyle(
+        fontFamily = BodyFont,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.24).sp,
+    )
+
+    /** "Personal Information" / "Saved Emergencies" / "Push Notifications". */
+    val RowTitle = TextStyle(
+        fontFamily = BodyFont,
+        fontWeight = FontWeight.Medium,
+        fontSize = 18.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.27).sp,
+    )
+
+    /** "Name, DOB, Gender" and the other three sublines. */
+    val RowSubtitle = TextStyle(
+        fontFamily = BodyFont,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.21).sp,
+    )
+
+    /** The "Edit" and "Change" links opposite two of those rows. Figma sets them as [GroupLabel]. */
+    val RowAction = GroupLabel
+
+    /** "Healthcare Professional?" */
+    val CardTitle = TextStyle(
+        fontFamily = PlusJakartaSans,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        lineHeight = 25.sp,
+        letterSpacing = (-0.27).sp,
+    )
+
+    /** That card's paragraph — the only centred body copy in the app. */
+    val CardBody = TextStyle(
+        fontFamily = BodyFont,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = (-0.21).sp,
+    )
+
+    /** "Apply for Verification" */
+    val CardButton = TextStyle(
+        fontFamily = PlusJakartaSans,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        lineHeight = 20.sp,
+        letterSpacing = (-0.24).sp,
+    )
+
+    /** "Log Out" — [CardButton] two points up, and the page's last word. */
+    val LogOut = CardButton.copy(fontSize = 18.sp, letterSpacing = (-0.27).sp)
 }
