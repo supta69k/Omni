@@ -36,58 +36,85 @@ MainActivity  (enableEdgeToEdge, setContent)
     │
     └─ OmniTheme                      // Material theme: fixed light color scheme + Typography
          │
-         └─ Crossfade(screen)         // the app's top-level navigation + its page transition
+         └─ OmniApp()                 // holds `screen`; the session gate reconciles it (§2a rule 6)
               │
-              └─ when(screen) { … }
+              └─ Crossfade(screen)    // the app's top-level navigation + its page transition
                    │
-                   └─ Top-level screen  // OnboardingScreen / SignUpScreen / SignInScreen / HomeScreen
-                        │              // FeedScreen / SosScreen / NutritionScreen / SettingScreen
-                        └─ DesignFrame { }  // ← THE scaling boundary. Exactly one per screen, at the root.
-                             │
-                             └─ Screen content (Column / Box / verticalScroll, systemBarsPadding, …)
+                   └─ when(screen) { … }
+                        │
+                        └─ Top-level screen  // SplashScreen / OnboardingScreen / SignUpScreen / SignInScreen
+                             │              // HomeScreen / FeedScreen / SosScreen / NutritionScreen / SettingScreen
+                             └─ DesignFrame { }  // ← THE scaling boundary. Exactly one per screen, at the root.
                                   │
-                                  └─ Reusable components (cards, fields, nav, bento tiles, …)
-                                       // These NEVER create their own DesignFrame or override density.
+                                  └─ Screen content (Column / Box / verticalScroll, systemBarsPadding, …)
+                                       │
+                                       └─ Reusable components (cards, fields, nav, bento tiles, …)
+                                            // These NEVER create their own DesignFrame or override density.
 ```
 
 ### 2a. Navigation and page transitions
 
-Navigation is a single `AppScreen` enum plus a `when` in `MainActivity` — deliberately no navigation
-library. Three rules keep it honest:
+Navigation is a single `AppScreen` enum plus a `when` inside `MainActivity`'s `OmniApp()` — deliberately
+no navigation library. Six rules keep it honest:
 
 1. **Pages crossfade; the motion lives in the navbar, not the page.** `Crossfade` fades one whole
    page into the next (`PageFadeMillis`, ~200ms) with no directional slide — an earlier horizontal
    slide fought the bottom bar's morph-in-place animation and was removed. `AppScreen`'s declaration
    order therefore no longer drives any direction, but it is still declared in the order the user
-   moves through it (entry flow, then the five bottom-bar destinations in `OmniNavItem`'s own
-   left-to-right order) so the enum reads as the app's map; adding a tab means placing it at the
-   position it occupies in the bar.
+   moves through it (entry flow, then the four bottom-bar destinations in `OmniNavItem`'s own
+   left-to-right order, then the three the header opens) so the enum reads as the app's map; adding a
+   tab means placing it at the position it occupies in the bar.
 2. **Every screen keeps its own `DesignFrame` and its own `OmniBottomNav`.** The transition crossfades
    whole pages, so the bar is redrawn per screen rather than hoisted into a shared scaffold. This is
    what keeps §3's "exactly one frame per screen" rule true — do not hoist the nav without
-   revisiting that rule. The bar shows **four** tabs (`Home`, `Feed`, `Sos`, `Fitness`) spaced with
-   `SpaceEvenly`; the selected one becomes a white pill whose label springs out of the icon while the
-   siblings reflow, all on a bouncy `spring` (plus a `ripple` on tap) — that overshoot is the "fluid"
-   quality, so keep the springs, not linear tweens. The pill wraps its content rather than sitting in
-   a fixed cell, which is what lets it grow and the others slide.
-3. **`Setting` opens from the header avatar, not the bar.** Tapping the `OmniHeader` avatar calls
-   `onNavigate(OmniNavItem.Setting)`, so every screen that hosts the header passes that through. This
-   keeps the bar to four tabs (more room for the pill animation) and matches the reference UX. The
-   `Setting` enum entry still exists — it routes to `SettingScreen` — it just is not one of the four
-   `NavBarItems` the bar renders. `SettingScreen` therefore lights no pill (it passes the bar-absent
-   `OmniNavItem.Setting` as `selected`), which is the honest read: it is not a bottom-bar destination.
+   revisiting that rule. The bar shows **four** tabs (`Home`, `Feed`, `Sos`, `Fitness`) in a
+   `SpaceBetween` row; the selected one becomes a white pill whose label springs out of the icon while
+   the siblings reflow, all on a bouncy `spring` (plus a `ripple` on tap) — that overshoot is the
+   "fluid" quality, so keep the springs, not linear tweens. The pill wraps its content rather than
+   sitting in a fixed cell, which is what lets it grow and the others slide.
+
+   **Measure the track's insets to the icons, not to the cells.** Figma only ever draws this bar with
+   `Home` selected, so its literal `start = 4` is a measurement to the *pill*, which carries 19 of its
+   own padding — what the design places 23 from the edge is the icon. Hard-coding the 4 leaves the
+   bare `Home` icon jammed 4 from the edge in every other state while the far end keeps its 26, and
+   selecting the last tab exposes that worst. `OmniBottomNav` therefore derives both insets from
+   `NavIconInsetStart`/`NavIconInsetEnd` (23 / 26) and gives back the pill's own padding whenever the
+   edge cell *is* the pill, so `Home` still lands on the design's exact 4 / 55 / 55 / 55 / 26 and
+   every state keeps the same 23-to-354 band of icon ink. The inset and the pill padding share one
+   spring spec (`NavShapeSpring`) so their sum stays constant frame for frame and the outer icons hold
+   still through the switch; anything that animates a `Dp` into a `Modifier.padding` must also be
+   `coerceAtLeast(0.dp)`, since padding rejects negatives and a bouncy spring undershoots.
+3. **Three destinations open from the header, not the bar.** Tapping the `OmniHeader` avatar calls
+   `onNavigate(OmniNavItem.Setting)`; its two trailing icons call `onNavigate(OmniNavItem.Messages)`
+   and `onNavigate(OmniNavItem.Notifications)`. All three go through the *same* `onNavigate` a screen
+   already passes for its tabs, which is why they are `OmniNavItem` members at all: one lambda per
+   screen instead of a callback per icon. This keeps the bar to four tabs (more room for the pill
+   animation) and matches the reference UX. Those three entries route to real screens — `SettingScreen`
+   and two `ComingSoonScreen` stubs — they just are not among the four `NavBarItems` the bar renders, so
+   each passes its own bar-absent item as `selected` and lights no pill, which is the honest read: they
+   are not bottom-bar destinations.
 4. **A nav destination must never route to a different screen than the tab it lights.** Each screen
    hardcodes its own `OmniBottomNav(selected = …)`, so pointing a tab at another screen lights the
    wrong pill. **Figma is not the authority on which pill is lit.** Several frames were duplicated
    from an earlier one and still draw the *previous* screen's selection — both SOS frames draw Home's
    pill. The tab that opens a screen is the tab that lights, whatever the mock shows. A future
-   destination that lands before its design does gets a neutral stub carrying its own tab — never a
-   stand-in screen, and never a no-op tap.
+   destination that lands before its design does gets a neutral stub carrying its own tab
+   (`ComingSoonScreen`) — never a stand-in screen, and never a no-op tap.
 5. **Two frames that are two states of one page stay one screen.** SOS is drawn twice in Figma (the
    swipe track, then the hospitals sheet over the same map), and `SosScreen` renders both from one
    internal `activated` flag. Splitting them into two `AppScreen` entries would crossfade the whole
    page between two states of the same page and make the SOS pill fight itself, so a state change
    inside a screen is animated inside that screen.
+6. **The session decides the entry screen, and it does so in one place.** `AppScreen.Splash` is the
+   value `screen` starts on: it means "not decided yet", because both the Firebase session and the
+   DataStore onboarding flag arrive asynchronously and a gate that guessed would flash Onboarding for
+   a frame on every cold start of a signed-in app. A single `LaunchedEffect(authState, onboardingSeen)`
+   then moves `screen` on or off the `EntryScreens` set. It is keyed on the *session*, never on
+   `screen`, which is what lets a successful sign-in navigate straight to Home without the effect
+   second-guessing it. Screens never call `signOut` and then navigate themselves — `SettingScreen`
+   only clears the session and the gate does the rest, so there is one rule for where a signed-out app
+   goes rather than two that can disagree. `SplashScreen` is not in Figma; it is deliberately the
+   quietest thing in the app (background plus `AuthLogo`) so the hand-off to sign-in reads as one page.
 
 Key files:
 
@@ -95,14 +122,18 @@ Key files:
 |------|------|
 | `ui/DesignFrame.kt` | The **only** density/font scaling system. `DesignFrame { }` + `DesignFrameWidth = 415.dp`. |
 | `ui/DevicePreviews.kt` | The **only** approved multi-width `@Preview` set (`@DevicePreviews`). |
+| `ui/SplashScreen.kt` | The launch gate's "not decided yet" page. No design source; keep it minimal. |
+| `ui/ComingSoonScreen.kt` | Rule 4's neutral stub: a title, a line of copy, and the caller's own tab. |
 | `ui/theme/Type.kt` | `Typography` (Material slots) + font families (`PlusJakartaSans`, `BodyFont`). |
 | `ui/theme/HomeType.kt` | `HomeType` — the ~20 named styles the dashboard needs beyond Material's slots. |
 | `ui/theme/ScreenTypes.kt` | `FeedType` / `NutritionType` / `MapType` / `SettingsType` — the same contract, per later frame. |
 | `ui/theme/Color.kt` | The palette. **Single source of truth for color** — never hardcode hex in a screen. |
 | `ui/theme/Theme.kt` | `OmniTheme` — fixed light scheme, dynamic color disabled, no dark theme yet. |
 | `ui/auth/AuthCommon.kt` | Shared auth pieces (logo, field, button, footer). |
-| `ui/components/OmniChrome.kt` | The shared sticky header + floating bottom bar, and `OmniNavItem`. |
+| `ui/components/OmniChrome.kt` | The shared sticky header + floating bottom bar, `OmniHeaderState` and `OmniNavItem`. |
 | `ui/home/HomeScreen.kt`, `HomeBento.kt`, `HomeUpdates.kt` | Home screen + its components. |
+| `ui/home/SleepEntrySheet.kt` | The dashboard's only invented UI: a half-hour stepper on a hand-built bottom sheet (§6 rule 11). |
+| `domain/Recommendations.kt` | Pure Kotlin, no Compose: the progress-bar formula and the one status-threshold rule the cards share. |
 | `ui/feed/FeedScreen.kt`, `ui/sos/SosScreen.kt`, `ui/nutrition/NutritionScreen.kt`, `ui/settings/SettingScreen.kt` | The other four bottom-bar screens. |
 | `ui/onboarding/OnboardingScreen.kt`, `OnboardingPage.kt` | Onboarding carousel + page data. |
 
@@ -196,6 +227,40 @@ Only **after** that complete responsive/accessibility pass may the `fontScale` p
 6. Do **not** add fixed widths derived from raw device width — the coordinate system is the 415
    artboard, not the physical screen.
 7. Confirm the change behaves the same in Preview **and** on a real device / emulator.
+8. **Binding live data into a Figma box is a layout change.** Every text slot in this app was measured
+   against a mock string, several of them with no slack at all (`WaterCard`'s hint line already overflows
+   its source box by 5dp; `HomeGreeting`'s 248 has no room to grow). So a parameter that replaces a
+   literal must come with a plan for the strings the literal never covered: clamp it, ellipsise it, or
+   reword the long variant so it is never wider than the original — and say which, in the KDoc, with the
+   measurement. A count that can reach two digits, a name that can be one word or five, and an empty
+   value while the data is still loading are all the *normal* case once real data arrives.
+9. **When the design's own numbers disagree, fixing them is allowed — recording it is required.** The
+   water card drew 8 glasses, claimed a goal of 12 and a remainder of 5; no binding could satisfy all
+   three, so the goal became 8 (BACKEND_PLAN §3.1) and the default preview now fills 7 glasses instead of
+   Figma's 3. That is a deliberate divergence from the mock, noted in the composable's KDoc. Silent
+   divergence is what is forbidden, not divergence. The step tile's percentage is the same story: Figma
+   says 78% over "5,600 / 10,000", so the number is computed and the preview reads 56%. And the three
+   dashboard status chips are the same story again, at its sharpest: Figma calls 58% of the fibre goal
+   "Good" and 81% of the sleep goal "Fair", which no single threshold can produce, so one rule
+   (`domain/Recommendations.kt`) decides all three and **two of the design's labels change**. Whenever a
+   rule replaces hand-placed values, check the design against the rule before trusting either — the same
+   pass found `HomeUpdates.kt`'s claim that the axis marker points at the end of the filled bar, which
+   Figma's own coordinates disprove: it tracks the puck's centre, forty dp away.
+10. **A card only becomes tappable when the tap does something, and it never asks the system anything
+    itself.** `StepsCard` takes `permissionNeeded: Boolean` plus an `onEnableTracking` lambda and adds its
+    `clickable` only in that state — a permanently-tappable tile whose tap is a no-op in the normal case is
+    rule 4's dead tap wearing a card. The composable does not know what `ACTIVITY_RECOGNITION` is: the
+    launcher, the resume re-check and the fallback to the system settings page all live in `MainActivity`
+    (`rememberStepPermission`), which is the only place holding an Activity. A design with no state for a
+    refused permission still needs one — write the honest line rather than a plausible number.
+11. **When real data needs UI the design does not contain, build it out of parts the design already
+    owns.** Sleep is the one metric nothing can observe, so it has to be typed, and Figma draws no way to
+    type it: `ui/home/SleepEntrySheet.kt` is therefore invented UI, assembled from the hospitals sheet's
+    surface, shadow, grab handle and reveal timing so it adds behaviour without adding vocabulary. Its one
+    genuinely new value, a scrim, is aliased to an alpha the palette already carries. Prefer a hand-built
+    overlay inside the screen's own root `Box` to a Material component that hoists content into a separate
+    window — `ModalBottomSheet` would place its content outside `DesignFrame`, which silently invalidates
+    every measurement on the page, and it still needs an experimental opt-in.
 
 ---
 

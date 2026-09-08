@@ -2,8 +2,10 @@ package com.example.omni.ui.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,12 +26,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.data.model.DefaultFiberGoal
+import com.example.omni.data.model.DefaultSleepGoal
+import com.example.omni.domain.Status
+import com.example.omni.domain.formatAmount
+import com.example.omni.domain.progressBarOf
+import com.example.omni.domain.progressOf
+import com.example.omni.domain.remainingTo
+import com.example.omni.domain.statusFor
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniCardSurface
@@ -40,15 +52,19 @@ import com.example.omni.ui.theme.OmniStatusLabel
 import com.example.omni.ui.theme.OmniTabInactive
 
 /*
- * The three "Daily Updates" cards — Figma `Frame 82`, `Frame 101` and `Frame 120` inside `Frame 74`.
+ * The three "Daily updates & Recomindation" cards — Figma `Card container` nodes 149:301, 149:320 and
+ * 149:339 inside the dashboard's card stack. The redesign moved them (and renamed the section above
+ * them) but kept every internal measurement, so these three are unchanged from the previous frame.
  *
  * Unlike the bento tiles these are genuine stacks, so they are built as columns. Each is 354 wide
  * inside a 15 gutter, and the vertical padding and inner gap differ per card (6/6, 7/5, 5/5) — those
  * three pairs are what make all three cards come out at the heights Figma reports.
  *
- * The progress bars are the one place where absolute Figma coordinates become weights: the filled
- * segment sits at a measured offset inside the track, and expressing that offset as a weight ratio
- * reproduces the design exactly at 415dp wide while still scaling on other screens.
+ * The progress bars were the one place where absolute Figma coordinates became weights, with each bar's
+ * three widths hand-placed from the design. They are now computed from one number per card by
+ * `domain/Recommendations.kt` — see [com.example.omni.domain.progressBarOf] for why the design's own
+ * measurements gave the rule away, and BACKEND_PLAN §3.3 for the arithmetic. The same holds for the status
+ * chips: one threshold rule replaces three hand-picked labels, which **flips two of them** (see below).
  *
  * No text keeps a Figma width, and the reason is narrower than it once looked. Measured out of
  * `manrope.ttf`, the stand-in tracks Satoshi's advances to within a few percent — the fibre footnote
@@ -56,6 +72,14 @@ import com.example.omni.ui.theme.OmniTabInactive
  * heading wants 174.7 of its 172 box and "Action Needed" 81.2 of its 79. Every one of those boxes is
  * a dp or two short, so each row sizes to its contents instead, and where two children compete for
  * one row the fixed one wins and the flexible one takes the remainder.
+ *
+ * That slack is also what absorbs live data. The three footnotes are the only strings here that grow, and
+ * each of them shrinks or holds when it changes: a remainder is at most three characters where the design
+ * drew two, and the "goal met" variants are shorter outright than the sentences they replace. The one row
+ * that can wrap to a second line is the fibre footnote at 0g, where "Action Needed" is the widest chip and
+ * the sentence is at its longest — and that is fine, because nothing here has a fixed height. `UpdateCard`
+ * is a `Column` with padding, the footnote rows size to their contents, and the page scrolls, so the card
+ * grows by one line rather than clipping. The CPR card already ships that two-line look by design.
  */
 
 /** The shell every update card shares: a #F5F5F5 rounded rect with a 15 gutter. */
@@ -168,9 +192,24 @@ private fun UpdateProgress(
  * The words carried Figma's measured widths (31 / 19 / 79) and "Action Needed" — 81.2 in Manrope —
  * lost its tail; they size themselves now and refuse to wrap, so the chip is always whole and the
  * footnote beside it gets whatever is left.
+ *
+ * Which of the three shows is [com.example.omni.domain.statusFor]'s decision, not the card's, which is why
+ * this takes a [Status] rather than a drawable and a string. The design's own pairings could not survive
+ * that: it labels 58% fibre "Good" and 81% sleep "Fair", so one rule inevitably swaps them.
  */
 @Composable
-private fun StatusChip(dot: Int, label: String) {
+private fun StatusChip(status: Status) {
+    val dot = when (status) {
+        Status.Good -> R.drawable.ic_home_dot_good
+        Status.Fair -> R.drawable.ic_home_dot_fair
+        Status.ActionNeeded -> R.drawable.ic_home_dot_action
+    }
+    val label = when (status) {
+        Status.Good -> "Good"
+        Status.Fair -> "Fair"
+        Status.ActionNeeded -> "Action Needed"
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -191,33 +230,115 @@ private fun StatusChip(dot: Int, label: String) {
 }
 
 /**
- * "Increase Your Daily Fiber" — Figma `Frame 82`, 99.548 tall.
+ * The axis under a progress bar: `0` at one end, the goal at the other, and the marker triangle in between.
  *
- * Its axis row is 346 wide rather than the card's 354, and carries a small marker triangle at
- * x=183.833 that points at the end of the filled segment. Node `1:100`, a second triangle at
- * (198, 62.73), has no image source and renders nothing in Figma's own output, so it is skipped.
+ * The marker used to be placed by two weighted spacers carrying Figma's own gap widths, which worked only
+ * because those gaps had the axis labels' widths already subtracted out of them — and the goal label's
+ * width is exactly what stops being a constant once the goal is a parameter. So the row measures itself
+ * instead: [BoxWithConstraints] hands back the real width, and the triangle is offset to
+ * `markerFraction` of it. Because both this row and the bar above it are `fillMaxWidth`, the marker now
+ * lands on the puck's centre *exactly* rather than to within the label-width fudge the design carried.
+ *
+ * @param marker `null` on a card the design gives no triangle. Only the CPR card, whose axis is a plain
+ *   0–100% scale — the bar itself is the position there, and inventing a triangle for it would be adding a
+ *   component the source does not draw.
+ * @param endInset the sleep card's own 8 of trailing space after its label. Zero on the other two.
  */
 @Composable
-internal fun FiberCard(modifier: Modifier = Modifier) {
-    UpdateCard(verticalPadding = 6.dp, innerGap = 6.dp, modifier = modifier) {
-        UpdateHeader(title = "Increase Your Daily Fiber", value = "18/g", glyph = "🍃")
+private fun UpdateAxis(
+    height: Dp,
+    endLabel: String,
+    marker: AxisMarker? = null,
+    endInset: Dp = 0.dp,
+    startLabel: String = "0",
+) {
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth().height(height),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(startLabel, style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
 
-        UpdateProgress(trackHeight = 9.083.dp, lead = 155.5144f, fill = 72.6416f, tail = 125.8440f)
-
-        Row(
-            modifier = Modifier.fillMaxWidth().height(19.464.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("0", style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
-            Spacer(Modifier.weight(175.8331f))
+        if (marker != null) {
             Image(
-                painter = painterResource(R.drawable.ic_home_marker_arrow_sm),
+                painter = painterResource(marker.drawable),
                 contentDescription = null,
-                modifier = Modifier.width(8.333.dp).height(6.239.dp),
+                modifier = Modifier
+                    .offset(x = maxWidth * marker.fraction - marker.width / 2)
+                    .width(marker.width)
+                    .height(marker.height),
             )
-            Spacer(Modifier.weight(135.8339f))
-            Text("31 g", style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
         }
+
+        Text(
+            text = endLabel,
+            style = HomeType.AxisLabel,
+            color = OmniTabInactive,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = endInset),
+        )
+    }
+}
+
+/**
+ * One axis marker: which triangle, how big, and where along the row its centre goes.
+ *
+ * The two cards that have one use different assets at different sizes (8.333 x 6.239 against a square 10),
+ * which is Figma's own inconsistency and is reproduced rather than normalised.
+ */
+private class AxisMarker(
+    val drawable: Int,
+    val width: Dp,
+    val height: Dp,
+    val fraction: Float,
+)
+
+/**
+ * "Increase Your Daily Fiber" — Figma `Frame 82`, 99.548 tall.
+ *
+ * Its axis row is 346 wide in the source rather than the card's 354, and carries a small marker triangle at
+ * x=183.833. Node `1:100`, a second triangle at (198, 62.73), has no image source and renders nothing in
+ * Figma's own output, so it is skipped.
+ *
+ * [grams] reads 0 in the running app until Phase 6 starts rolling up meals, so the state this card is
+ * *usually* in today is the one the design never drew: nothing logged, "Action Needed", and the footnote at
+ * its longest. That is deliberate — an empty fibre log is worth saying out loud — and the default keeps the
+ * preview on the design's own 18/31g.
+ *
+ * The chip is the divergence to record (`UI_ARCHITECTURE.md` §6 rule 9): 18/31g is 58%, which the shared
+ * threshold rule calls **Fair**, where Figma drew "Good". Since the same rule calls the sleep card's 81%
+ * "Good" where Figma drew "Fair", the two labels are simply swapped in the source and no single rule can
+ * reproduce both.
+ */
+@Composable
+internal fun FiberCard(
+    grams: Float = 18f,
+    goalGrams: Float = DefaultFiberGoal,
+    modifier: Modifier = Modifier,
+) {
+    val progress = progressOf(grams, goalGrams)
+    val bar = progressBarOf(progress)
+
+    UpdateCard(verticalPadding = 6.dp, innerGap = 6.dp, modifier = modifier) {
+        UpdateHeader(
+            title = "Increase Your Daily Fiber",
+            // Figma's own "18/g", slash included, rather than the "18g" it reads as.
+            value = "${formatAmount(grams)}/g",
+            glyph = "🍃",
+        )
+
+        UpdateProgress(trackHeight = 9.083.dp, lead = bar.lead, fill = bar.fill, tail = bar.tail)
+
+        UpdateAxis(
+            height = 19.464.dp,
+            endLabel = "${formatAmount(goalGrams)} g",
+            marker = AxisMarker(
+                drawable = R.drawable.ic_home_marker_arrow_sm,
+                width = 8.333.dp,
+                height = 6.239.dp,
+                fraction = bar.markerFraction,
+            ),
+        )
 
         // Figma's 16-tall row and 194-wide footnote both needed loosening: the sentence measures
         // 194.1 in Manrope, a tenth over its box, and a 16 row is shorter than the 15.861 line plus
@@ -228,17 +349,17 @@ internal fun FiberCard(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = buildAnnotatedString {
-                    append("You’re ")
-                    withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("13g") }
-                    append(" away from your Goal")
-                },
+                text = remainderFootnote(
+                    remaining = remainingTo(grams, goalGrams),
+                    unit = "g",
+                    apostrophe = Curly,
+                ),
                 style = HomeType.CardFootnote,
                 color = OmniFootnote,
                 maxLines = 2,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            StatusChip(R.drawable.ic_home_dot_good, "Good")
+            StatusChip(statusFor(progress))
         }
     }
 }
@@ -248,29 +369,52 @@ internal fun FiberCard(modifier: Modifier = Modifier) {
  *
  * The footnote here uses a straight apostrophe where the fibre card uses a curly one. That is the
  * design's own inconsistency and both are reproduced verbatim rather than normalised.
+ *
+ * The only card with an input behind it: nothing in the app or the phone reports sleep (BACKEND_PLAN §3.5),
+ * so [onLog] opens `SleepEntrySheet` and the number is typed. With no entry yet [hours] is 0 and the card
+ * says so, which is the honest state rather than the design's mock 6.5.
+ *
+ * Its chip is the other half of the swap recorded on [FiberCard]: 6.5/8h is 81%, which the shared rule
+ * calls **Good**, where Figma drew "Fair".
  */
 @Composable
-internal fun SleepCard(modifier: Modifier = Modifier) {
-    UpdateCard(verticalPadding = 7.dp, innerGap = 5.dp, modifier = modifier) {
-        UpdateHeader(title = "Optimize Your Sleep", value = "6.5/h", glyph = "🌙", glyphWidth = 16.dp)
+internal fun SleepCard(
+    hours: Float = 6.5f,
+    goalHours: Float = DefaultSleepGoal,
+    onLog: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val progress = progressOf(hours, goalHours)
+    val bar = progressBarOf(progress)
 
-        UpdateProgress(trackHeight = 9.083.dp, lead = 196.4393f, fill = 72.6416f, tail = 84.9191f)
+    UpdateCard(
+        verticalPadding = 7.dp,
+        innerGap = 5.dp,
+        // The whole card is the target, not a button inside it: there is no button in the design, and this
+        // is the only card whose tap does something, so the tap has to be the card. Unlike `StepsCard` it is
+        // always live — logging sleep is never a no-op (§2a rule 4 is about dead taps, not about state).
+        modifier = modifier.clickable(onClick = onLog),
+    ) {
+        UpdateHeader(
+            title = "Optimize Your Sleep",
+            value = "${formatAmount(hours)}/h",
+            glyph = "🌙",
+            glyphWidth = 16.dp,
+        )
 
-        Row(
-            modifier = Modifier.fillMaxWidth().height(20.464.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("0", style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
-            Spacer(Modifier.weight(215f))
-            Image(
-                painter = painterResource(R.drawable.ic_home_marker_arrow),
-                contentDescription = null,
-                modifier = Modifier.size(10.dp),
-            )
-            Spacer(Modifier.weight(95f))
-            Text("8/h", style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
-            Spacer(Modifier.weight(8f))
-        }
+        UpdateProgress(trackHeight = 9.083.dp, lead = bar.lead, fill = bar.fill, tail = bar.tail)
+
+        UpdateAxis(
+            height = 20.464.dp,
+            endLabel = "${formatAmount(goalHours)}/h",
+            marker = AxisMarker(
+                drawable = R.drawable.ic_home_marker_arrow,
+                width = 10.dp,
+                height = 10.dp,
+                fraction = bar.markerFraction,
+            ),
+            endInset = 8.dp,
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -278,17 +422,17 @@ internal fun SleepCard(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = buildAnnotatedString {
-                    append("You're ")
-                    withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("1.5h") }
-                    append(" away from your Goal")
-                },
+                text = remainderFootnote(
+                    remaining = remainingTo(hours, goalHours),
+                    unit = "h",
+                    apostrophe = Straight,
+                ),
                 style = HomeType.CardFootnoteSleep,
                 color = OmniFootnote,
                 maxLines = 2,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            StatusChip(R.drawable.ic_home_dot_fair, "Fair")
+            StatusChip(statusFor(progress))
         }
     }
 }
@@ -296,48 +440,94 @@ internal fun SleepCard(modifier: Modifier = Modifier) {
 /**
  * "Learn Basic CPR Today" — Figma `Frame 120`, 114.131 tall.
  *
- * The odd one out: nothing has been done yet, so the bar starts at 0 and there is no marker on the
- * axis, and its footnote is the only one that wraps to two lines — hence the taller 34 row and the
- * card's extra 14.583 of height.
+ * The odd one out: the design draws it at 0%, so there is no marker on its axis, and its footnote is the
+ * only one that wraps to two lines — hence the taller 34 row and the card's extra 14.583 of height. A "0%"
+ * card still shows a coloured band, because the puck is a fixed width that slides rather than a fill that
+ * grows (BACKEND_PLAN §3.3). That is the design's intent, not a bug.
+ *
+ * [percent] stays 0 until Phase 7 ships the guides, so the two states above 0 are ones no build can reach
+ * yet. They exist anyway: the design has copy for "you have not started" only, and a card that kept telling
+ * someone to "read the 2-min guide" after they had read it would be worse than a plain sentence.
  */
 @Composable
-internal fun CprCard(modifier: Modifier = Modifier) {
+internal fun CprCard(percent: Int = 0, modifier: Modifier = Modifier) {
+    val clamped = percent.coerceIn(0, 100)
+    val bar = progressBarOf(clamped / 100f)
+
     UpdateCard(verticalPadding = 5.dp, innerGap = 5.dp, modifier = modifier) {
-        UpdateHeader(title = "Learn Basic CPR Today", value = "0%", glyph = null)
+        UpdateHeader(title = "Learn Basic CPR Today", value = "$clamped%", glyph = null)
 
-        UpdateProgress(trackHeight = 10.667.dp, lead = 0f, fill = 72.6416f, tail = 281.3584f)
+        UpdateProgress(trackHeight = 10.667.dp, lead = bar.lead, fill = bar.fill, tail = bar.tail)
 
-        Row(
-            modifier = Modifier.fillMaxWidth().height(19.464.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("0", style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
-            Text("100%", style = HomeType.AxisLabel, color = OmniTabInactive, maxLines = 1)
-        }
+        UpdateAxis(height = 19.464.dp, endLabel = "100%")
 
         // "Action Needed" is the widest chip of the three, so this is the row where the footnote has
         // least to work with — 260 of the 353 inner width. The sentence needs 334.7 on one line, so it
         // still breaks into the two the design shows, just at a later word than Figma's 206 box picks.
+        // Both of the other two sentences are shorter than this one and share a row with a narrower chip.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = buildAnnotatedString {
-                    append("Be prepared for an ")
-                    withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("emergency.") }
-                    append(" Read the ")
-                    withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("2-min") }
-                    append(" guide.")
-                },
+                text = cprFootnote(clamped),
                 style = HomeType.CardFootnoteWrapped,
                 color = OmniFootnote,
                 maxLines = 3,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            StatusChip(R.drawable.ic_home_dot_action, "Action Needed")
+            StatusChip(statusFor(clamped / 100f))
         }
     }
 }
+
+/**
+ * "You’re **13g** away from your Goal", and what it becomes once there is nothing left to owe.
+ *
+ * Shared by the two cards that count towards a number, because the sentence is the same sentence — only
+ * [unit] and the design's inconsistent [apostrophe] differ.
+ *
+ * The met variant is new copy for a state the design never drew, and it is deliberately **shorter** than
+ * the sentence it replaces (25 characters against 30), so the row it lands in cannot overflow a layout that
+ * already fits the longer one.
+ */
+private fun remainderFootnote(remaining: Float, unit: String, apostrophe: Char): AnnotatedString =
+    buildAnnotatedString {
+        if (remaining <= 0f) {
+            append("You${apostrophe}re at your daily Goal")
+            return@buildAnnotatedString
+        }
+        append("You${apostrophe}re ")
+        withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("${formatAmount(remaining)}$unit") }
+        append(" away from your Goal")
+    }
+
+/** The CPR card's sentence, which is three sentences: not started, part way, done. */
+private fun cprFootnote(percent: Int): AnnotatedString = buildAnnotatedString {
+    when {
+        percent <= 0 -> {
+            append("Be prepared for an ")
+            withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("emergency.") }
+            append(" Read the ")
+            withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("2-min") }
+            append(" guide.")
+        }
+
+        percent >= 100 -> {
+            append("Guide finished. ")
+            withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("You${Curly}re prepared.") }
+        }
+
+        else -> {
+            append("You${Curly}ve read ")
+            withStyle(SpanStyle(color = OmniFootnoteStrong)) { append("$percent%") }
+            append(" of the guide.")
+        }
+    }
+}
+
+/** The two apostrophes the design uses, named so a call site reads as a choice rather than a typo. */
+private const val Curly = '’'
+private const val Straight = '\''
+

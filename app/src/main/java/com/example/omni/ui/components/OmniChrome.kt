@@ -3,6 +3,8 @@ package com.example.omni.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -20,32 +22,46 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.theme.HomeType
+import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniHomeGreeting
 import com.example.omni.ui.theme.OmniHomeName
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniNavBar
 import com.example.omni.ui.theme.OmniNavPill
+import java.time.Duration
+import java.time.LocalTime
+import kotlinx.coroutines.delay
 
 /**
  * The two pieces of chrome every Omni screen shares: the sticky white header and the floating
@@ -62,6 +78,35 @@ import com.example.omni.ui.theme.OmniNavPill
 // ---- Header -------------------------------------------------------------------------------------
 
 /**
+ * Everything the header renders about the signed-in account, as one immutable value.
+ *
+ * It exists so the four screens that host [OmniHeader] pass **one** parameter instead of four each,
+ * and so every default is the literal string Figma draws — which is what keeps `@DevicePreviews`
+ * rendering the design without a Firebase session behind it (BACKEND_PLAN §4 rule 2).
+ *
+ * The unread counts are here rather than in the header's parameter list because they arrive from the
+ * same document as the name; they are 0 until the Cloud Functions of Phases 10 and 11 maintain them.
+ */
+data class OmniHeaderState(
+    val userName: String = "Sayed Mahir",
+    val photoUrl: String? = null,
+    val unreadMessages: Int = 0,
+    val unreadNotifications: Int = 0,
+) {
+    /**
+     * The name the dashboard greets, clamped to one word.
+     *
+     * The header's own slot has room for a full name; `HomeGreeting`'s is a fixed 248 and would clip a
+     * long one. Figma writes "Welcome back Mahir" — the *second* word of its own mock name, i.e. a
+     * nickname — so with real data this reads "Welcome back Sayed". That is a deliberate difference
+     * from the mock, not a regression: a rule that picks the last word would greet most people by
+     * their surname.
+     */
+    val greetingName: String
+        get() = userName.trim().substringBefore(' ').ifEmpty { userName }
+}
+
+/**
  * The sticky white bar — Figma `Top Bar` / `Frame 87`, minus its mock iOS status bar.
  *
  * Its inner column sits at x=21, not the 16 the scrolling content uses, so the avatar is inset
@@ -69,11 +114,19 @@ import com.example.omni.ui.theme.OmniNavPill
  *
  * The white fill is applied *before* [statusBarsPadding] so it paints the status-bar strip too;
  * with the padding first the strip stayed transparent and the content behind showed through it.
+ *
+ * [greeting] defaults to the clock rather than to a literal, so no caller has to re-derive it. Pass it
+ * explicitly (`greeting = "Good morning!"`) to pin a preview to the string Figma draws — otherwise a
+ * preview rendered after noon honestly says "Good afternoon!".
  */
 @Composable
 fun OmniHeader(
     modifier: Modifier = Modifier,
+    state: OmniHeaderState = OmniHeaderState(),
+    greeting: String = rememberTimeOfDayGreeting(),
     onProfileClick: () -> Unit = {},
+    onMessagesClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
 ) {
     Row(
         modifier = modifier
@@ -81,7 +134,7 @@ fun OmniHeader(
             .background(OmniBackground)
             .statusBarsPadding()
             .padding(top = HeaderTopGap, bottom = HeaderBottomGap)
-            .padding(horizontal = HeaderPadding)
+            .padding(start = HeaderPadding, end = HeaderActionPadding)
             .heightIn(min = HeaderRowHeight),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -90,48 +143,163 @@ fun OmniHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Image(
-                painter = painterResource(R.drawable.home_avatar),
+            // Coil rather than [Image]: `photoUrl` is a Storage download URL once the user has set a
+            // photo. All three of `placeholder`/`error`/`fallback` are the bundled asset the design
+            // draws, so the 36 circle is filled at every point in the load and the row never resizes —
+            // and a preview, which cannot reach the network, still renders the mock.
+            AsyncImage(
+                model = state.photoUrl,
                 contentDescription = "Your profile and settings",
+                placeholder = painterResource(R.drawable.home_avatar),
+                error = painterResource(R.drawable.home_avatar),
+                fallback = painterResource(R.drawable.home_avatar),
+                contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(AvatarSize)
                     .clip(CircleShape)
                     .clickable(onClick = onProfileClick),
             )
-            Column {
+            // A live display name is not the mock's tidy two words. Bounded and ellipsised so a long
+            // one truncates instead of shoving the two trailing icons off the bar: 250 is what the
+            // design leaves between the avatar's right edge (65) and the first icon's ink (329).
+            Column(modifier = Modifier.widthIn(max = HeaderNameMaxWidth)) {
                 Text(
-                    text = "Good morning!",
+                    text = greeting,
                     style = HomeType.Caption12,
                     color = OmniHomeGreeting,
                     maxLines = 1,
                     softWrap = false,
                 )
                 Text(
-                    text = "Sayed Mahir",
+                    text = state.userName,
                     style = HomeType.HeaderName,
                     color = OmniHomeName,
                     maxLines = 1,
                     softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(17.dp),
+            horizontalArrangement = Arrangement.spacedBy(HeaderActionGap),
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_home_search_chat),
+            HeaderAction(
+                icon = R.drawable.ic_home_search_chat,
                 contentDescription = "Messages",
-                modifier = Modifier.size(24.dp),
+                unread = state.unreadMessages,
+                onClick = onMessagesClick,
             )
-            Image(
-                painter = painterResource(R.drawable.ic_home_bell_badge),
+            HeaderAction(
+                icon = R.drawable.ic_home_bell_badge,
                 contentDescription = "Notifications",
-                modifier = Modifier.size(24.dp),
+                unread = state.unreadNotifications,
+                onClick = onNotificationsClick,
             )
         }
     }
+}
+
+/**
+ * One of the two trailing header icons, with a touch target and an unread dot.
+ *
+ * **The box is 40 and the icon is still 24.** Both icons had no `clickable` at all before; wrapping
+ * the bare 24 in one would have shipped a 24dp touch target, well under the 48 minimum. The design's
+ * own geometry caps how much can be reclaimed without moving any ink: the icons are 17 apart, so a box
+ * of 24 + 17 = 41 is the largest that still lets their centres stay where Figma puts them.
+ * [HeaderActionGap] and [HeaderActionPadding] are the design's 17 and 21 less the padding each box now
+ * carries, which is what keeps the ink at the same x. 48 is unreachable here without moving the icons.
+ *
+ * The dot is drawn only when there is something unread, so today — with the counters still 0 until
+ * Phases 10 and 11 — the header is pixel-identical to the design. Figma draws no badge anywhere, and
+ * there is no room on a 24 glyph for a numeral, so this deliberately shows *that* there is something
+ * rather than how much; the count belongs on the destination screen. Its ring is the page's own white,
+ * so it separates from the bell's purple disc as cleanly as from the white bar.
+ */
+@Composable
+private fun HeaderAction(
+    icon: Int,
+    contentDescription: String,
+    unread: Int,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(HeaderActionSize)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box {
+            Image(
+                painter = painterResource(icon),
+                contentDescription = contentDescription,
+                modifier = Modifier.size(HeaderIconSize),
+            )
+            if (unread > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        // `offset` takes negatives where `padding` would throw; the box's 8 of slack
+                        // on every side is what stops the overhang being clipped.
+                        .offset(x = BadgeOverhang, y = -BadgeOverhang)
+                        .size(BadgeSize)
+                        .clip(CircleShape)
+                        .background(OmniBackground)
+                        .padding(BadgeRing)
+                        .clip(CircleShape)
+                        .background(OmniAlertRed),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "Good morning!" / "Good afternoon!" / "Good evening!", from the clock.
+ *
+ * Not stored on the user — it is a function of *now*, and the boundaries are noon and 17:00.
+ *
+ * It also does not go stale. A plain `remember` would be read once at composition, so an app left open
+ * across noon would still say "Good morning!" until something else happened to recompose the header;
+ * instead the effect sleeps exactly until the next boundary and wakes to update. Two waits a day, not
+ * a ticker.
+ */
+@Composable
+fun rememberTimeOfDayGreeting(): String {
+    var greeting by remember { mutableStateOf(greetingFor(LocalTime.now())) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = LocalTime.now()
+            greeting = greetingFor(now)
+            delay(millisUntilGreetingChanges(now))
+        }
+    }
+
+    return greeting
+}
+
+/** Noon and 17:00 — the two times of day the greeting changes, in order. */
+private val GreetingBoundaries = listOf(LocalTime.NOON, LocalTime.of(17, 0))
+
+private fun greetingFor(now: LocalTime): String = when {
+    now < GreetingBoundaries[0] -> "Good morning!"
+    now < GreetingBoundaries[1] -> "Good afternoon!"
+    else -> "Good evening!"
+}
+
+/** How long until the next boundary, or until midnight if the evening is the current bracket. */
+private fun millisUntilGreetingChanges(now: LocalTime): Long {
+    val next = GreetingBoundaries.firstOrNull { it > now }
+    val remaining = if (next != null) {
+        Duration.between(now, next)
+    } else {
+        Duration.between(now, LocalTime.MAX).plusNanos(1)
+    }
+    // A boundary landing inside the same millisecond would otherwise spin this loop.
+    return remaining.toMillis().coerceAtLeast(1_000L)
 }
 
 /** 24 from the bottom of the mock status bar to the avatar row. */
@@ -140,8 +308,30 @@ private val HeaderTopGap = 24.dp
 /** The avatar's own height, which drives the row. */
 private val HeaderRowHeight = 36.dp
 
+private val AvatarSize = 36.dp
+
+/** 329 (the first trailing icon's ink) − 65 (the avatar's right edge plus its 8 gap), less breathing. */
+private val HeaderNameMaxWidth = 250.dp
+
 /** The header's gutter — 21 in the source, so the avatar is inset further than the cards. */
 private val HeaderPadding = 21.dp
+
+/** The trailing icons' own size, unchanged by the touch target that now surrounds them. */
+private val HeaderIconSize = 24.dp
+
+/** 24 of icon plus 8 of reclaimed space on each side — see [HeaderAction]. */
+private val HeaderActionSize = 40.dp
+
+/** The design's 17 between the icons, less the 8 + 8 their boxes now contribute: 17 − 16. */
+private val HeaderActionGap = 1.dp
+
+/** The design's 21 right gutter, less the 8 the last box carries. */
+private val HeaderActionPadding = HeaderPadding - (HeaderActionSize - HeaderIconSize) / 2
+
+/** The unread dot: 10 across, a 1.5 ring of page white, hung 2 outside the icon's corner. */
+private val BadgeSize = 10.dp
+private val BadgeRing = 1.5.dp
+private val BadgeOverhang = 2.dp
 
 /** 101 − (13 + 11.336 + 24 + 36): what is left below the avatar row inside the header frame. */
 private val HeaderBottomGap = 16.664.dp
@@ -152,35 +342,38 @@ val OmniHeaderHeight = 76.664.dp
 // ---- Bottom navigation --------------------------------------------------------------------------
 
 /**
- * The five destinations of the bottom bar, in Figma's own order, with the label each one shows when
- * it is the selected pill.
+ * Every destination the shared chrome can ask for, in Figma's own order, with the label each one shows
+ * when it is the selected pill.
  *
- * Every icon ships twice because the bar inverts: on the dark #302E2E track the icons are white,
- * and inside the white pill the selected one turns #302E2E.
+ * The first five are the bar's own order; [Setting] opens from the header avatar and [Messages] and
+ * [Notifications] from the two header icons, so three of the seven are not [NavBarItems] and light no
+ * pill. They are still members because they are places the chrome navigates to, and one enum means one
+ * `onNavigate` lambda per screen instead of a callback per icon.
+ *
+ * Each icon is a single-colour stroked vector drawn in white, and the bar inverts it by tint rather
+ * than by swapping assets: every one is #FFFFFF on the #302E2E track and #302E2E inside the white
+ * pill, which are exactly [OmniNavPill] and [OmniInk]. Figma exported a second, dark copy of all five
+ * (`ic_nav_*_dark`); those are redundant now and nothing references them.
  */
 enum class OmniNavItem(val label: String) {
     Home("Home"),
     Feed("Feed"),
     Sos("SOS"),
     Fitness("Fitness"),
-    Setting("Setting");
+    Setting("Setting"),
+    Messages("Messages"),
+    Notifications("Notifications");
 
-    internal val lightIcon: Int
+    internal val icon: Int
         get() = when (this) {
             Home -> R.drawable.ic_nav_home_light
             Feed -> R.drawable.ic_home_nav_rss
             Sos -> R.drawable.ic_home_nav_ambulance
             Fitness -> R.drawable.ic_home_nav_shoe
             Setting -> R.drawable.ic_home_nav_settings
-        }
-
-    internal val darkIcon: Int
-        get() = when (this) {
-            Home -> R.drawable.ic_home_nav_home
-            Feed -> R.drawable.ic_nav_rss_dark
-            Sos -> R.drawable.ic_nav_ambulance_dark
-            Fitness -> R.drawable.ic_nav_shoe_dark
-            Setting -> R.drawable.ic_nav_settings_dark
+            // Never rendered by the bar — neither is a tab — but the enum owes every member an icon.
+            Messages -> R.drawable.ic_home_search_chat
+            Notifications -> R.drawable.ic_home_bell_badge
         }
 
     internal val contentDescription: String
@@ -190,6 +383,8 @@ enum class OmniNavItem(val label: String) {
             Sos -> "Emergency"
             Fitness -> "Activity"
             Setting -> "Settings"
+            Messages -> "Messages"
+            Notifications -> "Notifications"
         }
 }
 
@@ -211,9 +406,41 @@ private val NavBarItems = listOf(OmniNavItem.Home, OmniNavItem.Feed, OmniNavItem
  * while the previous one **shrinks** back to an icon, and the remaining icons slide to take up the
  * freed space. That growth and reflow is driven by a bouncy [spring] rather than a linear tween — the
  * gentle overshoot is what makes it read as fluid instead of a flat fade — and the whole bar is laid
- * out with [Arrangement.SpaceEvenly] so the redistribution happens every frame as the pill resizes.
+ * out with [Arrangement.SpaceBetween] so the redistribution happens every frame as the pill resizes.
  *
  * A bounded [ripple] fires from the tapped pill, echoing the reference's radial pulse.
+ *
+ * ## Geometry: 4 / 55 / 55 / 55 / 26, measured to the icons
+ *
+ * The source (node 178:26, and identically 177:17 and the bar inside 149:221) is not evenly
+ * distributed. Its pill hugs the left edge and the last icon stops well short of the right one: 4 in,
+ * then 55 between each cell, then 26 out. A [Arrangement.SpaceBetween] row is what reproduces those
+ * positions — `SpaceEvenly` never could, its equal gaps having to average 4, 55 and 26.
+ *
+ * But Figma only ever draws this bar with `Home` selected, and a literal `start = 4` is only right in
+ * that one state. The 4 is the gap to the *pill*, which carries 19 of its own padding, so what the
+ * design actually places 23 from the left edge is the **icon**. Hard-code the 4 and the moment another
+ * tab is picked the bare `Home` icon sits 4 from the edge — jammed against it, while the pill at the
+ * far end keeps its 26 of air. That asymmetry is what the last tab exposes worst.
+ *
+ * So both track insets are measured to the icon ([NavIconInsetStart] / [NavIconInsetEnd]) and give
+ * back the pill's own padding whenever the edge cell *is* the pill:
+ *
+ * | selected  | start           | end             | first icon | last ink |
+ * |-----------|-----------------|-----------------|------------|----------|
+ * | `Home`    | 23 − 19 = **4** | **26**          | 23         | 354      |
+ * | `Feed`    | **23**          | **26**          | 23         | 354      |
+ * | `Sos`     | **23**          | **26**          | 23         | 354      |
+ * | `Fitness` | **23**          | 26 − 17 = **9** | 23         | 354      |
+ *
+ * `Home` still lands on the design's literal 4 / 55 / 55 / 55 / 26 (pill 113 + three 24 icons = 185
+ * of the 350 inner width, leaving three 55 gaps), and every other state keeps the same 23 and 354 of
+ * icon ink, so the bar stays balanced whichever tab is lit.
+ *
+ * The inset and the pill's padding share [NavShapeSpring] on purpose: their sum is 23 at the start
+ * edge and 26 at the end in *every* state, and because a spring's normalised response is
+ * amplitude-independent, one shared spec makes the two animations cancel frame for frame. The outer
+ * icons therefore hold still through the switch while the pill and the reflow are what move.
  *
  * The `Setting` destination is deliberately absent: it lives on the header avatar now, which frees a
  * fourth of the track and gives the pill room to breathe.
@@ -224,6 +451,19 @@ fun OmniBottomNav(
     modifier: Modifier = Modifier,
     onSelect: (OmniNavItem) -> Unit = {},
 ) {
+    val trackStart by animateDpAsState(
+        targetValue = NavIconInsetStart -
+            if (selected == NavBarItems.first()) NavPillPaddingStart else 0.dp,
+        animationSpec = NavShapeSpring,
+        label = "navTrackStart",
+    )
+    val trackEnd by animateDpAsState(
+        targetValue = NavIconInsetEnd -
+            if (selected == NavBarItems.last()) NavPillPaddingEnd else 0.dp,
+        animationSpec = NavShapeSpring,
+        label = "navTrackEnd",
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -231,9 +471,11 @@ fun OmniBottomNav(
             .height(NavHeight)
             .clip(RoundedCornerShape(35.dp))
             .background(OmniNavBar)
-            .padding(horizontal = NavTrackPadding),
+            // [Modifier.padding] throws on a negative Dp, and an in-flight spring can undershoot its
+            // target, so every animated inset in this file is clamped before it reaches a modifier.
+            .padding(start = trackStart.coerceAtLeast(0.dp), end = trackEnd.coerceAtLeast(0.dp)),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         NavBarItems.forEach { item ->
             NavCell(
@@ -248,8 +490,23 @@ fun OmniBottomNav(
 /**
  * One tab. Unselected it is a bare white icon; selected it is a white pill whose label springs out of
  * the icon. The pill's width is not fixed — it wraps its content, so [AnimatedVisibility] expanding
- * the label is what grows the pill, and the parent's [Arrangement.SpaceEvenly] reflows the siblings
+ * the label is what grows the pill, and the parent's [Arrangement.SpaceBetween] reflows the siblings
  * around it on the same spring.
+ *
+ * A bare cell is exactly the 24 icon inside the 59-high row: no side padding, because the source
+ * measures the gaps between the icon boxes themselves (55 between neighbours), and any padding here
+ * would push the icons inward off their measured slots.
+ *
+ * The pill's 19 / 17 is therefore animated, not switched. Flipping it on selection moved the icon 19
+ * in a single frame while the label beside it took ~400ms to spring out, which is the hitch that made
+ * the switch feel broken: the icon arrived, then the pill caught up around it. On [NavShapeSpring] the
+ * padding and the parent's track inset are one motion instead (see [OmniBottomNav]).
+ *
+ * The icon's colour is animated for the same reason, and on the *same* spec as the pill behind it
+ * ([NavTintSpring]). Swapping to a second, dark drawable the instant `selected` flipped left a white
+ * icon sitting on a pill that was still half white — the icon disappeared for a few frames on the way
+ * in and again on the way out. Tinting one drawable keeps the icon exactly as far from its backdrop
+ * at every point in the fade as it is at either end.
  */
 @Composable
 private fun NavCell(
@@ -259,8 +516,23 @@ private fun NavCell(
 ) {
     val pillColor by animateColorAsState(
         targetValue = if (selected) OmniNavPill else Color.Transparent,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = NavTintSpring,
         label = "navPillColor",
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) OmniInk else OmniNavPill,
+        animationSpec = NavTintSpring,
+        label = "navIconColor",
+    )
+    val pillStart by animateDpAsState(
+        targetValue = if (selected) NavPillPaddingStart else 0.dp,
+        animationSpec = NavShapeSpring,
+        label = "navPillStart",
+    )
+    val pillEnd by animateDpAsState(
+        targetValue = if (selected) NavPillPaddingEnd else 0.dp,
+        animationSpec = NavShapeSpring,
+        label = "navPillEnd",
     )
     val interaction = remember { MutableInteractionSource() }
 
@@ -274,29 +546,21 @@ private fun NavCell(
                 indication = ripple(bounded = true),
                 onClick = onClick,
             )
-            .padding(horizontal = if (selected) NavPillPadding else NavIconPadding),
+            .padding(start = pillStart.coerceAtLeast(0.dp), end = pillEnd.coerceAtLeast(0.dp)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
-            painter = painterResource(if (selected) item.darkIcon else item.lightIcon),
+            painter = painterResource(item.icon),
             contentDescription = item.contentDescription,
+            colorFilter = ColorFilter.tint(iconColor),
             modifier = Modifier.size(NavIconSize),
         )
         AnimatedVisibility(
             visible = selected,
             enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) +
-                expandHorizontally(
-                    spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow,
-                    ),
-                    expandFrom = Alignment.Start,
-                ),
+                expandHorizontally(NavLabelEnterSpring, expandFrom = Alignment.Start),
             exit = fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
-                shrinkHorizontally(
-                    spring(stiffness = Spring.StiffnessMedium),
-                    shrinkTowards = Alignment.Start,
-                ),
+                shrinkHorizontally(NavLabelExitSpring, shrinkTowards = Alignment.Start),
         ) {
             // Left padding is inside the animated region so it grows with the label, keeping the icon
             // centred while collapsed and giving the label its gap only once it is out.
@@ -320,23 +584,70 @@ private val NavIconSize = NavIconSizePx.dp
 /** The pill's height inside the 67 track — the source pill was 59. */
 private val NavPillHeight = 59.dp
 
-/** Inner inset at each end of the *selected* pill so the icon and label clear its rounded edge. */
-private val NavPillPadding = 18.dp
-
-/** Inset around a bare icon, which doubles as its tap target's breathing room. */
-private val NavIconPadding = 10.dp
+/** 19 before the icon and 17 after the label inside the pill (node 178:26: 19 + 24 + 6 + 47 + 17). */
+private val NavPillPaddingStart = 19.dp
+private val NavPillPaddingEnd = 17.dp
 
 /** Icon-to-label gap once the pill is open — the source used 6. */
-private val NavLabelGap = 8.dp
-
-/** Small inset so the leftmost/rightmost pill never kisses the rounded end of the track. */
-private val NavTrackPadding = 6.dp
+private val NavLabelGap = 6.dp
 
 val OmniNavHeight = 67.dp
 private val NavHeight = OmniNavHeight
 
 /** (415 − 380) / 2 — reproduces the design's 380 track inside the 415 artboard. */
 private val NavSideGutter = 17.5.dp
+
+/**
+ * The track's own insets, measured to the **icon** rather than to the cell.
+ *
+ * The source puts its pill 4 from the left edge, and the pill carries 19 of internal padding, so the
+ * first icon's ink starts at 23; 26 is the design's own margin from the last icon to the right edge.
+ * Both are constants of the *design*, true in every state, which is why [OmniBottomNav] derives its
+ * paddings from them instead of hard-coding the 4 that only holds while `Home` is lit.
+ */
+private val NavIconInsetStart = 23.dp
+private val NavIconInsetEnd = 26.dp
+
+/**
+ * The spec for every animated [Dp] in the bar — the pill's own 19 / 17 and the track insets that give
+ * it back. One shared spec is the point: a spring's normalised response does not depend on amplitude,
+ * so `4 → 23` and `19 → 0` stay a constant 23 the whole way across and the outer icons never budge.
+ *
+ * Non-bouncy, so it also cannot undershoot into the negative [Dp] that [padding] rejects. The bounce
+ * the eye reads comes from [NavLabelEnterSpring] and the reflow it drives, which is 53 of travel
+ * against these 36.
+ */
+private val NavShapeSpring = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessLow,
+    visibilityThreshold = 0.1.dp,
+)
+
+/**
+ * The label's growth and collapse. Same [Spring.StiffnessLow] in both directions so the pill losing
+ * its label and the pill gaining one trade width at the same tempo — mismatched stiffnesses made the
+ * total content width dip mid-switch, which pumped all three gaps open and shut. Only the damping
+ * differs: the incoming label overshoots a little (this is the bounce), the outgoing one must not,
+ * because an undershooting [shrinkHorizontally] would hand a negative size to layout.
+ */
+private val NavLabelEnterSpring = spring(
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessLow,
+    visibilityThreshold = IntSize.VisibilityThreshold,
+)
+private val NavLabelExitSpring = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessLow,
+    visibilityThreshold = IntSize.VisibilityThreshold,
+)
+
+/**
+ * The pill's fill and the icon's tint, deliberately one spec: the icon is only ever legible because
+ * it is the inverse of whatever is directly behind it, so the two must not be allowed to drift apart
+ * mid-fade. Quicker than [NavShapeSpring] — colour has no distance to travel and lagging the layout
+ * makes the pill look like it is catching up with itself.
+ */
+private val NavTintSpring = spring<Color>(stiffness = Spring.StiffnessMediumLow)
 
 /** The bar floats 16 above the system navigation bar. */
 val OmniNavBottomGap = 16.dp

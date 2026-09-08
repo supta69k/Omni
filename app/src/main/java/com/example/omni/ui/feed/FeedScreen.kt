@@ -42,6 +42,7 @@ import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniBottomNav
 import com.example.omni.ui.components.OmniHeader
+import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
@@ -77,6 +78,7 @@ import com.example.omni.ui.theme.OmniTheme
  */
 @Composable
 fun FeedScreen(
+    header: OmniHeaderState = OmniHeaderState(),
     onNavigate: (OmniNavItem) -> Unit = {},
     onCompose: () -> Unit = {},
 ) {
@@ -130,7 +132,7 @@ fun FeedScreen(
                 Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
             }
 
-            FeedHeader(onProfileClick = { onNavigate(OmniNavItem.Setting) })
+            FeedHeader(header = header, onNavigate = onNavigate)
 
             OmniBottomNav(
                 selected = OmniNavItem.Feed,
@@ -153,9 +155,18 @@ fun FeedScreen(
  * that becomes [SearchRowGap] below the greeting row.
  */
 @Composable
-private fun FeedHeader(modifier: Modifier = Modifier, onProfileClick: () -> Unit = {}) {
+private fun FeedHeader(
+    modifier: Modifier = Modifier,
+    header: OmniHeaderState = OmniHeaderState(),
+    onNavigate: (OmniNavItem) -> Unit = {},
+) {
     Column(modifier = modifier.background(OmniBackground)) {
-        OmniHeader(onProfileClick = onProfileClick)
+        OmniHeader(
+            state = header,
+            onProfileClick = { onNavigate(OmniNavItem.Setting) },
+            onMessagesClick = { onNavigate(OmniNavItem.Messages) },
+            onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
+        )
 
         Spacer(Modifier.height(SearchRowGap))
 

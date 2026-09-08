@@ -2,7 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Firebase Auth, Firestore and Storage all need the network; the manifest previously declared
+         no permissions at all, so every call would have failed at runtime. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- The step counter. A runtime permission from API 29 up; below that the declaration alone is
+         enough. Refusing it is handled in the UI (the card offers to turn tracking on) rather than
+         being treated as an error. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Not required: plenty of devices have no pedometer, and the app is perfectly usable without
+         one. Marking it required would hide Omni from those devices in the Play Store. -->
+    <uses-feature
+        android:name="android.hardware.sensor.stepcounter"
+        android:required="false" />
+
     <application
+        android:name=".OmniApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

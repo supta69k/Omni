@@ -46,11 +46,17 @@ import com.example.omni.ui.theme.OmniTheme
  *
  * The column is scrollable: at 415x920 it fits with room to spare, but it is 843dp tall and would
  * otherwise clip on a shorter screen or when the keyboard is up.
+ *
+ * Like [SignInScreen] it keeps its own field state and hands the values out through
+ * [onCreateAccount]; validation and Firebase both live behind that callback (BACKEND_PLAN §4 rule 1).
  */
 @Composable
 fun SignUpScreen(
     onSignIn: () -> Unit = {},
-    onCreateAccount: () -> Unit = {},
+    onCreateAccount: (name: String, email: String, password: String, confirm: String) -> Unit =
+        { _, _, _, _ -> },
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -76,7 +82,7 @@ fun SignUpScreen(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(36.dp),
+                    verticalArrangement = Arrangement.spacedBy(ButtonBlockGap),
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -141,7 +147,17 @@ fun SignUpScreen(
                         }
                     }
 
-                    AuthPrimaryButton(label = "Create an Account", onClick = onCreateAccount)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(MessageSlotGap),
+                    ) {
+                        AuthMessageSlot(message = errorMessage)
+                        AuthPrimaryButton(
+                            label = "Create an Account",
+                            onClick = { onCreateAccount(name, email, password, confirmPassword) },
+                            isLoading = isLoading,
+                        )
+                    }
                 }
 
                 AuthFooter(
@@ -191,10 +207,25 @@ private fun TermsRow() {
  */
 private val TopSpacing = 34.dp
 
+/**
+ * The design leaves 36 between the form and the button. As on sign in, the message slot and its gap
+ * come out of that 36 instead of extending it, so the button does not move.
+ */
+private val ButtonBlockGap = 36.dp - MessageSlotHeight - MessageSlotGap
+
 @DevicePreviews
 @Composable
 private fun SignUpScreenPreview() {
     OmniTheme {
         SignUpScreen()
+    }
+}
+
+/** The validation failure the design file has no state for. */
+@DevicePreviews
+@Composable
+private fun SignUpScreenErrorPreview() {
+    OmniTheme {
+        SignUpScreen(errorMessage = "Passwords do not match.")
     }
 }

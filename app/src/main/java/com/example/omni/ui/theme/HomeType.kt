@@ -5,7 +5,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Text styles for the home dashboard — Figma frame `iPhone 14 & 15 Pro - 22` (node 1:4).
+ * Text styles for the home dashboard — Figma frame `iPhone 14 & 15 Pro - 34` (node 149:221).
  *
  * The frame uses about twenty distinct combinations of family, weight, size and leading, far more
  * than Material's fifteen typography slots hold, so they live here as named constants instead of
@@ -52,9 +52,9 @@ object HomeType {
     val HeroTitle = TextStyle(
         fontFamily = PlusJakartaSans,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 21.sp,
-        lineHeight = 25.sp,
-        letterSpacing = (-0.63).sp,
+        fontSize = 20.sp,
+        lineHeight = 24.sp,
+        letterSpacing = (-0.6).sp,
     )
 
     /** "100% offline access" — the only Light weight anywhere in the app. */
@@ -71,7 +71,7 @@ object HomeType {
         fontFamily = PlusJakartaSans,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
-        lineHeight = 31.sp,
+        lineHeight = 19.sp,
         letterSpacing = (-0.14).sp,
     )
 
@@ -143,7 +143,7 @@ object HomeType {
         lineHeight = 14.551.sp,
         letterSpacing = (-0.055).sp,
     )
-    // ---- "Daily Updates" section (Figma `Frame 54`) ----
+    // ---- "Daily updates & Recomindation" section (the dashboard container) ----
 
     val SectionTitle = TextStyle(
         fontFamily = PlusJakartaSans,
@@ -152,18 +152,6 @@ object HomeType {
         lineHeight = 25.sp,
         letterSpacing = (-0.2).sp,
     )
-
-    /** "Wellness" / "Activity" — the unselected tabs, which use the body face. */
-    val TabIdle = TextStyle(
-        fontFamily = BodyFont,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 25.sp,
-        letterSpacing = (-0.16).sp,
-    )
-
-    /** "Recommended" — the selected tab switches to the display face. */
-    val TabActive = TabIdle.copy(fontFamily = PlusJakartaSans)
 
     // ---- Update cards (Figma `Frame 74`) ----
 

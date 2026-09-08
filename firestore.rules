@@ -1,0 +1,110 @@
+rules_version = '2';
+
+// Omni — Firestore security rules (BACKEND_PLAN §8).
+//
+// Publish with:  firebase deploy --only firestore:rules
+//
+// The whole file is deny-by-default: a path with no `match` block is unreachable, so a new collection
+// is locked until a rule is written for it deliberately. Two deviations from BACKEND_PLAN §8 are
+// marked inline below; both close holes rather than open them.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()   { return request.auth != null; }
+    function isSelf(uid)  { return signedIn() && request.auth.uid == uid; }
+    function isAdmin()    { return signedIn() && request.auth.token.admin == true; }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      // DEVIATION 1 from §8, which allowed any self-create. Without these guards the very first
+      // write of a hand-rolled client could set `role: 'ADMIN'` or `verified: true` — the update rule
+      // below blocks changing those keys, but nothing was stopping them being born that way.
+      // FirebaseAuthRepository.writeNewUser sends exactly name/email/role/verified/createdAt, so it
+      // satisfies this as written.
+      allow create: if isSelf(uid)
+                    && request.resource.data.role == 'USER'
+                    && request.resource.data.verified == false
+                    && !request.resource.data.keys().hasAny(['profession', 'unread']);
+
+      // A user may never grant themselves role, verification or unread counts.
+      allow update: if isSelf(uid)
+                    && !request.resource.data.diff(resource.data)
+                         .affectedKeys()
+                         .hasAny(['role','verified','profession','unread']);
+      allow update: if isAdmin();
+      allow delete: if false;
+
+      match /days/{day}           { allow read, write: if isSelf(uid); }
+      match /days/{day}/meals/{m} { allow read, write: if isSelf(uid); }
+      match /guideProgress/{g}    { allow read, write: if isSelf(uid); }
+      match /emergencyContacts/{c}{ allow read, write: if isSelf(uid); }
+      match /following/{target}   { allow read: if signedIn(); allow write: if isSelf(uid); }
+    }
+
+    match /posts/{postId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.likeCount == 0
+                    && request.resource.data.commentCount == 0
+                    && request.resource.data.body.size() <= 2000;
+
+      // DEVIATION 2 from §8, which also allowed any signed-in user to write likeCount /
+      // commentCount / repostCount directly so the client could `increment` them. Rules cannot check
+      // "+1, and a matching like document exists", so that rule let anyone set a post's like count to
+      // any number. §12 recommends the Cloud Function instead, so the client is simply not allowed to
+      // touch the counters: the trigger runs with admin credentials and bypasses rules entirely.
+      // If you ever decide to go back to client increments, this is the one line to add.
+      allow update, delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      allow delete: if isAdmin();
+
+      match /likes/{uid} {
+        allow read: if signedIn();
+        allow write: if isSelf(uid);
+      }
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+        allow update, delete: if signedIn() && resource.data.authorId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /verificationRequests/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      // The applicant submits; only an admin may set status.
+      allow create: if isSelf(uid) && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{uid}/items/{id} {
+      allow read: if isSelf(uid);
+      allow update: if isSelf(uid)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;          // Cloud Functions only (they bypass rules)
+    }
+
+    match /conversations/{cid} {
+      allow read:   if signedIn() && request.auth.uid in resource.data.participants;
+      allow create: if signedIn() && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.participants.size() == 2;
+      allow update: if signedIn() && request.auth.uid in resource.data.participants;
+
+      match /messages/{mid} {
+        allow read: if signedIn()
+                    && request.auth.uid in get(/databases/$(database)/documents/conversations/$(cid))
+                         .data.participants;
+        allow create: if signedIn() && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    match /sosEvents/{uid}/items/{id} {
+      allow read, write: if isSelf(uid);
+      allow read: if isAdmin();
+    }
+  }
+}

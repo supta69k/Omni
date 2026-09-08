@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -45,6 +46,22 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // `collectAsStateWithLifecycle` — the auth gate must stop collecting while backgrounded.
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    // Onboarding-seen flag now; the step-counter baseline in Phase 4. Chosen over Room because it
+    // needs no KSP, which is the riskiest thing to add to an AGP 9 build with built-in Kotlin.
+    implementation(libs.androidx.datastore.preferences)
+    // Nothing in the app could load a remote image before this: every avatar and feed photo was a
+    // bundled drawable. `coil-network-okhttp` is a separate artifact in Coil 3 — without it
+    // `AsyncImage` compiles and then fails at runtime on any http(s) model.
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
+    implementation(libs.kotlinx.coroutines.play.services)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

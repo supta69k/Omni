@@ -45,14 +45,18 @@ import com.example.omni.ui.theme.OmniTheme
  * it has two fields instead of four, so [TopSpacing] is the only structural difference besides the
  * form itself.
  *
- * The button label reads "Sing In" because that is the label in the Figma file; fixing the typo here
- * would put the code out of step with the design source.
+ * The screen still owns its field state; the callbacks hand the values out so a ViewModel can act on
+ * them. It stays free of Firebase entirely (BACKEND_PLAN §4 rule 1) and every parameter defaults to
+ * the inert behaviour the previews had, so `SignInScreen()` still renders the design as drawn.
  */
 @Composable
 fun SignInScreen(
     onSignUp: () -> Unit = {},
-    onSignIn: () -> Unit = {},
-    onForgotPassword: () -> Unit = {},
+    onSignIn: (email: String, password: String) -> Unit = { _, _ -> },
+    onForgotPassword: (email: String) -> Unit = {},
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
+    noticeMessage: String? = null,
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -77,7 +81,7 @@ fun SignInScreen(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(58.dp),
+                    verticalArrangement = Arrangement.spacedBy(ButtonBlockGap),
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -145,12 +149,27 @@ fun SignInScreen(
                                 color = OmniInk,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(onClick = onForgotPassword),
+                                    .clickable { onForgotPassword(email) },
                             )
                         }
                     }
 
-                    AuthPrimaryButton(label = "Sing In", onClick = onSignIn)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(MessageSlotGap),
+                    ) {
+                        // The error wins when both are set: a failure is the more urgent thing to
+                        // read, and only one line is reserved.
+                        AuthMessageSlot(
+                            message = errorMessage ?: noticeMessage,
+                            isError = errorMessage != null,
+                        )
+                        AuthPrimaryButton(
+                            label = "Sign In",
+                            onClick = { onSignIn(email, password) },
+                            isLoading = isLoading,
+                        )
+                    }
                 }
 
                 AuthFooter(
@@ -172,10 +191,26 @@ fun SignInScreen(
  */
 private val TopSpacing = 144.dp
 
+/**
+ * The design leaves 58 between the form and the button. The message slot and its gap are carved out
+ * of that 58 rather than added to it, so the button sits exactly where Figma draws it whether or not
+ * there is a message to show.
+ */
+private val ButtonBlockGap = 58.dp - MessageSlotHeight - MessageSlotGap
+
 @DevicePreviews
 @Composable
 private fun SignInScreenPreview() {
     OmniTheme {
         SignInScreen()
+    }
+}
+
+/** The state nobody can see in the design file: a rejected password, mid-request. */
+@DevicePreviews
+@Composable
+private fun SignInScreenErrorPreview() {
+    OmniTheme {
+        SignInScreen(errorMessage = "Wrong password. Try again or reset it.")
     }
 }

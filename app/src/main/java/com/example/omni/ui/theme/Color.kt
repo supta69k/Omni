@@ -13,6 +13,13 @@ import androidx.compose.ui.graphics.Color
 // Surfaces
 val OmniBackground = Color(0xFFFFFFFF)
 
+/**
+ * The one true red in the app: the SOS swipe track ([OmniSosTrack]) and a failed sign-in
+ * ([OmniAuthError]). Declared up here because top-level properties initialise in file order — an
+ * alias may only ever point at something declared **above** it, or it silently reads as transparent.
+ */
+val OmniAlertRed = Color(0xFFFF6962)
+
 // Text
 val OmniInk = Color(0xFF302E2E)        // headings + primary button fill
 val OmniBody = Color(0xFF6C6C6C)       // supporting paragraph copy
@@ -36,6 +43,12 @@ val OmniPlaceholder = Color(0xFFABABAB)   // field placeholder text and icon str
 val OmniAuthLink = Color(0xFF000000)      // "Sign In" / "Sign Up" footer link, terms label
 val OmniDivider = OmniBody                // the two hairlines flanking "or"
 
+/**
+ * The message under a failed sign-in. The Figma frames draw no error state at all, so it reuses
+ * [OmniAlertRed] rather than introducing a second red.
+ */
+val OmniAuthError = OmniAlertRed          // #FF6962
+
 // ---- Home screen (Figma `iPhone 14 & 15 Pro - 22`) ----
 
 // Header
@@ -50,12 +63,11 @@ val OmniWaterTeal = Color(0xFFAFDFDF)     // hydration card fill
 val OmniStepsCream = Color(0xFFFEEBA9)    // step-count card fill
 val OmniStatLabel = Color(0xFF3E3C3C)     // "Water today" / "Today's steps" and their hints
 
-// "Daily Updates" section
+// "Daily updates & Recomindation" section
 val OmniSectionTitle = Color(0xFF1E1E1E)
-val OmniTabTrack = OmniFieldSurface       // #F5F5F5, shared with the update cards
-val OmniTabInactive = Color(0xFFC8C8C8)   // idle tab labels and the progress-bar axis labels
-val OmniTabActiveSurface = Color(0xFFFFFFFF)
-val OmniTabShadow = Color(0x40BEBEBE)     // rgba(190,190,190,0.25) glow under the active tab
+val OmniTabInactive = Color(0xFFC8C8C8)   // the progress-bar axis labels
+val OmniTabActiveSurface = Color(0xFFFFFFFF)  // still shared with the feed's selected pill
+val OmniTabShadow = Color(0x40BEBEBE)     // rgba(190,190,190,0.25) glow under that pill
 
 /** Pure black — the active tab label, the update-card headings, and their big values. */
 val OmniCardInk = Color(0xFF000000)
@@ -110,8 +122,8 @@ val OmniNutriChipFat = OmniAuthHeading    // #8D84F9
 
 // ---- SOS and hospital maps (Figma `- 31`, `- 30`, `- 33`) ----
 
-/** The "Swipe to active SOS" track. The one true red in the app. */
-val OmniSosTrack = Color(0xFFFF6962)
+/** The "Swipe to active SOS" track — [OmniAlertRed], the app's only red. */
+val OmniSosTrack = OmniAlertRed
 
 val OmniSheetSurface = Color(0xFFFFFDFD)  // the hospitals bottom sheet, a hair warmer than white
 val OmniSheetTitle = Color(0xFF4B4B4B)    // "Nearest Hospitals"
@@ -151,3 +163,13 @@ val OmniSetToggleKnob = OmniBackground    // the 21 white knob riding in both tr
 
 /** Off is drawn nowhere in the source, so a switch that can be turned off borrows the idle grey. */
 val OmniSetToggleOff = OmniIndicatorInactive  // #E3E1E4
+
+// ---- The sleep entry sheet (no Figma source) ----
+//
+// The one screen element the design does not contain: sleep is the only metric neither the app nor the
+// phone can observe, so it has to be typed, and Figma draws no way to type it. Everything it needs is
+// borrowed from the hospitals sheet — the same surface, shadow and grab handle — except the dim behind
+// it, because that sheet floats over a map dark enough not to need one.
+
+/** rgba(0,0,0,0.25), matched to [OmniMapSearchShadow] so the app has one depth of black, not two. */
+val OmniScrim = Color(0x40000000)

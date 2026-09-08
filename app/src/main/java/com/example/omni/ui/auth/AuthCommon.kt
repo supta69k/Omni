@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,9 +34,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniAuthLink
 import com.example.omni.ui.theme.OmniBody
@@ -74,6 +77,16 @@ internal val FieldEndPadding = 41.dp
 // Primary button — Figma `Frame 130`
 internal val ButtonHeight = 50.dp
 internal val ButtonCorner = 20.dp
+
+/**
+ * The reserved height of [AuthMessageSlot], and the gap between it and the button.
+ *
+ * Both are subtracted from the gap the design already leaves above the button, so the button stays at
+ * the y Figma puts it at: the slot lives *inside* that whitespace rather than being added to it. See
+ * the call sites in [SignInScreen] and [SignUpScreen].
+ */
+internal val MessageSlotHeight = 20.dp
+internal val MessageSlotGap = 8.dp
 
 // Footer — Figma `Frame 165` / `Frame 131`
 private val FooterWidth = 364.00592041015625.dp
@@ -225,12 +238,56 @@ internal fun AuthField(
     }
 }
 
-/** The dark call-to-action at the bottom of the form — Figma `Frame 130`. */
+/**
+ * Where a backend message appears — the one-line error under a failed sign-in, or the confirmation
+ * that a reset email went out.
+ *
+ * It occupies [MessageSlotHeight] whether or not there is anything to say. That is the whole point:
+ * `UI_ARCHITECTURE.md` §4 pins `fontScale` to 1 and these screens are pixel-locked, so a composable
+ * that appears out of nothing would shove the button and the footer down the moment Firebase
+ * disagreed with the user. Reserving the box means the layout never moves.
+ *
+ * One line, ellipsised. Every sentence [firebaseAuthErrorMessage] and the two ViewModels can produce
+ * fits at this width; the only text that can overflow is a raw `localizedMessage` from an exception
+ * nothing mapped, and truncating that is better than reflowing the form.
+ */
+@Composable
+internal fun AuthMessageSlot(
+    message: String?,
+    modifier: Modifier = Modifier,
+    isError: Boolean = true,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(MessageSlotHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isError) OmniAuthError else OmniBody,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * The dark call-to-action at the bottom of the form — Figma `Frame 130`.
+ *
+ * [isLoading] swaps the label for a spinner *inside the same box* and stops the taps. The box keeps
+ * its [ButtonHeight] either way — resizing it would move the footer every time someone signed in.
+ */
 @Composable
 internal fun AuthPrimaryButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
 ) {
     Box(
         modifier = modifier
@@ -238,17 +295,29 @@ internal fun AuthPrimaryButton(
             .height(ButtonHeight)
             .clip(RoundedCornerShape(ButtonCorner))
             .background(OmniInk)
-            .clickable(onClick = onClick),
+            .clickable(enabled = !isLoading, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleSmall,
-            color = OmniOnInk,
-            textAlign = TextAlign.Center,
-        )
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(IndicatorSize),
+                color = OmniOnInk,
+                strokeWidth = IndicatorStroke,
+            )
+        } else {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = OmniOnInk,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
+
+/** Sized to sit inside the button's cap height so the box never has to grow. */
+private val IndicatorSize = 22.dp
+private val IndicatorStroke = 2.dp
 
 /**
  * Everything below the button: the "or" rule, the two social buttons, and the cross-link to the
