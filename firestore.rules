@@ -84,7 +84,14 @@ service cloud.firestore {
       allow read: if isSelf(uid);
       allow update: if isSelf(uid)
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow create, delete: if false;          // Cloud Functions only (they bypass rules)
+
+      // DEVIATION 3 from §8, which reserved every create for the Cloud Functions. A user may now write
+      // into their *own* inbox and nobody else's, which is what lets Phase 10 ship something real
+      // before Phase 12's functions exist: the SOS screen records "your alert was saved" the moment it
+      // writes the event. The blast radius is a user filling their own list — the cross-account writes
+      // (a like, a comment, a follow) still cannot be forged, because `isSelf(uid)` is the recipient.
+      allow create: if isSelf(uid);
+      allow delete: if false;                  // Cloud Functions only (they bypass rules)
     }
 
     match /conversations/{cid} {
@@ -105,6 +112,14 @@ service cloud.firestore {
     match /sosEvents/{uid}/items/{id} {
       allow read, write: if isSelf(uid);
       allow read: if isAdmin();
+    }
+
+    // The public hospital directory (BACKEND_PLAN §7). Read-only for every signed-in client; the
+    // documents are written from the console or an import script, never from the app — which is
+    // what makes the directory available offline through Firestore's cache after the first sync.
+    match /hospitals/{id} {
+      allow read: if signedIn();
+      allow write: if false;
     }
   }
 }

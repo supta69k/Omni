@@ -1,5 +1,6 @@
 package com.example.omni.ui.feed
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,20 +25,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.data.model.Post
+import com.example.omni.data.model.compactCount
+import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniBottomNav
@@ -54,8 +56,8 @@ import com.example.omni.ui.theme.OmniFeedPostBody
 import com.example.omni.ui.theme.OmniFeedSurface
 import com.example.omni.ui.theme.OmniFeedTimestamp
 import com.example.omni.ui.theme.OmniFeedVerified
-import com.example.omni.ui.theme.OmniHeroPink
 import com.example.omni.ui.theme.OmniInk
+import com.example.omni.ui.theme.OmniSosTrack
 import com.example.omni.ui.theme.OmniTabActiveSurface
 import com.example.omni.ui.theme.OmniTabShadow
 import com.example.omni.ui.theme.OmniTheme
@@ -79,10 +81,17 @@ import com.example.omni.ui.theme.OmniTheme
 @Composable
 fun FeedScreen(
     header: OmniHeaderState = OmniHeaderState(),
-    onNavigate: (OmniNavItem) -> Unit = {},
+    state: FeedUiState = FeedUiState(),
+    onSegmentChange: (FeedSegment) -> Unit = {},
+    onLike: (String) -> Unit = {},
+    onOpenComments: (String) -> Unit = {},
+    onCloseComments: () -> Unit = {},
+    onSendComment: (String) -> Unit = {},
     onCompose: () -> Unit = {},
+    onLoadMore: () -> Unit = {},
+    onNavigate: (OmniNavItem) -> Unit = {},
 ) {
-    var selectedSegment by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
 
     DesignFrame {
         Box(
@@ -104,8 +113,8 @@ fun FeedScreen(
 
                 Box(Modifier.padding(start = ScreenPadding)) {
                     FeedSegments(
-                        selected = selectedSegment,
-                        onSelect = { selectedSegment = it },
+                        selected = state.segment,
+                        onSelect = onSegmentChange,
                     )
                 }
 
@@ -122,17 +131,82 @@ fun FeedScreen(
 
                 Spacer(Modifier.height(FirstPostGap))
 
-                Column(
-                    modifier = Modifier.padding(horizontal = ScreenPadding),
-                    verticalArrangement = Arrangement.spacedBy(PostSpacing),
-                ) {
-                    FeedPosts.forEach { FeedPost(post = it) }
+                if (state.posts.isEmpty()) {
+                    // The honest empty state: a feed with nothing in it yet, rather than the design's
+                    // two mock posts pretending to be data.
+                    Text(
+                        text = "No posts yet. Share the first one!",
+                        style = FeedType.Hint16,
+                        color = OmniFeedHint,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier.padding(horizontal = ScreenPadding),
+                        verticalArrangement = Arrangement.spacedBy(PostSpacing),
+                    ) {
+                        state.posts.forEach { post ->
+                            FeedPost(
+                                post = post,
+                                onLike = { onLike(post.id) },
+                                onComment = { onOpenComments(post.id) },
+                                onShare = {
+                                    // The Android share sheet, with the post's body as the text.
+                                    val send = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(
+                                            Intent.EXTRA_TEXT,
+                                            "${post.authorName} on omni:\n${post.body}",
+                                        )
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(send, "Share post"),
+                                    )
+                                },
+                            )
+                        }
+
+                        // Load-more is a word rather than an invisible scroll trigger: the trigger
+                        // needs the scroll's end signal, which a plain column here does not surface
+                        // without restructuring the page — noted as the follow-up when paging is
+                        // exercised in anger.
+                        if (state.canLoadMore) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(19.dp))
+                                    .background(OmniFeedSurface)
+                                    .clickable(onClick = onLoadMore)
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Load more",
+                                    style = FeedType.SegmentLabel,
+                                    color = OmniCardInk,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
             }
 
-            FeedHeader(header = header, onNavigate = onNavigate)
+            FeedHeader(header = header, onNavigate = onNavigate, onCompose = onCompose)
+
+            // The comments sheet, hosted in the page's own root Box so it stays inside DesignFrame's
+            // density — the same rule the sleep and meal sheets follow.
+            CommentsSheet(
+                visible = state.commentsOpenId != null,
+                comments = state.comments,
+                onDismiss = onCloseComments,
+                onSend = onSendComment,
+            )
 
             OmniBottomNav(
                 selected = OmniNavItem.Feed,
@@ -159,6 +233,7 @@ private fun FeedHeader(
     modifier: Modifier = Modifier,
     header: OmniHeaderState = OmniHeaderState(),
     onNavigate: (OmniNavItem) -> Unit = {},
+    onCompose: () -> Unit = {},
 ) {
     Column(modifier = modifier.background(OmniBackground)) {
         OmniHeader(
@@ -210,7 +285,8 @@ private fun FeedHeader(
                     .width(51.dp)
                     .height(50.dp)
                     .clip(RoundedCornerShape(42.dp))
-                    .background(OmniInk),
+                    .background(OmniInk)
+                    .clickable(onClick = onCompose),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
@@ -320,7 +396,7 @@ private fun ShareMealTile(onClick: () -> Unit) {
  * states occupy identical space and the track does not twitch as the selection moves.
  */
 @Composable
-private fun FeedSegments(selected: Int, onSelect: (Int) -> Unit) {
+private fun FeedSegments(selected: FeedSegment, onSelect: (FeedSegment) -> Unit) {
     Row(
         modifier = Modifier
             .width(253.dp)
@@ -331,8 +407,8 @@ private fun FeedSegments(selected: Int, onSelect: (Int) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SegmentTab("Discover", 125.dp, selected == 0) { onSelect(0) }
-        SegmentTab("Following", 106.dp, selected == 1) { onSelect(1) }
+        SegmentTab("Discover", 125.dp, selected == FeedSegment.Discover) { onSelect(FeedSegment.Discover) }
+        SegmentTab("Following", 106.dp, selected == FeedSegment.Following) { onSelect(FeedSegment.Following) }
     }
 }
 
@@ -381,12 +457,21 @@ private fun SegmentTab(label: String, width: Dp, selected: Boolean, onClick: () 
 /**
  * One post — Figma `Recently Post Container` (124:72) and `Posts Container` (124:112).
  *
- * The two are the same structure with three differences the design actually makes: the badge colour,
- * the gap between image and actions (20 on the first, 18 on the second), and the counts. Those live
- * in [Post] rather than in two copies of the layout.
+ * The layout is unchanged from the design; what changed is where every value comes from: the author
+ * row, the badge, the "Verified by omni" line, the timestamp, the body and the image are all fields
+ * of the post now, and the three pills carry click handlers with the like reflecting its state.
+ *
+ * The verified badge draws only when the author is verified — the design's every-post badge was the
+ * mock's simplification. The sub-line reads "Verified by omni" for verified professionals and the
+ * author's own line otherwise ("Posted on omni"), which is the sentence the mock was standing in for.
  */
 @Composable
-private fun FeedPost(post: Post) {
+private fun FeedPost(
+    post: Post,
+    onLike: () -> Unit,
+    onComment: () -> Unit,
+    onShare: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(19.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(17.dp)) {
             Row(
@@ -398,35 +483,53 @@ private fun FeedPost(post: Post) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(
-                        painter = painterResource(post.avatar),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                    Box(
                         modifier = Modifier
                             .size(49.dp)
                             .clip(RoundedCornerShape(35.7.dp))
                             .background(OmniFeedSurface),
-                    )
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (post.authorPhotoUrl != null) {
+                            coil3.compose.AsyncImage(
+                                model = post.authorPhotoUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            // The author's initial on the feed's grey — the placeholder that cannot
+                            // fail to load, the same stand-in the comments sheet uses.
+                            Text(
+                                text = post.authorName.take(1).uppercase(),
+                                style = FeedType.AuthorName,
+                                color = OmniFeedTimestamp,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                     Column {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(3.dp),
                             verticalAlignment = Alignment.Top,
                         ) {
                             Text(
-                                text = post.author,
+                                text = post.authorName,
                                 style = FeedType.AuthorName,
                                 color = OmniCardInk,
                                 maxLines = 1,
                                 softWrap = false,
                             )
-                            Image(
-                                painter = painterResource(post.badge),
-                                contentDescription = "Verified",
-                                modifier = Modifier.size(14.dp),
-                            )
+                            if (post.authorVerified) {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_feed_badge_check),
+                                    contentDescription = "Verified",
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
                         }
                         Text(
-                            text = "Verified by omni",
+                            text = if (post.authorVerified) "Verified by omni" else "Posted on omni",
                             style = FeedType.Meta12,
                             color = OmniFeedVerified,
                             maxLines = 1,
@@ -436,7 +539,7 @@ private fun FeedPost(post: Post) {
                 }
 
                 Text(
-                    text = "3 min ago",
+                    text = relativeTimeOf(post.createdAt),
                     style = FeedType.Meta12,
                     color = OmniFeedTimestamp,
                     maxLines = 1,
@@ -452,17 +555,19 @@ private fun FeedPost(post: Post) {
             )
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(post.actionsGap)) {
-            Image(
-                painter = painterResource(post.image),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(255.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(OmniFeedSurface),
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(19.dp)) {
+            if (post.imageUrl != null) {
+                coil3.compose.AsyncImage(
+                    model = post.imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(255.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(OmniFeedSurface),
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -473,29 +578,62 @@ private fun FeedPost(post: Post) {
                     horizontalArrangement = Arrangement.spacedBy(30.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ActionPill(post.likes, R.drawable.ic_feed_heart_add, "Like")
-                    ActionPill(post.comments, R.drawable.ic_feed_comment, "Comment")
-                    ActionPill(post.reposts, R.drawable.ic_feed_repost, "Repost")
+                    ActionPill(
+                        text = compactCount(post.likeCount),
+                        icon = R.drawable.ic_feed_heart_add,
+                        contentDescription = if (post.likedByMe) "Unlike" else "Like",
+                        emphasized = post.likedByMe,
+                        onClick = onLike,
+                    )
+                    ActionPill(
+                        text = compactCount(post.commentCount),
+                        icon = R.drawable.ic_feed_comment,
+                        contentDescription = "Comment",
+                        emphasized = false,
+                        onClick = onComment,
+                    )
+                    ActionPill(
+                        text = "0",
+                        icon = R.drawable.ic_feed_repost,
+                        contentDescription = "Repost",
+                        emphasized = false,
+                        onClick = onShare,
+                    )
                 }
                 Image(
                     painter = painterResource(R.drawable.ic_feed_share),
                     contentDescription = "Share",
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable(onClick = onShare),
                 )
             }
         }
     }
 }
 
-/** An 86 x 39 grey pill holding a count and its 20dp icon, 4 apart. */
+/**
+ * An 86 x 39 grey pill holding a count and its 20dp icon, 4 apart — now a button.
+ *
+ * [emphasized] is the liked state: the pill stays the design's grey (the design never drew a liked
+ * variant) but the count and icon tint to the SOS red, the palette's one emphasis colour, so the
+ * state is visible without inventing a new surface.
+ */
 @Composable
-private fun ActionPill(count: String, icon: Int, contentDescription: String) {
+private fun ActionPill(
+    text: String,
+    icon: Int,
+    contentDescription: String,
+    emphasized: Boolean,
+    onClick: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .width(86.dp)
             .height(39.dp)
             .clip(RoundedCornerShape(19.dp))
-            .background(OmniFeedSurface),
+            .background(OmniFeedSurface)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -504,9 +642,9 @@ private fun ActionPill(count: String, icon: Int, contentDescription: String) {
             verticalAlignment = Alignment.Top,
         ) {
             Text(
-                text = count,
+                text = text,
                 style = FeedType.ActionValue,
-                color = OmniInk,
+                color = if (emphasized) OmniSosTrack else OmniInk,
                 maxLines = 1,
                 softWrap = false,
             )
@@ -514,53 +652,15 @@ private fun ActionPill(count: String, icon: Int, contentDescription: String) {
                 painter = painterResource(icon),
                 contentDescription = contentDescription,
                 modifier = Modifier.size(20.dp),
+                colorFilter = if (emphasized) {
+                    ColorFilter.tint(OmniSosTrack)
+                } else {
+                    null
+                },
             )
         }
     }
 }
-
-/** One feed post's content, so the two the design contains share a single layout. */
-private data class Post(
-    val author: String,
-    val badge: Int,
-    val avatar: Int,
-    val image: Int,
-    val body: String,
-    val likes: String,
-    val comments: String,
-    val reposts: String,
-    /** 20 on the first post, 18 on the second — the design's own inconsistency, kept. */
-    val actionsGap: Dp,
-)
-
-private val FeedPosts = listOf(
-    Post(
-        author = "Dr.Ben",
-        badge = R.drawable.ic_feed_badge_check,
-        avatar = R.drawable.feed_post1_avatar,
-        image = R.drawable.feed_post1_image,
-        body = "Think of your meals as cellular fuel. Prioritizing whole foods and healthy fats " +
-            "supports your heart, brain, and immune system. Eat well today to protect your health " +
-            "tomorrow. \n#NutritionFacts #LifestyleMedicine",
-        likes = "1k",
-        comments = "100",
-        reposts = "50",
-        actionsGap = 20.dp,
-    ),
-    Post(
-        author = "Dr.Kelly",
-        badge = R.drawable.ic_feed_badge_check_alt,
-        avatar = R.drawable.feed_post2_avatar,
-        image = R.drawable.feed_post2_image,
-        body = "A balanced plate is the best daily prescription. Fill half your plate with " +
-            "colorful veggies to reduce inflammation, and add lean protein for sustained energy. " +
-            "Simple, effective, and doctor-approved. 🥗🩺 #FoodIsMedicine #HealthyLiving",
-        likes = "900",
-        comments = "80",
-        reposts = "33",
-        actionsGap = 18.dp,
-    ),
-)
 
 private val StoryImages = listOf(
     R.drawable.feed_story_1,

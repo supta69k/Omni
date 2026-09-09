@@ -98,6 +98,9 @@ class FirestoreMetricsRepository(
         /** Grams. Far past anything edible, and short enough that the footnote stays on two lines. */
         const val MaxFiberGrams = 999f
 
+        /** The three macros' shared ceiling; the same layout-slack reasoning as [MaxFiberGrams]. */
+        const val MaxMacroGrams = 2_000f
+
         fun DocumentSnapshot.toDailyMetrics(date: String): DailyMetrics? {
             if (!exists()) return null
             return DailyMetrics(
@@ -110,6 +113,13 @@ class FirestoreMetricsRepository(
                 // Named `fiber` in Firestore (BACKEND_PLAN §7) but `fiberGrams` in Kotlin, where the unit
                 // has to be visible next to a goal of the same name. Phase 6's meal roll-up writes it.
                 fiberGrams = float("fiber", MaxFiberGrams),
+                // The meal roll-up's other four sums (Phase 6). Nutrition re-sums its live meal list for
+                // its own screen, so these exist for consistency between devices and for any future
+                // reader that wants the day without its meals.
+                calories = (get("calories") as? Number)?.toInt()?.coerceAtLeast(0) ?: 0,
+                protein = float("protein", MaxMacroGrams),
+                carbs = float("carbs", MaxMacroGrams),
+                fat = float("fat", MaxMacroGrams),
             )
         }
 

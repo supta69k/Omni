@@ -50,6 +50,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.data.model.Hospital
+import com.example.omni.data.model.distanceLabel
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniBottomNav
@@ -107,10 +109,30 @@ import kotlin.math.roundToInt
 @Composable
 fun SosScreen(
     header: OmniHeaderState = OmniHeaderState(),
+    hospitals: List<Hospital> = DefaultHospitals,
+    hasLocation: Boolean = false,
+    /**
+     * How many emergency contacts the account holds — the label on the sheet's alert pill, and the
+     * only thing this screen needs to know about them. Zero turns the pill into the way to add one.
+     */
+    contactCount: Int = 0,
     onNavigate: (OmniNavItem) -> Unit = {},
     onSearch: () -> Unit = {},
-    onFindRoute: () -> Unit = {},
-    onCallHospital: () -> Unit = {},
+    onFindRoute: (Hospital) -> Unit = {},
+    onCallHospital: (Hospital) -> Unit = {},
+    /**
+     * The national emergency line. Offered when the directory is empty, which is the only state in
+     * which every other way out of this screen is gone (BACKEND_PLAN §11 Phase 9 — the dial must
+     * work "regardless of network state").
+     */
+    onCallEmergency: () -> Unit = {},
+    /**
+     * Texts the saved contacts, or opens the page to save one when there are none — the caller decides
+     * which, because it is the same pill either way and only the router knows where that page is.
+     */
+    onAlertContacts: () -> Unit = {},
+    /** Fires the moment the swipe completes — the screen's own signal that SOS was activated. */
+    onActivate: () -> Unit = {},
     /**
      * Opens straight into the hospitals sheet. Exists so a preview can render `- 30` without a
      * gesture, and so a future alert can deep-link into it.
@@ -167,7 +189,10 @@ fun SosScreen(
                     .navigationBarsPadding()
                     .padding(start = SliderStart, bottom = OmniNavBottomGap + OmniNavHeight + SliderNavGap),
             ) {
-                SosSwipeTrack(onActivate = { activated = true })
+                SosSwipeTrack(onActivate = {
+                    activated = true
+                    onActivate()
+                })
             }
 
             AnimatedVisibility(
@@ -179,9 +204,14 @@ fun SosScreen(
                     .navigationBarsPadding(),
             ) {
                 HospitalSheet(
+                    hospitals = hospitals,
+                    hasLocation = hasLocation,
+                    contactCount = contactCount,
                     onDismiss = { activated = false },
                     onFindRoute = onFindRoute,
                     onCall = onCallHospital,
+                    onCallEmergency = onCallEmergency,
+                    onAlertContacts = onAlertContacts,
                 )
             }
 
@@ -311,13 +341,25 @@ private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit)
  * sheet is bottom-anchored at its full height instead of wrapping its children. The card rail is a
  * 322-wide window onto a horizontal scroll, exactly as the source marks it — the second hospital is
  * off to the right, not below.
+ *
+ * **Layout change (`UI_ARCHITECTURE.md` §6 rule 8/11).** BACKEND_PLAN §11 Phase 9 asks activation to
+ * "notify saved emergency contacts", and the design has nowhere to say so. Rather than a Material
+ * component that would hoist itself out of `DesignFrame`, the alert pill is the sheet's *own*
+ * `Call Container` shape dropped into that empty tail: bottom-anchored at [AlertPillBottom], which is
+ * the floating bar's slot plus four, so it lands at y=343 — three clear of where the design's content
+ * ends and 34 clear of the bar. Nothing the design draws moves.
  */
 @Composable
 private fun HospitalSheet(
+    hospitals: List<Hospital>,
+    hasLocation: Boolean,
+    contactCount: Int,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit = {},
-    onFindRoute: () -> Unit = {},
-    onCall: () -> Unit = {},
+    onFindRoute: (Hospital) -> Unit = {},
+    onCall: (Hospital) -> Unit = {},
+    onCallEmergency: () -> Unit = {},
+    onAlertContacts: () -> Unit = {},
 ) {
     Box(
         modifier = modifier
@@ -353,32 +395,91 @@ private fun HospitalSheet(
             Spacer(Modifier.height(4.dp))
 
             Text(
-                text = "Found 5 facilities within 5 miles ",
+                // The design's "Found 5 facilities within 5 miles " is a mock literal with a stray
+                // trailing space; the count is the list's own, the radius is the eight kilometres
+                // the screen actually searches, and the unit is kilometres because the app targets
+                // Bangladesh (BACKEND_PLAN §11 Phase 9). Without a location the line says so —
+                // an unsorted directory pretending to be "nearest" would be a lie.
+                text = when {
+                    hospitals.isEmpty() -> "The hospital directory hasn't reached this phone yet"
+                    hasLocation -> "Found ${hospitals.size} facilities within 8 km"
+                    else -> "${hospitals.size} facilities — turn on location to sort by distance"
+                },
                 style = MapType.SheetSubtitle,
                 color = OmniSheetSubtitle,
-                maxLines = 1,
-                softWrap = false,
+                maxLines = 2,
             )
 
             Spacer(Modifier.height(HospitalRailGap))
 
-            Row(
-                modifier = Modifier
-                    .width(HospitalCardWidth)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(26.dp),
-            ) {
-                Hospitals.forEach { hospital ->
-                    HospitalCard(hospital = hospital, onFindRoute = onFindRoute, onCall = onCall)
+            if (hospitals.isEmpty()) {
+                // The one state BACKEND_PLAN §11 Phase 9 refuses to leave dead: "always keep the
+                // emergency dial button working regardless of network state". Every other route out
+                // of this screen goes through a hospital card, so with no directory — a first run
+                // that has never been online, and nothing in Firestore's cache — the sheet would
+                // otherwise be an empty box in the middle of an emergency. 999 is Bangladesh's
+                // national emergency line and needs neither the directory nor a data connection.
+                Column(
+                    modifier = Modifier.width(HospitalCardWidth),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(
+                        text = "It needs one online moment to download, then works offline for good.",
+                        style = MapType.SheetSubtitle,
+                        color = OmniSheetDetail,
+                        maxLines = 3,
+                    )
+                    HospitalAction(
+                        icon = R.drawable.ic_hosp_call,
+                        label = "Call 999",
+                        fill = OmniCallButton,
+                        labelColor = OmniInk,
+                        labelStart = 78.dp,
+                        onClick = onCallEmergency,
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .width(HospitalCardWidth)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(26.dp),
+                ) {
+                    hospitals.forEach { hospital ->
+                        HospitalCard(hospital = hospital, onFindRoute = onFindRoute, onCall = onCall)
+                    }
                 }
             }
+        }
+
+        // The alert pill, in the tail. Red like the swipe track it answers to when there is somebody
+        // to text; the hospital tray's grey when there is not, because "go and add one" is a settings
+        // errand and should not shout like an emergency.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = SheetPadding, bottom = AlertPillBottom)
+                .width(HospitalCardWidth),
+        ) {
+            HospitalAction(
+                icon = R.drawable.ic_home_search_chat,
+                label = when (contactCount) {
+                    0 -> "Add Alert Contacts"
+                    1 -> "Alert 1 Contact"
+                    else -> "Alert $contactCount Contacts"
+                },
+                fill = if (contactCount == 0) OmniHospitalCard else OmniSosTrack,
+                labelColor = if (contactCount == 0) OmniInk else OmniOnInk,
+                labelStart = AlertLabelStart,
+                onClick = onAlertContacts,
+            )
         }
     }
 }
 
 /** One hospital — Figma `Hospital Container` (node 134:12631), 322 x 242. */
 @Composable
-private fun HospitalCard(hospital: Hospital, onFindRoute: () -> Unit, onCall: () -> Unit) {
+private fun HospitalCard(hospital: Hospital, onFindRoute: (Hospital) -> Unit, onCall: (Hospital) -> Unit) {
     Column(
         modifier = Modifier.width(HospitalCardWidth),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -395,8 +496,16 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: () -> Unit, onCall: ()
                 horizontalArrangement = Arrangement.spacedBy(13.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // The photo alternates between the design's two — the directory carries no photo,
+                // and two real photographs read better than one repeated six times.
                 Image(
-                    painter = painterResource(hospital.photo),
+                    painter = painterResource(
+                        if (hospital.id.hashCode() % 2 == 0) {
+                            R.drawable.hospital_photo_1
+                        } else {
+                            R.drawable.hospital_photo_2
+                        },
+                    ),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -444,8 +553,11 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: () -> Unit, onCall: ()
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                             )
+                            // The haversine distance in kilometres — the design's "4 mins (0.8 mi)"
+                            // was a mock; a drive *time* would need the paid Routes API, which the
+                            // plan explicitly declines (§11 Phase 9).
                             Text(
-                                text = hospital.drive,
+                                text = hospital.distanceLabel(),
                                 style = MapType.SheetSubtitle,
                                 color = OmniSheetDetail,
                                 maxLines = 1,
@@ -462,8 +574,12 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: () -> Unit, onCall: ()
                                 contentDescription = "Rating",
                                 modifier = Modifier.size(18.dp),
                             )
+                            // OpenStreetMap carries no ratings, so most real cards have none. The
+                            // design's own "4.3" is a mock: printing it beside a hospital nobody has
+                            // rated states a fact the directory does not hold. An em dash keeps the
+                            // row's width and says the same thing honestly.
                             Text(
-                                text = hospital.rating,
+                                text = hospital.rating?.let { "%.1f".format(it) } ?: "—",
                                 style = MapType.HospitalRating,
                                 color = OmniSheetDetail,
                                 maxLines = 1,
@@ -483,7 +599,7 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: () -> Unit, onCall: ()
             fill = OmniRouteButton,
             labelColor = OmniOnInk,
             labelStart = 85.dp,
-            onClick = onFindRoute,
+            onClick = { onFindRoute(hospital) },
         )
         HospitalAction(
             icon = R.drawable.ic_hosp_call,
@@ -493,7 +609,7 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: () -> Unit, onCall: ()
             // are indistinguishable at 18px, so the ink token carries both.
             labelColor = OmniInk,
             labelStart = 78.dp,
-            onClick = onCall,
+            onClick = { onCall(hospital) },
         )
     }
 }
@@ -533,30 +649,29 @@ private fun HospitalAction(
     }
 }
 
-/** One card's content, so the rail's two entries share a single layout. */
-private data class Hospital(
-    val name: String,
-    val type: String,
-    val drive: String,
-    val rating: String,
-    val photo: Int,
-)
-
-private val Hospitals = listOf(
+/**
+ * The preview default — the design's own two cards, promoted to the shared [Hospital] model so
+ * `@DevicePreviews` renders the sheet exactly as Figma drew it while the real screen passes live
+ * directory data.
+ */
+private val DefaultHospitals = listOf(
     Hospital(
+        id = "city-central",
         name = "City Central Hospital",
         type = "Trauma Center Level 1 • 24/7 ER",
-        drive = "4 mins (0.8 mi)",
-        rating = "4.3",
-        photo = R.drawable.hospital_photo_1,
+        lat = 22.3569,
+        lng = 91.7832,
+        rating = 4.3,
+        distanceKm = 0.8,
     ),
     Hospital(
+        id = "metro-general",
         name = "Metro General Care",
         type = "Urgent Care • Open till 10 PM",
-        // The stray space after the bracket is the design's own; kept so the two read identically.
-        drive = "16 mins ( 2.1 mi)",
-        rating = "4.3",
-        photo = R.drawable.hospital_photo_2,
+        lat = 22.3375,
+        lng = 91.8123,
+        rating = 4.3,
+        distanceKm = 2.1,
     ),
 )
 
@@ -614,6 +729,19 @@ private val HospitalRailGap = 19.dp
 
 private val HospitalCardWidth = 322.dp
 
+/**
+ * The alert pill's bottom inset — [OmniNavHeight] + [OmniNavBottomGap] + 4, measured from the same
+ * navigation-bar-padded bottom the floating bar is placed from. In a 480 sheet that puts the 50-high
+ * pill at y=343: three below where the design's own content ends at 340, and four above the bar.
+ */
+private val AlertPillBottom = OmniNavHeight + OmniNavBottomGap + 4.dp
+
+/**
+ * 78 is the call button's inset and the pill borrows it, which leaves 322 − 78 − 24 − 12 = 208 for the
+ * label — enough for "Add Alert Contacts" at 18px, the longest of the three.
+ */
+private val AlertLabelStart = 78.dp
+
 @DevicePreviews
 @Composable
 private fun SosScreenPreview() {
@@ -623,5 +751,12 @@ private fun SosScreenPreview() {
 @DevicePreviews
 @Composable
 private fun SosScreenActivatedPreview() {
-    OmniTheme { SosScreen(startActivated = true) }
+    OmniTheme { SosScreen(startActivated = true, hasLocation = true, contactCount = 2) }
+}
+
+/** The state a fresh install in airplane mode lands on: no directory, and 999 as the way out. */
+@DevicePreviews
+@Composable
+private fun SosScreenEmptyDirectoryPreview() {
+    OmniTheme { SosScreen(startActivated = true, hospitals = emptyList()) }
 }

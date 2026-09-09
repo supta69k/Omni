@@ -106,6 +106,9 @@ val OmniFeedPostBody = Color(0xFF041F1E)
 
 // ---- Nutrition / food log (Figma `iPhone 14 & 15 Pro - 35`) ----
 
+/** The calorie gauge's unfilled track — the `Progress card` arc's own grey. */
+val OmniArcTrackGrey = Color(0xFFEAE7E7)
+
 val OmniNutriDaySurface = OmniFieldSurface  // #F5F5F5 — the six unselected weekday chips
 val OmniNutriDayIdle = OmniBody           // #6C6C6C — their letter and date
 val OmniNutriDaySelected = OmniAuthHeading  // #8D84F9 — the "W 04" chip

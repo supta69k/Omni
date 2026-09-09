@@ -60,8 +60,14 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    // Phase 10. Pulls in the FirebaseMessagingService the manifest registers; the token itself is
+    // stored on `users/{uid}.fcmTokens` so the Phase 12 functions have somewhere to send to.
+    implementation(libs.firebase.messaging)
     implementation(libs.firebase.storage)
     implementation(libs.kotlinx.coroutines.play.services)
+    // The SOS screen's fused location (Phase 9). `getCurrentLocation` only — no ongoing updates,
+    // so no foreground-service question arises.
+    implementation(libs.play.services.location)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

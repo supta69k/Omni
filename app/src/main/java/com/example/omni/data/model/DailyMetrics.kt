@@ -24,10 +24,16 @@ import java.time.LocalTime
  * the walking and is the only source on any other device.
  *
  * [sleepHours] and [fiberGrams] feed the two update cards that have no automatic source. Sleep is typed
- * in by hand (`SleepEntrySheet`); fibre is a roll-up of the day's meals and so reads 0 until Phase 6
- * starts writing it — which is the honest reading of "no food logged", not a placeholder. The Firestore
- * field behind [fiberGrams] is called `fiber` (BACKEND_PLAN §7); the Kotlin name carries its unit because
- * the goal beside it does too ([User.fiberGoal]).
+ * in by hand (`SleepEntrySheet`); fibre is a roll-up of the day's meals (Phase 6's `MealRepository`
+ * recomputes it on every meal change) and so reads 0 until something is logged — which is the honest
+ * reading of "no food logged", not a placeholder. The Firestore field behind [fiberGrams] is called
+ * `fiber` (BACKEND_PLAN §7); the Kotlin name carries its unit because the goal beside it does too
+ * ([User.fiberGoal]).
+ *
+ * [calories], [protein], [carbs] and [fat] are the same meal roll-up's other four sums, written to the
+ * same document by the same recompute. They are read back here rather than re-summed from meals so
+ * Nutrition needs exactly one listener per day — the same reason every card on Home reads this one
+ * document.
  */
 data class DailyMetrics(
     val date: String,
@@ -35,6 +41,10 @@ data class DailyMetrics(
     val steps: Int = 0,
     val sleepHours: Float = 0f,
     val fiberGrams: Float = 0f,
+    val calories: Int = 0,
+    val protein: Float = 0f,
+    val carbs: Float = 0f,
+    val fat: Float = 0f,
 )
 
 /**

@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Omni</string>
+
+    <!-- The notification channel the user sees in system settings (Phase 10). One channel: the app's
+         pushes are all "something happened in Omni", and splitting them would give the user four
+         switches for a feature that has one. -->
+    <string name="notification_channel_name">Omni alerts</string>
+    <string name="notification_channel_description">Replies, reminders and emergency updates.</string>
 </resources>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The status-bar icon. Android masks a small icon to its alpha channel and tints the result, so this is
+  the header bell's own strokes filled solid white on a transparent field — a coloured icon would come
+  out as a white blob with the badge circle swallowing the shape.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+
+    <path
+        android:pathData="M17.6136 16.8636V10.4886C17.6136 7.58914 15.2631 5.23863 12.3636 5.23863C9.46412 5.23863 7.11362 7.58914 7.11362 10.4886V16.8636"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M18.7386 16.8636H5.98862"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M13.4886 18.3636C13.4886 18.9849 12.9849 19.4886 12.3636 19.4886M12.3636 19.4886C11.7423 19.4886 11.2386 18.9849 11.2386 18.3636M12.3636 19.4886V18.3636"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="round" />
+
+</vector>

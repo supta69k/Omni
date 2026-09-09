@@ -11,6 +11,16 @@
          being treated as an error. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
+    <!-- The SOS screen's hospital sort (Phase 9). Runtime permissions; the screen degrades to the
+         unsorted directory when they are refused rather than blocking the emergency flow on them. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Phase 10. Runtime-requested on API 33+ only; below that a notification needs no permission at
+         all. Refusing it leaves the in-app inbox and the bell badge working — nothing is gated on it,
+         the user simply stops getting tray entries. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Not required: plenty of devices have no pedometer, and the app is perfectly usable without
          one. Marking it required would hide Omni from those devices in the Play Store. -->
     <uses-feature
@@ -39,6 +49,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Phase 10. `exported="false"`: only the Play Services messaging component binds to this,
+             and it does so from within the same app's process boundary. -->
+        <service
+            android:name=".service.OmniMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- The icon and channel Android falls back to when a push arrives while the app is in the
+             background and the payload names neither. Without the channel id, a message delivered on
+             API 26+ before any screen has run would be dropped silently. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification_bell" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="omni_general" />
     </application>
 
 </manifest>

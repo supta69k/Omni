@@ -11,10 +11,10 @@ package com.example.omni.data.model
  * Functions of Phases 10 and 11; until those land the map is simply absent, which reads as 0 — the
  * same thing the header shows today.
  *
- * [waterGoal], [stepsGoal], [sleepGoal] and [fiberGoal] are the `goals` map (BACKEND_PLAN §7). Goals belong
- * to the *account*, not to a day: changing the target must not rewrite history, so they are stored here
- * and the per-day document keeps only what actually happened. The two hour/gram goals are `Float` because
- * half an hour of sleep is a normal target and the cards print a decimal.
+ * [waterGoal], [stepsGoal], [sleepGoal], [fiberGoal] and [calorieGoal] are the `goals` map (BACKEND_PLAN
+ * §7). Goals belong to the *account*, not to a day: changing the target must not rewrite history, so they
+ * are stored here and the per-day document keeps only what actually happened. The two hour/gram goals are
+ * `Float` because half an hour of sleep is a normal target and the cards print a decimal.
  */
 data class User(
     val uid: String,
@@ -30,6 +30,13 @@ data class User(
     val stepsGoal: Int = DefaultStepsGoal,
     val sleepGoal: Float = DefaultSleepGoal,
     val fiberGoal: Float = DefaultFiberGoal,
+    val calorieGoal: Int = DefaultCalorieGoal,
+    /**
+     * The `prefs` map (BACKEND_PLAN §7). Both default to **on**, which is what the settings switches
+     * have always drawn and what a document written before Phase 10 has no opinion about.
+     */
+    val pushNotifications: Boolean = true,
+    val offlineCache: Boolean = true,
 )
 
 /**
@@ -55,6 +62,14 @@ const val DefaultSleepGoal = 8f
  * four-digit remainder would push a word onto a fourth line.
  */
 const val DefaultFiberGoal = 31f
+
+/**
+ * 2,000 kcal — BACKEND_PLAN §7's own default, and the number the gauge's sentence is measured against.
+ *
+ * Clamped when read (see `FirestoreUserRepository`): the percent is printed inside a fixed box beside
+ * the arc, so a six-digit goal would push "999%" into the sentence's line.
+ */
+const val DefaultCalorieGoal = 2_000
 
 enum class UserRole { USER, PROFESSIONAL, ADMIN }
 

@@ -27,9 +27,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,16 +91,17 @@ fun SettingScreen(
     userName: String = "Sayed Mahir",
     userEmail: String = "sayedmahir69@gmail.com",
     photoUrl: String? = null,
+    pushNotifications: Boolean = true,
+    offlineCache: Boolean = true,
     onNavigate: (OmniNavItem) -> Unit = {},
     onEditProfile: () -> Unit = {},
     onAccountAction: (String) -> Unit = {},
     onSavedEmergencies: () -> Unit = {},
+    onPushNotificationsChange: (Boolean) -> Unit = {},
+    onOfflineCacheChange: (Boolean) -> Unit = {},
     onApplyForVerification: () -> Unit = {},
     onLogOut: () -> Unit = {},
 ) {
-    var pushNotifications by remember { mutableStateOf(true) }
-    var offlineCache by remember { mutableStateOf(true) }
-
     DesignFrame {
         Box(
             modifier = Modifier
@@ -172,24 +170,24 @@ fun SettingScreen(
                         title = "Push Notifications",
                         subtitle = "Alerts, reminders, community",
                         textWidth = 201.dp,
-                        onClick = { pushNotifications = !pushNotifications },
+                        onClick = { onPushNotificationsChange(!pushNotifications) },
                     ) {
                         PreferenceSwitch(
                             checked = pushNotifications,
                             trackOn = OmniSetTogglePush,
-                            onCheckedChange = { pushNotifications = it },
+                            onCheckedChange = onPushNotificationsChange,
                         )
                     }
                     SettingsRow(
                         title = "Offline First Aid Cache",
                         subtitle = "Download guides for offline use",
                         textWidth = 201.dp,
-                        onClick = { offlineCache = !offlineCache },
+                        onClick = { onOfflineCacheChange(!offlineCache) },
                     ) {
                         PreferenceSwitch(
                             checked = offlineCache,
                             trackOn = OmniSetToggleCache,
-                            onCheckedChange = { offlineCache = it },
+                            onCheckedChange = onOfflineCacheChange,
                         )
                     }
                 }

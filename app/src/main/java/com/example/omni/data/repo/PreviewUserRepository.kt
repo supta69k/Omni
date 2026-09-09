@@ -1,6 +1,8 @@
 package com.example.omni.data.repo
 
+import com.example.omni.data.model.Profession
 import com.example.omni.data.model.User
+import com.example.omni.data.model.UserRole
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +23,8 @@ class PreviewUserRepository(
 
     override fun observeUser(uid: String): Flow<User?> = user.asStateFlow()
 
+    override fun observeProfessionals(): Flow<List<User>> = MutableStateFlow(PreviewProfessionals)
+
     override suspend fun updateProfile(uid: String, fields: Map<String, Any?>) {
         user.update { current ->
             current.copy(
@@ -35,6 +39,26 @@ class PreviewUserRepository(
             uid = "preview-uid",
             name = "Sayed Mahir",
             email = "sayedmahir69@gmail.com",
+        )
+
+        /** Two, so a preview shows both disciplines the app knows about. */
+        val PreviewProfessionals = listOf(
+            User(
+                uid = "dr-rahman",
+                name = "Dr. Sadia Rahman",
+                email = "sadia@omni.health",
+                role = UserRole.PROFESSIONAL,
+                profession = Profession.DOCTOR,
+                verified = true,
+            ),
+            User(
+                uid = "nut-karim",
+                name = "Tanvir Karim",
+                email = "tanvir@omni.health",
+                role = UserRole.PROFESSIONAL,
+                profession = Profession.NUTRITIONIST,
+                verified = true,
+            ),
         )
     }
 }

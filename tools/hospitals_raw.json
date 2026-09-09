@@ -1,0 +1,2499 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-09-09T07:12:26Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 266877864,
+  "lat": 23.8747993,
+  "lon": 90.3967330,
+  "tags": {
+    "addr:city": "Uttara, Dhaka",
+    "addr:housenumber": "House 34, Road 4, Sector 9",
+    "addr:postcode": "1230",
+    "addr:street": "Sonargaon Janapath",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "উত্তরা আধুনিক মেডিকেল কলেজ ও হাসপাতাল",
+    "name:bn": "উত্তরা আধুনিক মেডিকেল কলেজ ও হাসপাতাল",
+    "name:en": "Uttara Adhunik Medical College",
+    "phone": "+88028911600",
+    "ref": "Bangladesh Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 266885101,
+  "lat": 23.8673070,
+  "lon": 90.3966708,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Uttara Cresent"
+  }
+},
+{
+  "type": "node",
+  "id": 354463524,
+  "lat": 23.7391179,
+  "lon": 90.3955527,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "পিজি হাসপাতাল",
+    "name:en": "Institute of Post Graduates Medicine and Research"
+  }
+},
+{
+  "type": "node",
+  "id": 364419618,
+  "lat": 23.7517932,
+  "lon": 90.3673206,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housename": "Bangladesh Eye Hospital",
+    "addr:street": "Satmasjid Road",
+    "amenity": "hospital",
+    "name": "Bangladesh Eye Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 364425541,
+  "lat": 23.7434833,
+  "lon": 90.3825849,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "14/E",
+    "addr:street": "Road 6",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Gonoshastha Nagar Hospital",
+    "name:bn": "গণস্বাস্থ্য নগর হাসপাতাল",
+    "phone": "+8801716-838078",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 395065676,
+  "lat": 23.7106526,
+  "lon": 90.4119161,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "National Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 842543448,
+  "lat": 22.3593346,
+  "lon": 91.8306570,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Chittagong Medical College Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 871761335,
+  "lat": 23.7485032,
+  "lon": 90.4050678,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Ad-Din Women's Medical college & Hospital",
+    "wikidata": "Q4678070",
+    "wikimedia_commons": "Category:Ad-din Women's Medical College",
+    "wikipedia": "en:Ad-din Women's Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 877863211,
+  "lat": 23.7465980,
+  "lon": 90.4027318,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Holy Family Red Crescent Medical College and Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 1271733441,
+  "lat": 23.7059820,
+  "lon": 90.4143860,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1329007641,
+  "lat": 22.3601025,
+  "lon": 91.8315438,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Chittagong Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 1496128734,
+  "lat": 23.8704897,
+  "lon": 90.4035461,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "32",
+    "addr:postcode": "1230",
+    "addr:street": "Isha Khan Avenue, Sector 6, Uttara Model Town",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "আমেরিকান সুপারস্পেসটিটি হাসপাতাল",
+    "name:en": "American SuperSpecialty Hospital",
+    "phone": "+880 2 8932345, +880 2 8918319, +880 2 8918349, +880 2 8918395, +8806662617496, +8801921346125, +8801733559050",
+    "source": "http://www.americanhospital-bd.com",
+    "website": "http://www.americanhospital-bd.com",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 1787174815,
+  "lat": 23.7501949,
+  "lon": 90.3697475,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Bangladesh Medical College Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 1787175313,
+  "lat": 23.7515946,
+  "lon": 90.3689190,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "ইবনে সিনা হাসপাতাল",
+    "name:en": "Ibn Sina Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 1848616382,
+  "lat": 22.3589378,
+  "lon": 91.8234566,
+  "tags": {
+    "addr:city": "Chittagong, Bangladesh",
+    "addr:postcode": "4000",
+    "addr:street": "OR Nizam Rd",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Chittagong Metropolitan Hospital",
+    "opening_hours": "24/7"
+  }
+},
+{
+  "type": "node",
+  "id": 1848622264,
+  "lat": 22.3593393,
+  "lon": 91.8237587,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Metropolitan Clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 1848622265,
+  "lat": 22.3593154,
+  "lon": 91.8242980,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Private",
+    "emergency": "yes",
+    "name": "Royal Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 1848622267,
+  "lat": 22.3593299,
+  "lon": 91.8240608,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Bell View Diagonistics"
+  }
+},
+{
+  "type": "node",
+  "id": 1936362153,
+  "lat": 23.7410137,
+  "lon": 90.4123483,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Popular"
+  }
+},
+{
+  "type": "node",
+  "id": 1962572816,
+  "lat": 22.3412045,
+  "lon": 91.8381286,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Government Hospital",
+    "emergency": "yes",
+    "name": "General Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 1963093210,
+  "lat": 22.3437812,
+  "lon": 91.8339690,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Private",
+    "emergency": "yes",
+    "name": "Centre Point Hospital , OS"
+  }
+},
+{
+  "type": "node",
+  "id": 2208594272,
+  "lat": 22.3618983,
+  "lon": 91.8297433,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Private",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "name": "Treatment Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208595895,
+  "lat": 22.3618530,
+  "lon": 91.8304008,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Private Hospital",
+    "emergency": "yes",
+    "name": "Holy Health Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720875,
+  "lat": 22.3614315,
+  "lon": 91.8136016,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Surjer Hasi Clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720876,
+  "lat": 22.3612206,
+  "lon": 91.8160556,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Lions Charitable Eye Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720877,
+  "lat": 22.3591808,
+  "lon": 91.7953144,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Imperial Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720878,
+  "lat": 22.3615287,
+  "lon": 91.7976924,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Banghabondhu Memorial Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720880,
+  "lat": 22.3620181,
+  "lon": 91.8093557,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "name": "Holy Crescent Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720882,
+  "lat": 22.3617825,
+  "lon": 91.8024561,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Chittagong diabetic and general Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2208720892,
+  "lat": 22.3617211,
+  "lon": 91.7981771,
+  "tags": {
+    "amenity": "hospital",
+    "name": "USTC Medical College Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597818,
+  "lat": 22.3942639,
+  "lon": 91.8689780,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Medical Square"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597822,
+  "lat": 22.3606051,
+  "lon": 91.8303823,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Government Hospital",
+    "emergency": "yes",
+    "name": "Chittagong Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597836,
+  "lat": 22.3674084,
+  "lon": 91.8430813,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Diagnostic Center",
+    "emergency": "no",
+    "name": "Modern Diagnostic Center,OS"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597842,
+  "lat": 22.3591836,
+  "lon": 91.8265210,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "no",
+    "name": "Marie Stopes Clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597857,
+  "lat": 22.3588273,
+  "lon": 91.8251425,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Diagnostic Center",
+    "emergency": "no",
+    "name": "labaid diagnostic center"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597865,
+  "lat": 22.3609104,
+  "lon": 91.8317715,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Private",
+    "emergency": "yes",
+    "name": "Popular Diagnostic Center"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597869,
+  "lat": 22.3583034,
+  "lon": 91.8254633,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Metro diagnostic center"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597873,
+  "lat": 22.3610907,
+  "lon": 91.8312057,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Chittagong Shishu Hospital",
+    "name:en": "Chittagong shishu hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2209597874,
+  "lat": 22.3603935,
+  "lon": 91.8282626,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Blood Bank",
+    "emergency": "yes",
+    "name": "লাইফ সেভ ব্লাড ব্যাংক",
+    "name:en": "Life save Blood bank"
+  }
+},
+{
+  "type": "node",
+  "id": 2211572832,
+  "lat": 22.3424373,
+  "lon": 91.8374508,
+  "tags": {
+    "amenity": "hospital",
+    "designation": "Maternity",
+    "emergency": "yes",
+    "name": "Jemison redcrescent maternity hospital,Anderkilla"
+  }
+},
+{
+  "type": "node",
+  "id": 2211572833,
+  "lat": 22.3424373,
+  "lon": 91.8374507,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Jemison redcrescent maternity hospital,Anderkilla"
+  }
+},
+{
+  "type": "node",
+  "id": 2214704493,
+  "lat": 22.3604532,
+  "lon": 91.8337379,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Health Home Private Clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 2214704495,
+  "lat": 22.3602062,
+  "lon": 91.8332580,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Mirror Hospital Limited."
+  }
+},
+{
+  "type": "node",
+  "id": 2214704496,
+  "lat": 22.3602835,
+  "lon": 91.8338829,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Mohila O Sishu Hospital,OS"
+  }
+},
+{
+  "type": "node",
+  "id": 2214704498,
+  "lat": 22.3604793,
+  "lon": 91.8335431,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Surgiscope hospital unit 1 OS"
+  }
+},
+{
+  "type": "node",
+  "id": 2216627192,
+  "lat": 22.3597999,
+  "lon": 91.8374698,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Surgiscope Hospital unit 2"
+  }
+},
+{
+  "type": "node",
+  "id": 2216631278,
+  "lat": 22.3651894,
+  "lon": 91.8339336,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Doctor's hospital(OS)"
+  }
+},
+{
+  "type": "node",
+  "id": 2216636912,
+  "lat": 22.3631377,
+  "lon": 91.8305255,
+  "tags": {
+    "amenity": "hospital",
+    "closed": "yes",
+    "healthcare": "hospital",
+    "name": "CSCR storke unit"
+  }
+},
+{
+  "type": "node",
+  "id": 2216658624,
+  "lat": 22.3614483,
+  "lon": 91.8289753,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Checkup Diagnostic Centre"
+  }
+},
+{
+  "type": "node",
+  "id": 2320394258,
+  "lat": 23.7523917,
+  "lon": 90.3853287,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Samorita Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2324541010,
+  "lat": 22.3624485,
+  "lon": 91.8346561,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Niramoy Clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 2332686512,
+  "lat": 23.7878589,
+  "lon": 90.3279930,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Aminbazar union Health Center"
+  }
+},
+{
+  "type": "node",
+  "id": 2333045235,
+  "lat": 22.3524869,
+  "lon": 91.8202101,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Police Lines Hospital",
+    "operator": "Bangladesh Police",
+    "operator:type": "private"
+  }
+},
+{
+  "type": "node",
+  "id": 2339088931,
+  "lat": 22.3313997,
+  "lon": 91.8320131,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Menon Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2340250459,
+  "lat": 22.3277277,
+  "lon": 91.8114567,
+  "tags": {
+    "addr:city": "Chittagong",
+    "addr:postcode": "4100",
+    "addr:street": "Agrabad access Road",
+    "amenity": "hospital",
+    "name": "Nawabi"
+  }
+},
+{
+  "type": "node",
+  "id": 2342005239,
+  "lat": 22.3661028,
+  "lon": 91.8334820,
+  "tags": {
+    "addr:housenumber": "116-117",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Ekushe Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2343354456,
+  "lat": 23.7940859,
+  "lon": 90.4128239,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Lab Aid Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2408686614,
+  "lat": 22.3288889,
+  "lon": 91.8027234,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Agrabad Eye Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2446029248,
+  "lat": 22.4179164,
+  "lon": 91.8661393,
+  "tags": {
+    "addr:housename": "Nojumia hat,Kaptai Road,Chittagong",
+    "amenity": "hospital",
+    "name": "The fair lab"
+  }
+},
+{
+  "type": "node",
+  "id": 2571053072,
+  "lat": 22.3596798,
+  "lon": 91.8349368,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Ma Moni Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2577035693,
+  "lat": 22.3602517,
+  "lon": 91.8524369,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Orin Dental Care"
+  }
+},
+{
+  "type": "node",
+  "id": 2580458163,
+  "lat": 22.3461643,
+  "lon": 91.8339182,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Sensive Diagnostics Center"
+  }
+},
+{
+  "type": "node",
+  "id": 2580474812,
+  "lat": 22.3446545,
+  "lon": 91.8340144,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Bellevue Diagnostic Center"
+  }
+},
+{
+  "type": "node",
+  "id": 2580477465,
+  "lat": 22.3446669,
+  "lon": 91.8335531,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Lab one diagnostic center"
+  }
+},
+{
+  "type": "node",
+  "id": 2585719362,
+  "lat": 22.3439671,
+  "lon": 91.8329767,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Bangladesh Diabetic Foot Saving Centre"
+  }
+},
+{
+  "type": "node",
+  "id": 2697236496,
+  "lat": 23.8691562,
+  "lon": 90.4041091,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "House 24",
+    "addr:postcode": "1230",
+    "addr:street": "Road 13, Sector 6, Uttara Model Town",
+    "amenity": "hospital",
+    "name": "Uttara Community Hospital",
+    "note": "House no: 24, Road no: 13, Sector: 06, Uttara, Dhaka-1230 info@uchlbd.com ﻿Tel Phone: 8951475 Mobile: 01924-752988, 01962-407044",
+    "phone": "+88028951475, +8801924752988, +8801962407044",
+    "source": "http://ds24editor.wix.com/uchl",
+    "website": "http://ds24editor.wix.com/uchl"
+  }
+},
+{
+  "type": "node",
+  "id": 2877319781,
+  "lat": 23.7989706,
+  "lon": 90.3865056,
+  "tags": {
+    "amenity": "hospital",
+    "name": "MARKS HOSPITAL"
+  }
+},
+{
+  "type": "node",
+  "id": 2895202033,
+  "lat": 23.8941807,
+  "lon": 90.3766464,
+  "tags": {
+    "amenity": "hospital",
+    "name": "East West Medical College and Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 2993160472,
+  "lat": 23.7805550,
+  "lon": 90.4101087,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "28/8/B, 15th Floor",
+    "addr:postcode": "1200",
+    "addr:street": "Bir Uttam A. K. Khandakar Road",
+    "amenity": "hospital",
+    "name": "Life Care"
+  }
+},
+{
+  "type": "node",
+  "id": 2993197559,
+  "lat": 23.7762603,
+  "lon": 90.4087339,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "National Institute of Diseases of the Chest & Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3003562592,
+  "lat": 23.7592083,
+  "lon": 90.3900863,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Al Razi Hospital (Ext)"
+  }
+},
+{
+  "type": "node",
+  "id": 3003715875,
+  "lat": 23.7586584,
+  "lon": 90.3903864,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Al Fateh Diagnostics"
+  }
+},
+{
+  "type": "node",
+  "id": 3006174850,
+  "lat": 23.7391216,
+  "lon": 90.3942607,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Institute of Nuclear Medicine"
+  }
+},
+{
+  "type": "node",
+  "id": 3006177812,
+  "lat": 23.7396737,
+  "lon": 90.3953693,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Cabin Block"
+  }
+},
+{
+  "type": "node",
+  "id": 3015256422,
+  "lat": 23.7302625,
+  "lon": 90.4072651,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Free Friday Clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 3283392703,
+  "lat": 23.7735858,
+  "lon": 90.4108260,
+  "tags": {
+    "amenity": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3283392704,
+  "lat": 23.7739208,
+  "lon": 90.4099113,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:postcode": "1212",
+    "amenity": "hospital",
+    "emergency": "no",
+    "name": "TB Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3301113417,
+  "lat": 23.7155564,
+  "lon": 90.3808215,
+  "tags": {
+    "amenity": "hospital",
+    "health_facility_type": "health_centre",
+    "name": "Manobic Heath Center",
+    "operator": "Manobig Oganijation"
+  }
+},
+{
+  "type": "node",
+  "id": 3301866477,
+  "lat": 23.7291782,
+  "lon": 90.3234324,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Upazila Health Complex",
+    "operator": "Govt",
+    "source": "Esri, Survey"
+  }
+},
+{
+  "type": "node",
+  "id": 3307823182,
+  "lat": 23.7299525,
+  "lon": 90.3340594,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Bresba Medical Services LTD.",
+    "source": "Esri, Survey"
+  }
+},
+{
+  "type": "node",
+  "id": 3307824662,
+  "lat": 23.7303012,
+  "lon": 90.3333249,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Ati Bazar Central Hospital",
+    "source": "Esri, Survey"
+  }
+},
+{
+  "type": "node",
+  "id": 3314001918,
+  "lat": 23.7100254,
+  "lon": 90.3675051,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Riverside Hospital",
+    "note": "Huzurpara"
+  }
+},
+{
+  "type": "node",
+  "id": 3314098942,
+  "lat": 23.7302739,
+  "lon": 90.3578648,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Life & Care Hospital",
+    "note": "kamrangir Chor"
+  }
+},
+{
+  "type": "node",
+  "id": 3315890963,
+  "lat": 23.7395453,
+  "lon": 90.3750454,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Japan Bangladesh Friendship Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3320927147,
+  "lat": 23.7409440,
+  "lon": 90.3587459,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Sikder Medical College Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3320955408,
+  "lat": 23.7437864,
+  "lon": 90.3602519,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Bangladesh Eye trust Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3321172255,
+  "lat": 23.7454685,
+  "lon": 90.3625365,
+  "tags": {
+    "alt_name": "Nogoor Shashtokendro",
+    "amenity": "hospital",
+    "health_facility:type": "health center",
+    "name": "Urban Primary Health Care Center",
+    "operator": "Meri Stopes"
+  }
+},
+{
+  "type": "node",
+  "id": 3328858519,
+  "lat": 23.7458503,
+  "lon": 90.3703427,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Naz-E-Noor Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3391624665,
+  "lat": 23.7307962,
+  "lon": 90.3673035,
+  "tags": {
+    "amenity": "hospital",
+    "health_facility:type": "health_center",
+    "healthcare": "hospital",
+    "name": "Nogor Shasto kendro"
+  }
+},
+{
+  "type": "node",
+  "id": 3450283986,
+  "lat": 23.7735111,
+  "lon": 90.3695891,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "National Institute of Traumatology & Orthopaedic Rehabilitation (NITOR)"
+  }
+},
+{
+  "type": "node",
+  "id": 3473792183,
+  "lat": 23.7124024,
+  "lon": 90.3722885,
+  "tags": {
+    "amenity": "hospital",
+    "health_facility:type": "Nursing_Home",
+    "name": "Puspit Nursing Home"
+  }
+},
+{
+  "type": "node",
+  "id": 3502993813,
+  "lat": 23.7141574,
+  "lon": 90.3625354,
+  "tags": {
+    "amenity": "hospital",
+    "health_facility:type": "health center",
+    "name": "মেরী স্টোপস স্বাস্থ্য কেন্দ্র",
+    "name:en": "Meri Staps Health Center",
+    "note": "Kamrangirchor"
+  }
+},
+{
+  "type": "node",
+  "id": 3528885127,
+  "lat": 23.7171694,
+  "lon": 90.3719977,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Aleya Islam General Hospital",
+    "source": "Survey - HOTOSM, MSF, Bing"
+  }
+},
+{
+  "type": "node",
+  "id": 3528909645,
+  "lat": 23.7406532,
+  "lon": 90.3742506,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Government Remeta Employee Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3529068545,
+  "lat": 23.7184024,
+  "lon": 90.3727432,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Al-Ahsan Diagnostic Hospital",
+    "source": "Survey - HOTOSM, MSF, Bing"
+  }
+},
+{
+  "type": "node",
+  "id": 3529312405,
+  "lat": 23.7177122,
+  "lon": 90.3680177,
+  "tags": {
+    "amenity": "hospital",
+    "health_facility_type": "health centre",
+    "name": "Marie Stopes",
+    "source": "Survey - HOTOSM, MSF, Bing"
+  }
+},
+{
+  "type": "node",
+  "id": 3529323293,
+  "lat": 23.7162141,
+  "lon": 90.3677164,
+  "tags": {
+    "amenity": "hospital",
+    "health_facility_type": "hospital",
+    "name": "মেডিসিন্স সান্স ফ্রন্টিয়ার্স",
+    "name:en": "MEDICINS SANS FRONTIERES",
+    "note": "Ali Nogor, Nobi Nogor",
+    "operator": "Medicins Sans Frontier"
+  }
+},
+{
+  "type": "node",
+  "id": 3559086357,
+  "lat": 23.7383957,
+  "lon": 90.3877204,
+  "tags": {
+    "amenity": "hospital",
+    "level": "3",
+    "name": "জেনারেল মেডিক্যাল হসপিটাল",
+    "name:en": "General Medical Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3671354272,
+  "lat": 23.7370732,
+  "lon": 90.3866517,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "65,",
+    "addr:postcode": "1205",
+    "addr:street": "elephant",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Meherun Homeo Pharmacy"
+  }
+},
+{
+  "type": "node",
+  "id": 3712960338,
+  "lat": 23.7451485,
+  "lon": 90.3992966,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:street": "Eskaton Road",
+    "amenity": "hospital",
+    "healthcare": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3731446676,
+  "lat": 23.7410273,
+  "lon": 90.4186838,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "আল-বারাকাহ জেনারেল হাসপাতাল",
+    "name:bn": "আল-বারাকাহ জেনারেল হাসপাতাল",
+    "name:en": "AL-Barakah General Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3732390817,
+  "lat": 23.8027632,
+  "lon": 90.3706420,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Al-Helal Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3732776471,
+  "lat": 23.7442514,
+  "lon": 90.3723242,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "no",
+    "name": "প্রাইম ব্যাংক চক্ষু হাসপাতাল",
+    "name:bn": "প্রাইম ব্যাংক চক্ষু হাসপাতাল",
+    "name:en": "Prime Bank Eye Hospitals",
+    "note": "eye hospital operate by prime bank"
+  }
+},
+{
+  "type": "node",
+  "id": 3732862292,
+  "lat": 23.7472931,
+  "lon": 90.3702313,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Eden Multicare Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3734280310,
+  "lat": 23.7477633,
+  "lon": 90.4091274,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "University Dental College and Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3734289774,
+  "lat": 23.7374290,
+  "lon": 90.4285859,
+  "tags": {
+    "amenity": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3734803537,
+  "lat": 23.8075588,
+  "lon": 90.3696927,
+  "tags": {
+    "amenity": "hospital",
+    "check_date": "2024-04-22",
+    "name": "radda"
+  }
+},
+{
+  "type": "node",
+  "id": 3734921272,
+  "lat": 23.8682156,
+  "lon": 90.3940639,
+  "tags": {
+    "amenity": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3740064551,
+  "lat": 23.8166526,
+  "lon": 90.3674582,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Eye hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3741032771,
+  "lat": 23.7110370,
+  "lon": 90.4242969,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Bangladesh Humiopathik Porishod, Dhaka Jila"
+  }
+},
+{
+  "type": "node",
+  "id": 3744956568,
+  "lat": 23.7035507,
+  "lon": 90.4247766,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "74/1",
+    "addr:street": "Dinanath Sen Road",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Aroggo niketon homio center",
+    "note": "Dr. Shahida Islam Asha (DHMS) Time : 4pm to 9 am"
+  }
+},
+{
+  "type": "node",
+  "id": 3744967700,
+  "lat": 23.7024645,
+  "lon": 90.4194307,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "92",
+    "addr:postcode": "1204",
+    "addr:street": "Keshab Benarjee Road",
+    "amenity": "hospital",
+    "name": "Delta Dygonestic & Health Service"
+  }
+},
+{
+  "type": "node",
+  "id": 3781657800,
+  "lat": 23.8191076,
+  "lon": 90.3805302,
+  "tags": {
+    "addr:city": "Bauniabadh, Pallabi, Mirpur-11, Dhaka",
+    "addr:housenumber": "E-block",
+    "amenity": "hospital",
+    "licensed": "Government",
+    "name": "Government Outdoor Dispensary (GOD)",
+    "note": "Muslim Aid Road",
+    "opening_hours": "Sa-Th 9:00-14:00; Fr off"
+  }
+},
+{
+  "type": "node",
+  "id": 3788786313,
+  "lat": 23.7740437,
+  "lon": 90.4052251,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Songkramok Badhi Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3795800904,
+  "lat": 22.3184273,
+  "lon": 91.8521737,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Sah Somie nagoi community clinic"
+  }
+},
+{
+  "type": "node",
+  "id": 3797620952,
+  "lat": 23.7375744,
+  "lon": 90.4098236,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "ইসলামী ব্যাংক কেন্দ্রীয় হাসপাতাল",
+    "name:bn": "ইসলামী ব্যাংক কেন্দ্রীয় হাসপাতাল",
+    "name:en": "Islami Bank Central Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 3797662116,
+  "lat": 23.7317089,
+  "lon": 90.4061085,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "বারডেম জেনারেল হাসপাতাল ২",
+    "name:en": "BIRDEM General Hospital 2"
+  }
+},
+{
+  "type": "node",
+  "id": 3810938213,
+  "lat": 23.8151865,
+  "lon": 90.3713550,
+  "tags": {
+    "addr:city": "Mirpur 11, Dhaka",
+    "addr:housenumber": "Hosue 2, Block C",
+    "addr:postcode": "1216",
+    "addr:street": "Line 12, Road 10, Tara Medical Road",
+    "amenity": "hospital",
+    "contact:phone": "+8801924521356",
+    "healthcare": "hospital",
+    "level": "1",
+    "name": "তারা মেডিকেল সেন্টার",
+    "name:bn": "তারা মেডিকেল সেন্টার",
+    "name:en": "Tara Medical Centre",
+    "opening_hours": "Sa-Fr 09:00-24:00"
+  }
+},
+{
+  "type": "node",
+  "id": 3907717965,
+  "lat": 23.8668616,
+  "lon": 90.3955096,
+  "tags": {
+    "addr:city": "Uttara Dhaka",
+    "addr:postcode": "1230",
+    "addr:street": "Road 13",
+    "amenity": "hospital",
+    "name": "Uttara Cresent Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4077212339,
+  "lat": 23.7514278,
+  "lon": 90.4047963,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Nagor Health Care 2"
+  }
+},
+{
+  "type": "node",
+  "id": 4077212341,
+  "lat": 23.7512263,
+  "lon": 90.4048592,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Nari Maitree"
+  }
+},
+{
+  "type": "node",
+  "id": 4092034085,
+  "lat": 23.7062422,
+  "lon": 90.3472974,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Malancha Govt. Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4206412116,
+  "lat": 23.8065469,
+  "lon": 90.3674517,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Medinova Hospital",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 4322832184,
+  "lat": 23.8182452,
+  "lon": 90.3660545,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "প্লট ১",
+    "addr:suburb": "Mirpur-11",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "495",
+    "name": "Akumunnessa Eye Clinic(আকুমুন্নেসা আই ক্লিনিক)"
+  }
+},
+{
+  "type": "node",
+  "id": 4322832764,
+  "lat": 23.8195104,
+  "lon": 90.3654856,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housename": "ইসলামী ব্যাংক বিল্ডিং",
+    "addr:street": "৩",
+    "addr:suburb": "Mirpur-11",
+    "amenity": "hospital",
+    "check_date": "2025-12-02",
+    "identifier": "507",
+    "name": "ইসলামী ব্যাংক হাসপাতাল",
+    "name:en": "Islami Bank Hospital",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4322833430,
+  "lat": 23.8177023,
+  "lon": 90.3663789,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housename": "৩",
+    "addr:street": "৬",
+    "addr:suburb": "Mirpur-11",
+    "amenity": "hospital",
+    "check_date": "2026-07-15",
+    "identifier": "467",
+    "name": "ফিজিওথেরাপি সেন্টার",
+    "name:bn": "ফিজিওথেরাপি সেন্টার",
+    "name:en": "Physiotherapy Centre"
+  }
+},
+{
+  "type": "node",
+  "id": 4322833433,
+  "lat": 23.8212392,
+  "lon": 90.3730252,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১১",
+    "addr:street": "১",
+    "addr:suburb": "Mirpur-11",
+    "amenity": "hospital",
+    "check_date": "2024-04-02",
+    "identifier": "436",
+    "name": "shishu Hospital(শিশু হাসপাতাল)"
+  }
+},
+{
+  "type": "node",
+  "id": 4331663674,
+  "lat": 23.8173443,
+  "lon": 90.3732098,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১০",
+    "addr:street": "২",
+    "addr:suburb": "Mirpur-11",
+    "amenity": "hospital",
+    "identifier": "622",
+    "name": "BRAC Metarnity Centre(ব্রাক মেটারনিটি সেন্টার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4331663684,
+  "lat": 23.8155046,
+  "lon": 90.3740054,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "৩",
+    "addr:suburb": "Mirpur-11",
+    "amenity": "hospital",
+    "identifier": "630",
+    "name": "Dr. Priyanka Aziz Chamber(ডাঃ প্রিয়াংকা আজিজ চেম্বার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4357401918,
+  "lat": 23.7552277,
+  "lon": 90.3800946,
+  "tags": {
+    "amenity": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4361747694,
+  "lat": 23.7394982,
+  "lon": 90.3814159,
+  "tags": {
+    "addr:city": "dhaka city",
+    "addr:housenumber": "14/a",
+    "addr:postcode": "1205",
+    "addr:street": "Dhanmondi Road 2",
+    "amenity": "hospital",
+    "check_date": "2024-05-02",
+    "healthcare": "physiotherapist",
+    "label": "48/В2",
+    "name": "Modern Physiotherapy",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 4361780506,
+  "lat": 23.7387316,
+  "lon": 90.3802694,
+  "tags": {
+    "addr:city": "dhaka city",
+    "addr:housenumber": "22/B",
+    "addr:postcode": "1205",
+    "addr:street": "Dhanmondi Road 2",
+    "amenity": "hospital",
+    "check_date": "2024-05-02",
+    "healthcare": "hospital",
+    "label": "3",
+    "name": "OHCL",
+    "source": "survey"
+  }
+},
+{
+  "type": "node",
+  "id": 4372209895,
+  "lat": 22.3582562,
+  "lon": 91.8249135,
+  "tags": {
+    "amenity": "hospital",
+    "name:en": "Evergreen Health Center"
+  }
+},
+{
+  "type": "node",
+  "id": 4381071794,
+  "lat": 23.7482183,
+  "lon": 90.4123789,
+  "tags": {
+    "addr:housenumber": "11",
+    "addr:postcode": "1217",
+    "addr:street": "ডিআইটি সড়ক",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Saphena General Hospital",
+    "opening_hours": "24/7",
+    "phone": "+8801711560347"
+  }
+},
+{
+  "type": "node",
+  "id": 4381094290,
+  "lat": 23.7481756,
+  "lon": 90.4123777,
+  "tags": {
+    "addr:housenumber": "11",
+    "addr:postcode": "1217",
+    "addr:street": "ডিআইটি সড়ক",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Saphena Womens Dental College & Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4381975631,
+  "lat": 23.7438830,
+  "lon": 90.4160348,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "6",
+    "addr:postcode": "1217",
+    "addr:street": "Shantibagh Rd",
+    "amenity": "hospital",
+    "name": "Family Dentist"
+  }
+},
+{
+  "type": "node",
+  "id": 4388781962,
+  "lat": 23.7179419,
+  "lon": 90.4159896,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Nibedita General Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4388841143,
+  "lat": 23.7160002,
+  "lon": 90.4163756,
+  "tags": {
+    "amenity": "hospital",
+    "name": "বার্ডেম হাসপাতাল",
+    "name:bn": "বার্ডেম হাসপাতাল",
+    "name:en": "Bardem Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4388870973,
+  "lat": 23.7194239,
+  "lon": 90.4165136,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Health Care"
+  }
+},
+{
+  "type": "node",
+  "id": 4389406404,
+  "lat": 23.7396681,
+  "lon": 90.4205869,
+  "tags": {
+    "addr:street": "আউটার সার্কুলার রোড",
+    "amenity": "hospital",
+    "name": "ইসলামি ব্যাংক হাসপাতাল ভবন ৫",
+    "name:bn": "ইসলামি ব্যাংক হাসপাতাল ভবন ৫",
+    "name:en": "Islami Bank Hospital Buding 5"
+  }
+},
+{
+  "type": "node",
+  "id": 4389421503,
+  "lat": 23.7380452,
+  "lon": 90.4222603,
+  "tags": {
+    "addr:street": "আউটার সার্কুলার রোড",
+    "amenity": "hospital",
+    "name": "প্যান প্যাসিফিক হাসপাতাল",
+    "name:bn": "প্যান প্যাসিফিক হাসপাতাল",
+    "name:en": "Pan pacific Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4407994596,
+  "lat": 23.8230190,
+  "lon": 90.3688928,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৫১",
+    "addr:street": "৪",
+    "addr:suburb": "Mirpur-12",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "670",
+    "name": "Dr Ainul Islam Khan Chamber(ড আইনুল ইসলাম চেম্বার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4407994598,
+  "lat": 23.8228712,
+  "lon": 90.3689304,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৫১",
+    "addr:street": "৮",
+    "addr:suburb": "Mirpur-12",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "672",
+    "name": "Dr Nighat Rahman Chamber(ড নিঘাত রহমান)"
+  }
+},
+{
+  "type": "node",
+  "id": 4407994599,
+  "lat": 23.8230876,
+  "lon": 90.3688620,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৬১",
+    "addr:street": "৯",
+    "addr:suburb": "Mirpur-12",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "669",
+    "name": "Dr Sayeda Dil Afroz Chamber(ড সায়েদা দিল আফরোজ)"
+  }
+},
+{
+  "type": "node",
+  "id": 4407994680,
+  "lat": 23.8268842,
+  "lon": 90.3662785,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "০১",
+    "addr:street": "০৬",
+    "addr:suburb": "Mirpur-12",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "675",
+    "name": "Popular Medicine Corner (পপুলার মেডিসিন কর্নার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4407994683,
+  "lat": 23.8265626,
+  "lon": 90.3648013,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "71",
+    "addr:street": "6",
+    "addr:suburb": "Mirpur-12",
+    "amenity": "hospital",
+    "check_date": "2025-11-15",
+    "identifier": "676",
+    "name": "Rabeya Maternity(রাবেয়া ম্যাটারনিটি)"
+  }
+},
+{
+  "type": "node",
+  "id": 4407994807,
+  "lat": 23.8228939,
+  "lon": 90.3689290,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৫১",
+    "addr:street": "৮",
+    "addr:suburb": "Mirpur-12",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "671",
+    "name": "Shishir Medical Hall(শিশির মেডিক্যাল হল)"
+  }
+},
+{
+  "type": "node",
+  "id": 4410495892,
+  "lat": 23.7749900,
+  "lon": 90.3951924,
+  "tags": {
+    "addr:street": "Bir Uttam Ziaur Rahman Road",
+    "amenity": "hospital",
+    "name": "Ayesha Memorial Hospital",
+    "name:en": "Ayesha Memorial Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4430828491,
+  "lat": 23.7474961,
+  "lon": 90.4010657,
+  "tags": {
+    "addr:housenumber": "135",
+    "addr:postcode": "1000",
+    "addr:street": "New Easkaton Road",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "S.P.R.C & Neurology Hospital",
+    "opening_hours": "24/7",
+    "phone": "+88029339089"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181527,
+  "lat": 23.8234676,
+  "lon": 90.3640549,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "৭",
+    "addr:street": "২",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "identifier": "1035",
+    "name": "Alok health Care(আলোক হেলথ কেয়ার)",
+    "wheelchair": "no"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181532,
+  "lat": 23.8264832,
+  "lon": 90.3627322,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৮",
+    "addr:street": "৪",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "identifier": "968",
+    "name": "Anwara Nursing Home(আনোয়ারা নার্সিং হোম)"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181536,
+  "lat": 23.8243032,
+  "lon": 90.3635259,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১২",
+    "addr:street": "১",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "identifier": "1020",
+    "name": "Asia Health Care and Diagonistic Centre(এসিয়া হেলথ কেয়ার অ্যান্ড ডায়াগনিস্টিক সেন্টার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181553,
+  "lat": 23.8277311,
+  "lon": 90.3700976,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "৭",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "identifier": "958",
+    "name": "Brac Maternity Centre(ব্র্যাক মেটার্নিটি সেন্টার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181559,
+  "lat": 23.8231799,
+  "lon": 90.3640021,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housename": "৫",
+    "addr:street": "২",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "identifier": "1038",
+    "name": "Chowdury Doctors Chamber(চৌধুরী ডক্টরস চেম্বার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181714,
+  "lat": 23.8278871,
+  "lon": 90.3588367,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১২",
+    "addr:street": "২৯",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "identifier": "967",
+    "name": "Khandakar Chamber(খন্দকার চেম্বার)"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181774,
+  "lat": 23.8277468,
+  "lon": 90.3638623,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৪",
+    "addr:street": "১",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "check_date": "2022-10-11",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "healthcare:speciality": "general",
+    "identifier": "1013",
+    "name": "Regent Hospital Ltd(রিজেন্ট হসপিটাল লিমিটেড)",
+    "operator:type": "private",
+    "source": "local knowledge",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4432181793,
+  "lat": 23.8228059,
+  "lon": 90.3576258,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "১৫",
+    "addr:suburb": "N/A",
+    "amenity": "hospital",
+    "identifier": "1031",
+    "name": "Shishu Niramoy",
+    "name:bn": "শিশু নিরাময়"
+  }
+},
+{
+  "type": "node",
+  "id": 4486444918,
+  "lat": 23.7831714,
+  "lon": 90.4257155,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:postcode": "1212",
+    "addr:street": "Bir Uttam Rafiqul Islam Ave",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Ibn Sina Diagnostic & Consultation Center, Building-1",
+    "name:bn": "ইবনে সিনা ডায়াগনস্টিক ও কনসালটেশন সেন্টার, ভবন-১"
+  }
+},
+{
+  "type": "node",
+  "id": 4509927854,
+  "lat": 23.7177407,
+  "lon": 90.3770353,
+  "tags": {
+    "amenity": "hospital",
+    "name": "কুড়ারঘাট ৩২ শয্যা বিশিষ্ট হাসপাতাল",
+    "name:en": "Kamrangirchar Govt. Hospital",
+    "operator": "Govt.",
+    "source": "NextView"
+  }
+},
+{
+  "type": "node",
+  "id": 4515439399,
+  "lat": 23.7723586,
+  "lon": 90.3681050,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "জাতীয় মানসিক স্বাস্থ্য ইনস্টিটিউট এন্ড হসপিটাল",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4518419989,
+  "lat": 23.7452960,
+  "lon": 90.3819718,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "House no 17",
+    "addr:postcode": "1205",
+    "addr:street": "Dhanmondi Road no 5",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "name": "Anwar Khan Modern Medical College Hospital",
+    "phone": "+88028614927",
+    "wheelchair": "yes",
+    "wikidata": "Q4778088",
+    "wikimedia_commons": "Category:Anwer Khan Modern Medical College",
+    "wikipedia": "en:Anwer Khan Modern Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 4524681189,
+  "lat": 23.7625162,
+  "lon": 90.3654004,
+  "tags": {
+    "amenity": "hospital",
+    "name:en": "Mohammadpur Infertility Care & Research Centre (ICRC)"
+  }
+},
+{
+  "type": "node",
+  "id": 4527964655,
+  "lat": 23.7078377,
+  "lon": 90.4236155,
+  "tags": {
+    "addr:city": "Gandaria, Dhaka",
+    "addr:housenumber": "111/1/A",
+    "addr:postcode": "1204",
+    "addr:street": "Distillery Road",
+    "amenity": "hospital",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "healthcare:speciality": "general",
+    "name": "Asgar Ali Hospital",
+    "operator": "01787-683333",
+    "operator:type": "private",
+    "website": "https://asgaralihospital.com/"
+  }
+},
+{
+  "type": "node",
+  "id": 4531545620,
+  "lat": 23.7567970,
+  "lon": 90.3744592,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Mother Care Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4532130990,
+  "lat": 23.8276494,
+  "lon": 90.3680317,
+  "tags": {
+    "addr:housenumber": "48",
+    "addr:postcode": "1216",
+    "addr:street": "Block-C,Line-12.",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "internet_access": "wlan",
+    "name:en": "English",
+    "phone": "+8801717168522"
+  }
+},
+{
+  "type": "node",
+  "id": 4533184589,
+  "lat": 23.7461412,
+  "lon": 90.3854888,
+  "tags": {
+    "addr:housenumber": "32",
+    "addr:postcode": "1205",
+    "addr:street": "Green Road",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "internet_access": "wlan",
+    "name": "Green Life College",
+    "name:en": "Green Life Medical College Hospital",
+    "opening_hours": "24/7",
+    "phone": "+88029612345",
+    "website": "https://www.greenlife.edu.bd/"
+  }
+},
+{
+  "type": "node",
+  "id": 4561237386,
+  "lat": 23.7465544,
+  "lon": 90.3857644,
+  "tags": {
+    "addr:street": "Green Road",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Green Life Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 4579879715,
+  "lat": 23.8095357,
+  "lon": 90.3681201,
+  "tags": {
+    "addr:housenumber": "1",
+    "addr:postcode": "1216",
+    "addr:street": "এভিনিউ -১",
+    "amenity": "hospital",
+    "check_date": "2024-07-14",
+    "internet_access": "no",
+    "name": "Popular Diagnostic Center Ltd Unit-2",
+    "name:bn": "পপুলার ডায়াগনস্টিক সেন্টার",
+    "payment:cash": "yes",
+    "payment:credit_cards": "yes",
+    "payment:debit_cards": "yes",
+    "tourism": "hostel",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4608145192,
+  "lat": 23.8351199,
+  "lon": 90.4535587,
+  "tags": {
+    "addr:housenumber": "4",
+    "addr:postcode": "1229",
+    "addr:street": "Khilkhet Isapura",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "internet_access": "wlan",
+    "name": "Ashiyan Medical College Hospital",
+    "name:en": "Ashiyan Medical College Hospital",
+    "phone": "+8801713895345"
+  }
+},
+{
+  "type": "node",
+  "id": 4634235837,
+  "lat": 22.3227283,
+  "lon": 91.8070098,
+  "tags": {
+    "amenity": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4635158151,
+  "lat": 22.3134448,
+  "lon": 91.7964792,
+  "tags": {
+    "amenity": "hospital",
+    "name": "চট্টগ্রাম বন্দর হাসপাতাল",
+    "name:en": "Chiitagong Port Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4641633020,
+  "lat": 22.3331232,
+  "lon": 91.8334685,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Memon-2"
+  }
+},
+{
+  "type": "node",
+  "id": 4678674890,
+  "lat": 23.7523137,
+  "lon": 90.3813170,
+  "tags": {
+    "addr:street": "Pantha Path",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Square hospital extension bldg"
+  }
+},
+{
+  "type": "node",
+  "id": 4684480190,
+  "lat": 22.4015361,
+  "lon": 91.8060306,
+  "tags": {
+    "amenity": "hospital",
+    "name:en": "Chittagong cantonment"
+  }
+},
+{
+  "type": "node",
+  "id": 4839320530,
+  "lat": 23.7554384,
+  "lon": 90.3761021,
+  "tags": {
+    "addr:housenumber": "4/1/A",
+    "addr:postcode": "1207",
+    "addr:street": "Mirpur Road",
+    "amenity": "hospital",
+    "name": "দীন মোহাম্মদ চক্ষু হাসপাতাল ও গবেষনা কেন্দ্র",
+    "name:en": "Deen Mohd Eye Hospital & Research Centre",
+    "phone": "+8801731185782"
+  }
+},
+{
+  "type": "node",
+  "id": 4859599670,
+  "lat": 23.7803831,
+  "lon": 90.4261229,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Al Sami Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 4929887711,
+  "lat": 23.7703672,
+  "lon": 90.3694314,
+  "tags": {
+    "addr:country": "BD",
+    "addr:district": "Tiruvallur",
+    "addr:full": "4-A Dr J J Nager, Mogappair, Chennai",
+    "addr:postcode": "600037",
+    "addr:state": "Tamil Nadu",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Institute Of Cardio-Vascular Diseaqses",
+    "name:bn": "জাতীয় হৃদরোগ ইন্সটিটিউট",
+    "name:en": "National Institute of Cardiovascular Diseases",
+    "source": "OpenGovernmentData",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 4965399321,
+  "lat": 23.7629680,
+  "lon": 90.4031825,
+  "tags": {
+    "amenity": "hospital",
+    "name:en": "M H Samorita Hospital and Medical College"
+  }
+},
+{
+  "type": "node",
+  "id": 4976689766,
+  "lat": 23.7699696,
+  "lon": 90.3552318,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "৩৩",
+    "addr:street": "১২",
+    "addr:suburb": "Pisiculture_Housing_Society",
+    "amenity": "hospital",
+    "name": "ওয়েলকেয়ার হসপিটাল লিমিটেড",
+    "name:bn": "ওয়েলকেয়ার হসপিটাল লিমিটেড",
+    "name:en": "Wellcare Hospital Limited"
+  }
+},
+{
+  "type": "node",
+  "id": 4976689771,
+  "lat": 23.7713555,
+  "lon": 90.3548320,
+  "tags": {
+    "addr:city": "Dhaka",
+    "addr:housenumber": "৭৪৯",
+    "addr:street": "০৮",
+    "addr:suburb": "Baitul_Aman",
+    "amenity": "hospital",
+    "name:bn": "ভার্ড চক্ষু হাসপাতাল",
+    "name:en": "Vard Eye Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5019275482,
+  "lat": 22.3604419,
+  "lon": 91.7959434,
+  "tags": {
+    "amenity": "hospital",
+    "emergency": "yes",
+    "name": "Eye infarmary and training complex"
+  }
+},
+{
+  "type": "node",
+  "id": 5031604362,
+  "lat": 22.3660705,
+  "lon": 91.8334146,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Ekushey Hospital,Mirzapul(OS)"
+  }
+},
+{
+  "type": "node",
+  "id": 5033788421,
+  "lat": 23.7745887,
+  "lon": 90.3695602,
+  "tags": {
+    "amenity": "hospital",
+    "check_date": "2026-05-22",
+    "healthcare": "hospital",
+    "name": "জাতীয় চক্ষুবিজ্ঞান ইনস্টিটিউট এবং হাসপাতাল",
+    "name:bn": "জাতীয় চক্ষুবিজ্ঞান ইনস্টিটিউট এবং হাসপাতাল",
+    "name:en": "National Institute of Ophthalmology and Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5035017557,
+  "lat": 22.3596954,
+  "lon": 91.8365026,
+  "tags": {
+    "amenity": "hospital",
+    "name": "People's Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5105441222,
+  "lat": 22.2841804,
+  "lon": 91.7881054,
+  "tags": {
+    "amenity": "hospital",
+    "name:en": "Patenga Naval Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5153037006,
+  "lat": 22.2830266,
+  "lon": 91.7849173,
+  "tags": {
+    "amenity": "hospital",
+    "name": "Navy Hospital Gate নেভি হাসপাতালের গেট"
+  }
+},
+{
+  "type": "node",
+  "id": 5175493391,
+  "lat": 22.3538962,
+  "lon": 91.8287313,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Desh medical Services"
+  }
+},
+{
+  "type": "node",
+  "id": 5202601996,
+  "lat": 23.7822731,
+  "lon": 90.3527245,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "B.I.H.S General Hospital",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5206107453,
+  "lat": 23.7392113,
+  "lon": 90.3824483,
+  "tags": {
+    "amenity": "hospital",
+    "check_date": "2024-05-02",
+    "emergency": "yes",
+    "healthcare": "hospital",
+    "name": "popular hospital",
+    "source": "survey",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5209803187,
+  "lat": 23.7452371,
+  "lon": 90.3723768,
+  "tags": {
+    "addr:postcode": "1209",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Ibn Sina Hospital (head office)",
+    "phone": "09610-009616",
+    "website": "https://ibnsinatrust.com/"
+  }
+},
+{
+  "type": "node",
+  "id": 5209803627,
+  "lat": 23.7463591,
+  "lon": 90.3722829,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5216177321,
+  "lat": 23.8709680,
+  "lon": 90.4035774,
+  "tags": {
+    "amenity": "hospital",
+    "name": "কুয়েত বাংলাদেশ মৈত্রী সরকারি হাসপাতাল",
+    "name:en": "Kuwait Bangladesh Friendship Government Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5238876402,
+  "lat": 23.7942632,
+  "lon": 90.2711935,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Tetuljhora Health & Family Welfare Center তেতুলঝোড়া স্বাস্থ্য ও পরিবার কল্যাণ কেন্দ্র"
+  }
+},
+{
+  "type": "node",
+  "id": 5252017826,
+  "lat": 23.7678394,
+  "lon": 90.3988245,
+  "tags": {
+    "addr:housenumber": "304/E",
+    "addr:postcode": "1208",
+    "amenity": "hospital",
+    "name": "Impulse Hospital",
+    "name:bn": "ইমপালস্ হাসপাতাল",
+    "name:en": "Impulse Hospital"
+  }
+},
+{
+  "type": "node",
+  "id": 5298993124,
+  "lat": 23.7403579,
+  "lon": 90.3949575,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Transfusion Unit"
+  }
+},
+{
+  "type": "node",
+  "id": 5298993125,
+  "lat": 23.7403354,
+  "lon": 90.3949066,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Radiology And Imagine Department"
+  }
+},
+{
+  "type": "node",
+  "id": 5298993126,
+  "lat": 23.7403639,
+  "lon": 90.3951340,
+  "tags": {
+    "addr:street": "কাজী নজরুল ইসলাম সরণী",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Physical Medicine and Rehabilitation Ward"
+  }
+},
+{
+  "type": "node",
+  "id": 5299015622,
+  "lat": 23.7403507,
+  "lon": 90.3950205,
+  "tags": {
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name:en": "Transfusion Medicine Department"
+  }
+},
+{
+  "type": "node",
+  "id": 5342132622,
+  "lat": 23.7687483,
+  "lon": 90.3695214,
+  "tags": {
+    "addr:street": "Mirpur Road",
+    "amenity": "hospital",
+    "internet_access": "wlan",
+    "name": "শহীদ সোহরাওয়ার্দী মেডিক্যাল কলেজ হাসপাতাল",
+    "name:bn": "শহীদ সোহরাওয়ার্দী মেডিক্যাল কলেজ হাসপাতাল",
+    "name:en": "Shaheed Suhrawardi Medical College Hospital",
+    "opening_hours": "24/7",
+    "wheelchair": "yes"
+  }
+},
+{
+  "type": "node",
+  "id": 5494022722,
+  "lat": 23.7581754,
+  "lon": 90.3669772,
+  "tags": {
+    "addr:city": "Mohammadpur, Dhaka",
+    "addr:housenumber": "B-37",
+    "addr:postcode": "1200",
+    "addr:street": "Zakir Hossain Road, Block E",
+    "amenity": "hospital",
+    "healthcare": "hospital",
+    "name": "Swapna Pharmacy",
+    "name:en": "Swapna Pharmacy"
+  }
+}
+
+  ]
+}

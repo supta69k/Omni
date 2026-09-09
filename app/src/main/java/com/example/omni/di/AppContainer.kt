@@ -7,23 +7,52 @@ import com.example.omni.data.local.PreferencesStore
 import com.example.omni.data.local.StepCounterSource
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.DeviceStepsRepository
+import com.example.omni.data.repo.EmergencyContactRepository
 import com.example.omni.data.repo.FirebaseAuthRepository
+import com.example.omni.data.repo.FeedRepository
+import com.example.omni.data.repo.FirestoreEmergencyContactRepository
+import com.example.omni.data.repo.FirestoreFeedRepository
 import com.example.omni.data.repo.FirestoreGuideProgressRepository
+import com.example.omni.data.repo.FirestoreHospitalRepository
+import com.example.omni.data.repo.FirestoreMealRepository
 import com.example.omni.data.repo.FirestoreMetricsRepository
+import com.example.omni.data.repo.FirestoreNotificationRepository
+import com.example.omni.data.repo.FirestoreSosRepository
 import com.example.omni.data.repo.FirestoreUserRepository
 import com.example.omni.data.repo.GuideProgressRepository
+import com.example.omni.data.repo.BundledGuideRepository
+import com.example.omni.data.repo.GuideRepository
+import com.example.omni.data.repo.HospitalRepository
+import com.example.omni.data.repo.LocationRepository
+import com.example.omni.data.repo.MealRepository
+import com.example.omni.data.repo.MessageRepository
+import com.example.omni.data.repo.FirestoreMessageRepository
 import com.example.omni.data.repo.MetricsRepository
+import com.example.omni.data.repo.NotificationRepository
 import com.example.omni.data.repo.PreviewAuthRepository
+import com.example.omni.data.repo.PreviewEmergencyContactRepository
+import com.example.omni.data.repo.PreviewFeedRepository
 import com.example.omni.data.repo.PreviewGuideProgressRepository
+import com.example.omni.data.repo.PreviewMealRepository
+import com.example.omni.data.repo.PreviewMessageRepository
 import com.example.omni.data.repo.PreviewMetricsRepository
+import com.example.omni.data.repo.PreviewNotificationRepository
 import com.example.omni.data.repo.PreviewStepsRepository
 import com.example.omni.data.repo.PreviewUserRepository
+import com.example.omni.data.repo.SosRepository
 import com.example.omni.data.repo.StepsRepository
 import com.example.omni.data.repo.UserRepository
 import com.example.omni.ui.SessionViewModel
 import com.example.omni.ui.auth.SignInViewModel
 import com.example.omni.ui.auth.SignUpViewModel
+import com.example.omni.ui.feed.FeedViewModel
+import com.example.omni.ui.firstaid.GuidesViewModel
 import com.example.omni.ui.home.HomeViewModel
+import com.example.omni.ui.messages.MessagesViewModel
+import com.example.omni.ui.notifications.NotificationsViewModel
+import com.example.omni.ui.nutrition.NutritionViewModel
+import com.example.omni.ui.settings.EmergencyContactsViewModel
+import com.example.omni.ui.sos.SosViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
@@ -41,7 +70,15 @@ class AppContainer private constructor(
     val authRepository: AuthRepository,
     val userRepository: UserRepository,
     val metricsRepository: MetricsRepository,
+    val mealRepository: MealRepository,
     val guideProgressRepository: GuideProgressRepository,
+    val feedRepository: FeedRepository,
+    val emergencyContactRepository: EmergencyContactRepository,
+    val notificationRepository: NotificationRepository,
+    val messageRepository: MessageRepository,
+    private val hospitalRepositoryProvider: () -> HospitalRepository,
+    private val sosRepositoryProvider: () -> SosRepository,
+    private val locationRepositoryProvider: () -> LocationRepository,
     private val storageProvider: () -> FirebaseStorage,
     private val preferencesProvider: () -> PreferencesStore,
     private val stepsProvider: (AppContainer) -> StepsRepository,
@@ -60,6 +97,18 @@ class AppContainer private constructor(
      */
     val stepsRepository: StepsRepository by lazy { stepsProvider(this) }
 
+    /** Lazy: Play Services should not be dragged into a preview that never asks for a location. */
+    val sosRepository: SosRepository by lazy { sosRepositoryProvider() }
+    val locationRepository: LocationRepository by lazy { locationRepositoryProvider() }
+
+    /**
+     * Lazy for a third reason: the directory has no preview fake, so building it eagerly would call
+     * `FirebaseFirestore.getInstance()` while the preview container is being constructed — inside a
+     * `@Preview`, where Firebase has never been initialised, which throws before a single pixel is
+     * drawn. A preview that never opens the SOS sheet must never pay for it.
+     */
+    val hospitalRepository: HospitalRepository by lazy { hospitalRepositoryProvider() }
+
     companion object {
         @Volatile
         private var instance: AppContainer? = null
@@ -74,7 +123,15 @@ class AppContainer private constructor(
                 ),
                 userRepository = FirestoreUserRepository(firestore),
                 metricsRepository = FirestoreMetricsRepository(firestore),
+                mealRepository = FirestoreMealRepository(firestore),
                 guideProgressRepository = FirestoreGuideProgressRepository(firestore),
+                feedRepository = FirestoreFeedRepository(firestore),
+                emergencyContactRepository = FirestoreEmergencyContactRepository(firestore),
+                notificationRepository = FirestoreNotificationRepository(firestore),
+                messageRepository = FirestoreMessageRepository(firestore),
+                hospitalRepositoryProvider = { FirestoreHospitalRepository(firestore) },
+                sosRepositoryProvider = { FirestoreSosRepository(firestore) },
+                locationRepositoryProvider = { LocationRepository(appContext) },
                 storageProvider = { FirebaseStorage.getInstance() },
                 preferencesProvider = { PreferencesStore(appContext) },
                 stepsProvider = { container ->
@@ -92,7 +149,18 @@ class AppContainer private constructor(
                 authRepository = PreviewAuthRepository(),
                 userRepository = PreviewUserRepository(),
                 metricsRepository = PreviewMetricsRepository(),
+                mealRepository = PreviewMealRepository(),
                 guideProgressRepository = PreviewGuideProgressRepository(),
+                feedRepository = PreviewFeedRepository(),
+                emergencyContactRepository = PreviewEmergencyContactRepository(),
+                notificationRepository = PreviewNotificationRepository(),
+                messageRepository = PreviewMessageRepository(),
+                // The directory is Firestore-backed with no fake, deliberately: a preview showing the
+                // design's own two hospitals comes from SosScreen's defaults, not from here. Behind a
+                // provider so no preview ever reaches Firebase to find that out.
+                hospitalRepositoryProvider = { FirestoreHospitalRepository(FirebaseFirestore.getInstance()) },
+                sosRepositoryProvider = { throw NotImplementedError("sosEvents are not available in previews") },
+                locationRepositoryProvider = { throw NotImplementedError("Location is not available in previews") },
                 storageProvider = { throw NotImplementedError("Storage is not available in previews") },
                 preferencesProvider = { throw NotImplementedError("DataStore is not available in previews") },
                 stepsProvider = { PreviewStepsRepository() },
@@ -109,13 +177,62 @@ class AppContainer private constructor(
                 SignInViewModel::class.java -> SignInViewModel(current.authRepository) as T
                 SignUpViewModel::class.java -> SignUpViewModel(current.authRepository) as T
                 SessionViewModel::class.java ->
-                    SessionViewModel(current.authRepository, current.userRepository) as T
+                    SessionViewModel(
+                        current.authRepository,
+                        current.userRepository,
+                        current.notificationRepository,
+                        current.messageRepository,
+                    ) as T
                 HomeViewModel::class.java ->
                     HomeViewModel(
                         current.authRepository,
                         current.metricsRepository,
                         current.stepsRepository,
                         current.guideProgressRepository,
+                    ) as T
+                NutritionViewModel::class.java ->
+                    NutritionViewModel(
+                        current.authRepository,
+                        current.metricsRepository,
+                        current.mealRepository,
+                    ) as T
+                GuidesViewModel::class.java ->
+                    GuidesViewModel(
+                        current.authRepository,
+                        // The bundle is the same object in the preview container and the real one —
+                        // its content is compiled in, so there is no preview/real split to make.
+                        BundledGuideRepository,
+                        current.guideProgressRepository,
+                    ) as T
+                FeedViewModel::class.java ->
+                    FeedViewModel(
+                        current.authRepository,
+                        current.feedRepository,
+                    ) as T
+                SosViewModel::class.java ->
+                    SosViewModel(
+                        current.authRepository,
+                        current.hospitalRepository,
+                        current.locationRepository,
+                        current.sosRepository,
+                        current.emergencyContactRepository,
+                        current.notificationRepository,
+                    ) as T
+                EmergencyContactsViewModel::class.java ->
+                    EmergencyContactsViewModel(
+                        current.authRepository,
+                        current.emergencyContactRepository,
+                    ) as T
+                NotificationsViewModel::class.java ->
+                    NotificationsViewModel(
+                        current.authRepository,
+                        current.notificationRepository,
+                    ) as T
+                MessagesViewModel::class.java ->
+                    MessagesViewModel(
+                        current.authRepository,
+                        current.userRepository,
+                        current.messageRepository,
                     ) as T
                 else -> throw IllegalArgumentException("No factory for ${modelClass.name} — add it here")
             }

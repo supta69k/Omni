@@ -18,6 +18,24 @@ interface UserRepository {
      */
     fun observeUser(uid: String): Flow<User?>
 
+    /**
+     * Every verified professional, name-sorted — who a user is allowed to start a thread with
+     * (BACKEND_PLAN §12: "users → verified professionals only").
+     *
+     * Sorted in Kotlin rather than by Firestore on purpose: ordering a `verified == true` query by name
+     * needs a second composite index, and this list is capped at [MaxProfessionals] rows, which sorts in
+     * microseconds. One index for the app is enough.
+     */
+    fun observeProfessionals(): Flow<List<User>>
+
     /** Merges [fields] into the document; absent keys are left alone. */
     suspend fun updateProfile(uid: String, fields: Map<String, Any?>)
 }
+
+/**
+ * The ceiling on the professional directory.
+ *
+ * A term project's database has a handful of verified accounts, and a picker is a list somebody reads
+ * rather than pages through. If it ever fills up, the answer is a search field, not a bigger number.
+ */
+const val MaxProfessionals = 50L

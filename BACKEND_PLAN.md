@@ -20,12 +20,72 @@ all, and that one fact reorders everything.
 | Phase | State |
 |---|---|
 | **0** — Unblock | **Done.** `OmniApplication` created, manifest points at it, `INTERNET` declared. |
-| **1** — Auth for real | **Done in code, unverified on a device.** See the note below. |
-| **2** — Profile + header | **Done in code, unverified on a device.** One `SessionViewModel` feeds every screen. |
-| **3** — Water card | **Done in code, unverified on a device.** `FieldValue.increment` on `users/{uid}/days/{date}`. |
-| **4** — Step counter | **Done in code, unverified on a device.** `TYPE_STEP_COUNTER` → DataStore → Firestore every 250 steps. |
-| **5** — Updates & recommendations | **Done in code, unverified on a device.** One threshold rule and one bar formula in `domain/Recommendations.kt`; sleep gets an entry sheet. |
-| **6**–**13** | Not started. |
+| **1** — Auth for real | **Done, verified on a real device.** |
+| **2** — Profile + header | **Done, verified on a real device.** One `SessionViewModel` feeds every screen. |
+| **3** — Water card | **Done, verified on a real device.** `FieldValue.increment` on `users/{uid}/days/{date}`. |
+| **4** — Step counter | **Done, verified on a real device.** `TYPE_STEP_COUNTER` → DataStore → Firestore every 250 steps. |
+| **5** — Updates & recommendations | **Done, verified on a real device.** One threshold rule and one bar formula in `domain/Recommendations.kt`; sleep gets an entry sheet. |
+| **6** — Nutrition | **Done, verified on a real device.** Week strip, meal add/edit/delete, recomputed roll-up, live gauge numbers — and the Canvas arc replacing both static drawables (`ic_nutri_arc_track` / `ic_nutri_arc_progress` deleted). |
+| **7** — First-aid guides | **Done, verified on a real device.** Home's "Explore!" opens `GuidesScreen` (search, severity dots, per-guide percent) → `GuideDetailScreen` (ticks, warnings, back). Ticking steps writes Firestore and Home's CPR card re-renders ("You've read 75% of the guide."). One `GuidesViewModel` owns both pages via `open`. |
+| **8** — Feed | **Done in code, compiled, installed; device loop-test pending** (the phone was in active use during the window). Posts bind live (first-page listener + one-shot older pages), like pills flip optimistically (red tint) and write `likes/{uid}` carrying the post's `likers` array, comments sheet loads/sends live, `ComposePostScreen` creates text posts with the profile's identity denormalised, share opens the Android sheet, Following filters honestly (empty follow set → own posts only), empty state instead of mock posts. **Counters:** the deployed rules forbid client counter writes (DEVIATION 2), so like counts ride the `likers` array on the like document and comment counts are the sheet's live list length — both switch to the post's counter fields when Phase 12's functions exist. Image upload to Storage deferred with the composer's text-only MVP, as the plan allows. |
+| **9** — SOS | **Done in code, compiled; device test impossible on this machine** (no `adb`, no Android SDK installed — see below). The hold-to-activate slider now writes `sosEvents/{uid}/items/{eventId}` with the fix at the moment of the swipe; the hospital sheet binds a live directory sorted by real haversine distance once the location permission is granted, and says so honestly when it is not; "Find the Route" opens a `geo:` intent, "Call" dials the hospital (falling back to 999 when OSM lists no number, so the row is never a dead tap), and a new alert pill texts every saved emergency contact a Google Maps link to the user's position via `ACTION_SENDTO`. `SavedEmergenciesScreen` (no Figma frame — §6 rule 11) adds, lists, dials and removes up to 5 contacts under `users/{uid}/emergencyContacts`. |
+| **10** — Notifications + FCM | **Done in code, compiled; device test impossible on this machine.** The header bell now opens a real inbox instead of a "coming soon" stub: `NotificationsScreen` (no Figma frame — §6 rule 11) lists `notifications/{uid}/items` newest-first, tints unread rows and dots them by type, marks one read on tap and all read from a header link, and says so plainly when the inbox is empty. The badge on the bell is live. `OmniMessagingService` receives pushes, posts them on the `omni_general` channel through a new `ic_notification_bell`, and re-registers the device token on rotation; the token is written to `users/{uid}.fcmTokens` on sign-in and **removed on sign-out** so the next push for that account cannot land on a phone somebody else is now using. Settings' two switches became real: they read `users/{uid}.prefs` and write it back, and turning push off unregisters this device's token rather than filtering on arrival. `POST_NOTIFICATIONS` is asked for on the notifications page itself (API 33+ only), never at launch. |
+| **11** — Messaging | **Done in code, compiled, installed on a real device; interactive device test pending** (the phone was in active use during the window, and the Firestore API is still disabled in the console — see the Phase 8 note). `MessagesScreen` lists conversations and offers a "new chat" picker of verified professionals; `ChatScreen` is the thread with a composer; both are invented UI under §6 rule 11, built from the app's own parts (DesignFrame, palette tokens, existing type styles, previews). One `MessagesViewModel` owns both pages via `open`, the auth session drives the reads, and `MessageRepository` implements the §7 schema (conversation id = the two uids sorted and joined, so a chat is idempotent). The session that wrote it ended with the MainActivity wiring block present but its imports missing — those three imports were added and the build verified green on 2026-09-09. |
+| **12**–**13** | Not started. |
+
+**Phase 10's two deviations, both forced by Phase 12 not existing yet:**
+
+- **The bell badge counts unread items instead of reading `users/{uid}.unread.notifications`.** §7
+  denormalises that count onto the profile, but the deployed rules forbid a client writing `unread` and
+  the Cloud Functions that would maintain it are Phase 12 — so bound as specified the badge would read 0
+  forever, no matter how full the inbox was. `NotificationRepository.observeUnreadCount` counts the
+  unread documents directly (capped at 99, since the badge draws a dot rather than a total), which the
+  rules do let the owner read. It is ground truth rather than a cache, and when the functions land the
+  counter becomes an optimisation to switch to, not a prerequisite.
+- **DEVIATION 3 in `firestore.rules`: `notifications/{uid}/items` is now `allow create: if isSelf(uid)`.**
+  It was `if false`, which is correct once every item is written by an admin-credentialed function — but
+  today it made the inbox permanently unfillable. A user may now write into their **own** inbox and
+  nobody else's, so cross-account forgery is still impossible, and the SOS screen can record "your alert
+  was saved" as a receipt for a gesture whose every other effect happens somewhere the user cannot check.
+
+Two smaller notes on the same phase. Pushes are honoured against the preference **by token, not by
+check**: `onMessageReceived` fires only after delivery, so a client-side test there would still have cost
+the round-trip and would be wrong the moment the pref changed on another device — removing the token
+means the server has nothing to send to. And the prefs are written as a nested map through
+`set(…, merge())` rather than the dotted path `update()` would take: in a `set`, a dot is part of the
+field *name*, so `"prefs.pushNotifications"` would have silently created a top-level field of that
+literal name and left the real map untouched.
+
+**Phase 9's four deviations, all forced by the same missing thing — a billing account:**
+
+- **A seeded `hospitals` collection instead of the Places API.** The plan's "hospitals within 5 miles"
+  assumed Places Nearby Search, which needs an API key *and* an enabled billing account. The directory
+  is instead ~40 OpenStreetMap-derived hospitals in `tools/hospitals_import.jsonl`, read-only to
+  clients, filtered client-side by haversine distance. It works offline, costs nothing, and is honest
+  about being a fixed list.
+- **No live Google Map on the SOS sheet.** Would need `maps-compose`, a Maps SDK key and billing. The
+  sheet shows the ranked list the map would have annotated.
+- **No real drive times.** "12 min away" needs the paid Routes API. The cards show straight-line
+  kilometres, labelled as distance rather than time, because a straight line dressed up as a drive time
+  is a lie an emergency screen must not tell.
+- **Kilometres, not the design's miles.** The app's users are in Dhaka.
+
+**Phase 9 also fixed five defects in the Phase 7/8 code it built on**, all of which would have shipped:
+the post composer and the guide search both wrapped their `BasicTextField` in a zero-width box, so
+anything typed into either was measured at 0×0 and drawn nowhere; the location permission had a
+launcher and a helper but no caller, so the SOS directory could never sort; every `startActivity` in the
+SOS path was unguarded and would have crashed the app mid-emergency on a device with no dialer or maps
+app (now `startActivitySafely`); and `GuidesScreen`, `GuideDetailScreen` and `ComposePostScreen` were
+the only three screens in the app **not wrapped in `DesignFrame`**, so their fixed dp measurements did
+not scale with device width and, worse, their `fontScale` was not pinned — a user with large system text
+would have burst every pixel-locked row. All three are wrapped now.
+
+**On "verified on a real device" for Phases 9 onward:** this machine has no `adb`, no Android SDK and no
+emulator, so nothing after Phase 8 can be installed or loop-tested here. "Done in code, compiled" means
+exactly that and nothing more. Two console actions are also outstanding and are the account owner's to
+perform: **enable the Cloud Firestore API** in project `omni-2c987`, and **import
+`tools/hospitals_import.jsonl`** into a `hospitals` collection. Until the second one runs, the SOS sheet
+correctly shows its empty state and offers **Call 999**.
 
 Also landed alongside them, ahead of their phases: `firestore.rules`, `storage.rules`,
 `firebase.json` and `.firebaserc` from §8 (with two deviations, marked inline in the rules files);
@@ -622,7 +682,7 @@ land early.
 | ~~**3**~~ | ~~**Water card + plus button**~~ — **done in code** | 2 | 1 day |
 | ~~**4**~~ | ~~**Step counter from the device sensor**~~ — **done in code** | 3 | 1–2 days |
 | ~~**5**~~ | ~~**Updates & recommendations**~~ — **done in code** | 3, 4 | 1 day |
-| **6** | Nutrition: meals, macros, week strip | 5 | 2–3 days |
+| ~~**6**~~ | ~~Nutrition: meals, macros, week strip~~ — **done in code** | 5 | 2–3 days |
 | **7** | First-aid guides, 100% offline | 2 | 2 days |
 | **8** | Feed: read, like, comment, compose | 2 | 3–4 days |
 | **9** | SOS: location, Places, map, call, route | 2 | 3–4 days |

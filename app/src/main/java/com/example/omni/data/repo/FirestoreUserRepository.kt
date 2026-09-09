@@ -1,5 +1,6 @@
 package com.example.omni.data.repo
 
+import com.example.omni.data.model.DefaultCalorieGoal
 import com.example.omni.data.model.DefaultFiberGoal
 import com.example.omni.data.model.DefaultSleepGoal
 import com.example.omni.data.model.DefaultStepsGoal
@@ -42,6 +43,30 @@ class FirestoreUserRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun observeProfessionals(): Flow<List<User>> = callbackFlow {
+        val registration = firestore.collection(Users)
+            .whereEqualTo("verified", true)
+            .limit(MaxProfessionals)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    // Degraded, not closed: an empty picker with an honest sentence under it beats a
+                    // crash on the one screen a user opened to ask a doctor something.
+                    android.util.Log.w("Omni", "The professional directory could not be read", error)
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val professionals = snapshot?.documents
+                    ?.mapNotNull { document -> document.toUser(document.id) }
+                    // `verified` is the gate, but an account verified before it picked a profession
+                    // would render a row with no discipline under the name. Both are required.
+                    ?.filter { it.profession != null }
+                    ?.sortedBy { it.name.lowercase() }
+                    .orEmpty()
+                trySend(professionals)
+            }
+        awaitClose { registration.remove() }
+    }
+
     override suspend fun updateProfile(uid: String, fields: Map<String, Any?>) {
         firestore.collection(Users).document(uid)
             .set(fields + ("updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
@@ -56,6 +81,12 @@ class FirestoreUserRepository(
 
         /** Grams, matching the day value's own clamp in [FirestoreMetricsRepository]. */
         const val MaxFiberGoal = 999f
+
+        /**
+         * Calories. Generous, and the printed percent stays three characters wide — the same
+         * layout-slack reasoning as the two above it.
+         */
+        const val MaxCalorieGoal = 99_999
 
         fun DocumentSnapshot.toUser(uid: String): User? {
             if (!exists()) return null
@@ -73,8 +104,20 @@ class FirestoreUserRepository(
                 stepsGoal = goal("steps", DefaultStepsGoal),
                 sleepGoal = goal("sleepHours", DefaultSleepGoal, max = MaxSleepGoal),
                 fiberGoal = goal("fiberGrams", DefaultFiberGoal, max = MaxFiberGoal),
+                calorieGoal = goal("calories", DefaultCalorieGoal, max = MaxCalorieGoal),
+                pushNotifications = pref("pushNotifications"),
+                offlineCache = pref("offlineCache"),
             )
         }
+
+        /**
+         * One key out of the `prefs` map, defaulting to **true** when absent.
+         *
+         * Absent is the normal state for every account created before Phase 10, and the switches have
+         * always been drawn on — so "never answered" and "said yes" have to render the same, or every
+         * existing user would open Settings to find their notifications apparently turned off.
+         */
+        fun DocumentSnapshot.pref(key: String): Boolean = get("prefs.$key") as? Boolean ?: true
 
         /**
          * One key out of the `goals` map, or [fallback] when the map, the key or its type is missing.
@@ -84,6 +127,13 @@ class FirestoreUserRepository(
          */
         fun DocumentSnapshot.goal(key: String, fallback: Int): Int =
             (get("goals.$key") as? Number)?.toInt()?.takeIf { it > 0 } ?: fallback
+
+        /**
+         * The integer overload with a ceiling, for goals whose value is printed inside a fixed box
+         * (the gauge's percent, derived from the calorie goal).
+         */
+        fun DocumentSnapshot.goal(key: String, fallback: Int, max: Int): Int =
+            (get("goals.$key") as? Number)?.toInt()?.takeIf { it > 0 }?.coerceAtMost(max) ?: fallback
 
         /**
          * The same, for the two goals the update cards print with a decimal.
