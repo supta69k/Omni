@@ -62,7 +62,7 @@ fun DocumentSnapshot.toPost(): Post? {
             ?.let { name -> Profession.entries.firstOrNull { it.name == name } },
         body = getString("body").orEmpty(),
         imageUrl = getString("imageUrl"),
-        createdAt = (get("createdAt") as? Number)?.toLong() ?: 0L,
+        createdAt = millisOf("createdAt"),
     )
 }
 
@@ -93,9 +93,21 @@ fun DocumentSnapshot.toComment(): Comment? {
         authorId = getString("authorId").orEmpty(),
         authorName = getString("authorName").orEmpty(),
         body = getString("body").orEmpty(),
-        createdAt = (get("createdAt") as? Number)?.toLong() ?: 0L,
+        createdAt = millisOf("createdAt"),
     )
 }
+
+/**
+ * How many comments one post's live listener carries.
+ *
+ * Every other collection in the app already caps itself — conversations and notifications at 50,
+ * a chat thread at 100 — and this was the one that did not, so a post with a thousand replies meant
+ * a thousand documents on the wire and a thousand rows in a sheet that shows four. The newest 50 is
+ * what the sheet is for; older ones are readable in the order they were written, which nothing in
+ * the design offers a way to reach anyway.
+ */
+const val CommentPageSize = 50L
+
 
 /**
  * "3 min ago" — the relative timestamp the design hardcodes on every post, made real.

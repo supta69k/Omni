@@ -1,0 +1,12 @@
+{
+  "name": "omni-seed-tools",
+  "private": true,
+  "description": "One-shot seeding scripts for the Omni Firestore project. Not part of the Android build.",
+  "type": "module",
+  "scripts": {
+    "hospitals": "node seed-hospitals.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

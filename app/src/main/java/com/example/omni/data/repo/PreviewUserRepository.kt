@@ -1,5 +1,6 @@
 package com.example.omni.data.repo
 
+import com.example.omni.data.model.HealthGoals
 import com.example.omni.data.model.Profession
 import com.example.omni.data.model.User
 import com.example.omni.data.model.UserRole
@@ -30,6 +31,19 @@ class PreviewUserRepository(
             current.copy(
                 name = fields["name"] as? String ?: current.name,
                 photoUrl = fields["photoUrl"] as? String ?: current.photoUrl,
+            )
+        }
+    }
+
+    override suspend fun updateGoals(uid: String, goals: HealthGoals) {
+        val safe = goals.clamped()
+        user.update { current ->
+            current.copy(
+                waterGoal = safe.water,
+                stepsGoal = safe.steps,
+                sleepGoal = safe.sleepHours,
+                fiberGoal = safe.fiberGrams,
+                calorieGoal = safe.calories,
             )
         }
     }

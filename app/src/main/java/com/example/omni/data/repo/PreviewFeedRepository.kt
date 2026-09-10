@@ -49,6 +49,9 @@ class PreviewFeedRepository : FeedRepository {
     override fun observeFirstPage(uid: String, pageSize: Int): Flow<List<Post>> =
         posts.map { page -> page.take(pageSize).map { it.copy(likedByMe = it.id in likes.value) } }
 
+    override fun observeByAuthor(authorId: String, limit: Int): Flow<List<Post>> =
+        posts.map { all -> all.filter { it.authorId == authorId }.take(limit) }
+
     override suspend fun loadPage(uid: String, beforeCreatedAt: Long, pageSize: Int): List<Post> =
         emptyList()
 

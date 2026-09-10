@@ -73,6 +73,89 @@ const val DefaultCalorieGoal = 2_000
 
 enum class UserRole { USER, PROFESSIONAL, ADMIN }
 
+/**
+ * The five targets, together — what the goals page edits and writes as one `goals` map.
+ *
+ * A value object rather than five parameters on a repository method, because they are always read
+ * together, always written together, and a call site that passed steps where calories belong would
+ * compile perfectly well as five bare numbers.
+ *
+ * The field names match the Firestore keys exactly (BACKEND_PLAN §7), which is what lets the write be
+ * a literal map and the read stay the hand-written mapper it already is.
+ */
+data class HealthGoals(
+    val water: Int = DefaultWaterGoal,
+    val steps: Int = DefaultStepsGoal,
+    val sleepHours: Float = DefaultSleepGoal,
+    val fiberGrams: Float = DefaultFiberGoal,
+    val calories: Int = DefaultCalorieGoal,
+) {
+    /**
+     * Every value forced back into the range the cards can draw.
+     *
+     * Applied on the way *out* as well as on the way in. The editor's steppers cannot leave the range
+     * on their own, but a goal written by an older build, a console edit or a future screen can, and
+     * this is the one place that decides what a legal target is.
+     */
+    fun clamped(): HealthGoals = HealthGoals(
+        water = water.coerceIn(MinWaterGoal, MaxWaterGoal),
+        steps = steps.coerceIn(MinStepsGoal, MaxStepsGoal),
+        sleepHours = if (sleepHours.isFinite()) sleepHours.coerceIn(MinSleepGoal, MaxSleepGoal) else DefaultSleepGoal,
+        fiberGrams = if (fiberGrams.isFinite()) fiberGrams.coerceIn(MinFiberGoal, MaxFiberGoal) else DefaultFiberGoal,
+        calories = calories.coerceIn(MinCalorieGoal, MaxCalorieGoal),
+    )
+}
+
+/** The account's five targets as one object. */
+val User.goals: HealthGoals
+    get() = HealthGoals(
+        water = waterGoal,
+        steps = stepsGoal,
+        sleepHours = sleepGoal,
+        fiberGrams = fiberGoal,
+        calories = calorieGoal,
+    )
+
+/**
+ * What the goals page will let a target be, and what a stored one is clamped to.
+ *
+ * These are display limits before they are health advice. Each ceiling is the point past which some
+ * card stops being able to draw the number honestly:
+ *
+ *  - **Water** — the band holds 8 icons and the count is printed as `n/goal glasses` on one line. At 20
+ *    each icon stands for 2.5 glasses, which still reads; the hint's 4dp of slack is what stops it
+ *    there (see `HomeBento.waterHint`).
+ *  - **Steps** — the hint prints a percentage capped at three digits, so a goal a walker cannot reach
+ *    would freeze it at "999%". 50,000 is roughly 40km.
+ *  - **Sleep** — 12h was already `FirestoreUserRepository`'s ceiling, and it keeps the axis label two
+ *    characters wide. The floor is 4: below that it is not a goal, it is a symptom.
+ *  - **Fibre** — the card's footnote wraps to three lines and a three-digit remainder pushes a word
+ *    onto a fourth.
+ *  - **Calories** — the gauge prints its percent in a fixed box beside the arc.
+ *
+ * The steps are what the editor's `−`/`+` move by, chosen so a realistic target is a handful of taps
+ * from the default rather than fifty.
+ */
+const val MinWaterGoal = 1
+const val MaxWaterGoal = 20
+const val WaterGoalStep = 1
+
+const val MinStepsGoal = 1_000
+const val MaxStepsGoal = 50_000
+const val StepsGoalStep = 500
+
+const val MinSleepGoal = 4f
+const val MaxSleepGoal = 12f
+const val SleepGoalStep = 0.5f
+
+const val MinFiberGoal = 5f
+const val MaxFiberGoal = 99f
+const val FiberGoalStep = 1f
+
+const val MinCalorieGoal = 800
+const val MaxCalorieGoal = 6_000
+const val CalorieGoalStep = 50
+
 enum class Profession { DOCTOR, NUTRITIONIST }
 
 /** Where the app is in the auth lifecycle — what [MainActivity]'s launch gate reads. */

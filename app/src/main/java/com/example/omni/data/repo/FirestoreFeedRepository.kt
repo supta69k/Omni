@@ -1,10 +1,12 @@
 package com.example.omni.data.repo
 
 import com.example.omni.data.model.Comment
+import com.example.omni.data.model.CommentPageSize
 import com.example.omni.data.model.Post
 import com.example.omni.data.model.toComment
 import com.example.omni.data.model.toFirestoreMap
 import com.example.omni.data.model.toPost
+import com.google.firebase.firestore.AggregateSource
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -58,6 +60,21 @@ class FirestoreFeedRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun observeByAuthor(authorId: String, limit: Int): Flow<List<Post>> = callbackFlow {
+        val registration = firestore.collection(Posts)
+            .whereEqualTo("authorId", authorId)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(limit.toLong())
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.documents?.mapNotNull { it.toPost() }.orEmpty())
+            }
+        awaitClose { registration.remove() }
+    }
+
     private fun launchJoin(
         snapshot: QuerySnapshot,
         uid: String,
@@ -82,28 +99,33 @@ class FirestoreFeedRepository(
         return joinLikeState(snapshot, uid)
     }
 
+    /**
+     * Likes and unlikes, as the presence or absence of one document under `posts/{id}/likes/{uid}`.
+     *
+     * The document's *existence* is the like; it carries nothing but a timestamp. The scheme this
+     * replaced had every like document carry a `likers` array meant to hold everyone who had liked,
+     * seeded from `post.get("likers")` — a field no post has ever had, because [createPost] does not
+     * write one and DEVIATION 2 forbids the client touching a post's counters. So the array only
+     * ever held the one uid that wrote it, unliking never removed that uid from anyone else's copy,
+     * and the count [joinLikeState] read back was "1 if I liked this, 0 otherwise" regardless of how
+     * many others had. One document per liker cannot drift: it is either there or it is not.
+     */
     override suspend fun toggleLike(uid: String, postId: String) {
         val likeRef = likeDocument(postId, uid)
-        val existing = likeRef.get().await()
-        if (existing.exists()) {
+        if (likeRef.get().await().exists()) {
             likeRef.delete().await()
-            return
+        } else {
+            likeRef.set(mapOf("createdAt" to FieldValue.serverTimestamp())).await()
         }
-        // My like document carries the post's public likers array plus me. Reading the post first
-        // costs one read per toggle; in exchange, every reader of any like document gets the count.
-        val post = postDocument(postId).get().await()
-        val current = (post.get("likers") as? List<*>).orEmpty()
-        likeRef.set(
-            mapOf(
-                "createdAt" to FieldValue.serverTimestamp(),
-                "likers" to FieldValue.arrayUnion(uid, *current.toTypedArray()),
-            ),
-        ).await()
     }
 
     override fun observeComments(postId: String): Flow<List<Comment>> = callbackFlow {
         val registration = firestore.collection(Posts).document(postId).collection(Comments)
             .orderBy("createdAt", Query.Direction.DESCENDING)
+            // Newest first, then capped — so the cap keeps the 50 the sheet opens on rather than
+            // the 50 oldest. An uncapped listener on a busy post is a download that grows without
+            // limit for a sheet that can only show a handful.
+            .limit(CommentPageSize)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
@@ -145,23 +167,33 @@ class FirestoreFeedRepository(
     }
 
     /**
-     * The per-post join: one `get()` of *my* like document, concurrently across the page.
+     * The per-post join: have *I* liked it, and how many have — run concurrently across the page.
      *
-     * The like document's `likers` array is the count, so the read answers both questions — whether I
-     * liked and how many have. A post with no like document under it is unliked by 0 people, which is
-     * the normal state of a fresh post.
+     * Two questions, two reads. Membership is my own like document; the count is a server-side
+     * `count()` aggregation over the subcollection, which bills as a single read no matter how many
+     * likers there are and, unlike the array it replaced, is the same number on every device.
+     *
+     * Each read is guarded on its own so one failure costs one fact rather than the page: an
+     * aggregation needs the network (there is no cached `count()`), so offline the membership check
+     * still resolves from cache and the count falls back to the post's stored counter.
      */
     private suspend fun joinLikeState(snapshot: QuerySnapshot, uid: String): List<Post> =
         coroutineScope {
             snapshot.documents.map { document ->
                 async {
                     val post = document.toPost() ?: return@async null
-                    val like = likeDocument(post.id, uid).get().await()
-                    val likers = (like.get("likers") as? List<*>).orEmpty()
-                    post.copy(
-                        likedByMe = like.exists(),
-                        likeCount = likers.distinct().size,
-                    )
+                    val likedByMe = try {
+                        likeDocument(post.id, uid).get().await().exists()
+                    } catch (_: Exception) {
+                        false
+                    }
+                    val likeCount = try {
+                        likesCollection(post.id).count().get(AggregateSource.SERVER).await()
+                            .count.toInt()
+                    } catch (_: Exception) {
+                        post.likeCount
+                    }
+                    post.copy(likedByMe = likedByMe, likeCount = likeCount)
                 }
             }.awaitAll().filterNotNull()
         }
@@ -171,10 +203,11 @@ class FirestoreFeedRepository(
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(pageSize.toLong())
 
-    private fun postDocument(postId: String) = firestore.collection(Posts).document(postId)
+    private fun likesCollection(postId: String) =
+        firestore.collection(Posts).document(postId).collection(Likes)
 
     private fun likeDocument(postId: String, uid: String) =
-        firestore.collection(Posts).document(postId).collection(Likes).document(uid)
+        likesCollection(postId).document(uid)
 
     private companion object {
         const val Posts = "posts"

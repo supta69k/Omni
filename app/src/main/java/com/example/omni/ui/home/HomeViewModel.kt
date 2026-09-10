@@ -192,9 +192,21 @@ class HomeViewModel(
      * Nothing is written optimistically and nothing needs to be: Firestore applies the increment to its
      * local cache and re-fires the listener before the round-trip, so the icon fills on the same frame as
      * the tap, offline included.
+     *
+     * **The goal is a hard stop, and it is enforced here as well as on the card.** Water is the only
+     * number in the app the app itself *causes* — steps come off the pedometer, sleep is stated, meals
+     * are logged, and clamping any of those to a target would make the app lie about what happened. A
+     * glass exists only because this button was pressed, so at the goal the press does nothing. The card
+     * dims its `+` for the same reason, but the check is repeated here because the ceiling is a data
+     * rule: `addGlass` is a server-side `FieldValue.increment` and cannot be clamped on the way in, so
+     * the last place that can refuse is this method.
+     *
+     * @param goal the account's water target — passed in rather than observed, because this ViewModel
+     *   does not read the profile and the dashboard already holds it (see `User.waterGoal`).
      */
-    fun addGlass() {
+    fun addGlass(goal: Int) {
         val uid = authRepository.currentUid ?: return
+        if (uiState.value.glasses >= goal) return
         // Two taps inside a third of a second are a bounced finger, not two glasses. Deliberate double
         // logging still works — people pause longer than this between counted taps.
         val now = SystemClock.elapsedRealtime()

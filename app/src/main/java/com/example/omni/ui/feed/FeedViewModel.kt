@@ -1,5 +1,6 @@
 package com.example.omni.ui.feed
 
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,6 +10,7 @@ import com.example.omni.data.model.Post
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.FeedRepository
+import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.PostAuthor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -70,6 +73,7 @@ data class FeedUiState(
 class FeedViewModel(
     private val authRepository: AuthRepository,
     private val feedRepository: FeedRepository,
+    private val mediaRepository: MediaRepository,
 ) : ViewModel() {
 
     private val uid: Flow<String?> = authRepository.authState
@@ -104,9 +108,12 @@ class FeedViewModel(
             feedRepository.observeFirstPage(uid, PageSize).catch { cause ->
                 Log.w("Omni", "The feed could not be read", cause)
                 emit(emptyList())
-            }
+            }.onEach { page -> firstPageWasFull = page.size >= PageSize }
         }
     }
+
+    /** `true` only while the *first page* was full — a short first page means the feed is exhausted. */
+    @Volatile private var firstPageWasFull = false
 
     /** The open post's comments, live while the sheet is up. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -141,7 +148,10 @@ class FeedViewModel(
                     // Only my own posts until a follow feature exists; see [FeedSegment].
                     FeedSegment.Following -> pages.filter { it.authorId == authRepository.currentUid }
                 },
-                canLoadMore = !done && pages.isNotEmpty(),
+                // "Load more" appears only when a further page is genuinely possible: not exhausted,
+                // something to load, and a first page that filled its limit (a 3-post feed showing a
+                // Load-more button is a lie about there being more).
+                canLoadMore = !done && pages.isNotEmpty() && firstPageWasFull,
                 commentsOpenId = openId,
                 comments = rows,
             )
@@ -156,11 +166,20 @@ class FeedViewModel(
     }
 
     /**
-     * The optimistic like: the pill flips and the count moves on the tap's frame, the write follows,
-     * and the live listener confirms or corrects it.
-     *
-     * A write failure rolls the override back — unlike the water card there *was* something
+     * The optimistic like: the pill flips and the count moves on the tap's frame, and the write
+     * follows. A failure rolls the override back — unlike the water card there *was* something
      * optimistically applied, so leaving it would have the pill lie about the server's state.
+     *
+     * **Success keeps the override.** It used to drop it, on the reasoning that the live listener's
+     * next emission would carry the truth; it never does. A like is a document in the post's `likes`
+     * subcollection, and a subcollection write does not re-fire a snapshot listener registered on
+     * the `posts` collection — so no emission arrived, the join never re-ran, and dropping the
+     * override rebuilt the row from the unchanged pre-tap snapshot. The pill filled on tap and
+     * reverted a moment later, which is the flicker that reads as "liking doesn't stick".
+     *
+     * The override is the truth for this session: it is `base ± 1` off a count the join read from
+     * the server, and the next time the feed re-joins (reopening it, or a new post arriving) the
+     * server's own count replaces it.
      */
     fun toggleLike(postId: String) {
         val uid = authRepository.currentUid ?: return
@@ -173,8 +192,6 @@ class FeedViewModel(
         viewModelScope.launch {
             try {
                 feedRepository.toggleLike(uid, postId)
-                // The listener's next emission carries the truth; the override has done its job.
-                optimistic.value = optimistic.value - postId
             } catch (cause: Exception) {
                 Log.w("Omni", "Toggling the like on $postId failed", cause)
                 optimistic.value = optimistic.value - postId
@@ -215,6 +232,40 @@ class FeedViewModel(
 
     private var authorName = ""
 
+    /**
+     * Reposts [postId] — a new post of my own that quotes the original.
+     *
+     * The rules forbid the client from touching a post's `repostCount` (DEVIATION 2 — counters are
+     * the Cloud Functions' job, and those do not exist yet), so the count the pill shows stays 0
+     * while the repost itself is real: a quoting post in the feed, attributed to me, crediting the
+     * original author by name. When the Phase 12 functions land, the pill can read the counter the
+     * trigger maintains — the reference post remains the durable artefact either way.
+     *
+     * Image reposts carry the image: the URL is already public (Cloudinary), so the new post points
+     * at the same one and the feed shows the photograph, not a description of it.
+     */
+    fun repost(postId: String) {
+        val uid = authRepository.currentUid ?: return
+        val original = loadedState().firstOrNull { it.id == postId } ?: return
+        viewModelScope.launch {
+            try {
+                feedRepository.createPost(
+                    uid = uid,
+                    author = PostAuthor(
+                        name = authorName.ifBlank { "You" },
+                        photoUrl = null,
+                        verified = false,
+                        profession = null,
+                    ),
+                    body = "🔁 ${original.authorName}:\n${original.body}",
+                    imageUrl = original.imageUrl,
+                )
+            } catch (cause: Exception) {
+                Log.w("Omni", "Reposting $postId failed", cause)
+            }
+        }
+    }
+
     fun loadMore() {
         val uid = authRepository.currentUid ?: return
         if (loading) return
@@ -234,23 +285,64 @@ class FeedViewModel(
     }
 
     /**
-     * Creates a post as the signed-in user. [author] comes from the hoisted profile in
-     * `MainActivity`; the repository writes the uid it is handed as `authorId`, and the rules
-     * require that to be the caller's own — so a caller cannot post as someone else.
+     * Creates a post as the signed-in user, uploading [image] first when one is attached.
+     *
+     * [author] comes from the hoisted profile in `MainActivity`; the repository writes the uid it is
+     * handed as `authorId`, and the rules require that to be the caller's own — so a caller cannot
+     * post as someone else.
+     *
+     * [onResult] is handed `null` on success and a sentence to show otherwise. It used to be a bare
+     * `onDone()` called from a `finally`, which navigated back to the feed whether or not the write
+     * had worked — survivable while a post was three fields of text, dishonest now that it can carry
+     * a multi-megabyte upload over a phone connection that drops.
+     *
+     * The upload runs before the document is written, deliberately: a post created first and then
+     * failed to illustrate would need a second write to repair, and there is no screen that could
+     * offer to retry it.
      */
-    fun createPost(author: PostAuthor, body: String, imageUrl: String? = null, onDone: () -> Unit = {}) {
-        val uid = authRepository.currentUid ?: run { onDone(); return }
-        if (body.isBlank()) run { onDone(); return }
+    fun createPost(
+        author: PostAuthor,
+        body: String,
+        image: Uri? = null,
+        onResult: (String?) -> Unit = {},
+    ) {
+        val uid = authRepository.currentUid
+            ?: return onResult("You are signed out. Sign in and try again.")
+        // An image on its own is a post — the rules cap `body` at 2000 characters but never require
+        // one, and a photo with no caption is the ordinary case on every feed this one resembles.
+        if (body.isBlank() && image == null) {
+            return onResult("Write something or add a photo first.")
+        }
         viewModelScope.launch {
+            val imageUrl = if (image == null) null else {
+                try {
+                    mediaRepository.uploadPostImage(uid, image)
+                } catch (cause: Exception) {
+                    Log.w("Omni", "Uploading the post image failed", cause)
+                    return@launch onResult("The photo could not be uploaded — ${cause.reason()}")
+                }
+            }
             try {
                 feedRepository.createPost(uid, author, body, imageUrl)
+                onResult(null)
             } catch (cause: Exception) {
                 Log.w("Omni", "Creating the post failed", cause)
-            } finally {
-                onDone()
+                onResult("The post could not be published — ${cause.reason()}")
             }
         }
     }
+
+    /**
+     * The failure's own words, or a fallback when it has none.
+     *
+     * [MediaRepository] builds each throw as a readable clause — Cloudinary's own rejection text
+     * included — precisely so the composer can show it, and this used to replace all of them with a
+     * fixed "check your connection" that was wrong about the cause every time it was shown. A
+     * message the user can read back is the difference between a bug report that says "it failed"
+     * and one that names the failing step.
+     */
+    private fun Exception.reason(): String =
+        message?.takeIf { it.isNotBlank() } ?: "check your connection and try again"
 
     private var loading = false
 

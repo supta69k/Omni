@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+    What Android's Auto Backup may carry to a reinstall or a new phone. Devices below API 31 read
+    this file; API 31+ read `data_extraction_rules.xml`, which excludes the same paths.
+
+    Everything Omni owns lives in Firestore under the signed-in account, so a restore has nothing
+    to bring back that signing in would not bring back anyway. The one directory that must *not*
+    travel is DataStore's:
+
+      * `onboarding_seen` — a restored `true` is why an install can open straight onto sign-in with
+        no introduction. A first launch on a phone is a first launch, whatever the cloud remembers.
+      * the step counter's anchor and boot id — device-specific by construction (`StepState`). Another
+        phone's anchor is a meaningless number here, and restoring it makes the day's step count wrong
+        rather than merely absent.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="file" path="datastore" />
 </full-backup-content>

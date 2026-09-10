@@ -1,5 +1,6 @@
 package com.example.omni.ui.firstaid
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -61,6 +62,10 @@ import com.example.omni.ui.theme.OmniTheme
  *
  * The bar-absent [OmniNavItem.Home] is passed as `selected` — same honest read as `SettingScreen`:
  * this is not one of the four tabs, it is a page the hero card opens, so no pill lights.
+ *
+ * The field's arrow and the system back do the same thing, which is the point of the [BackHandler]:
+ * without it the hardware gesture left the app from a page that plainly has a back button, and the two
+ * ways out of the same screen disagreed.
  */
 @Composable
 fun GuidesScreen(
@@ -70,6 +75,8 @@ fun GuidesScreen(
     onBack: () -> Unit = {},
     onNavigate: (OmniNavItem) -> Unit = {},
 ) {
+    BackHandler(onBack = onBack)
+
     DesignFrame {
         Box(
             modifier = Modifier

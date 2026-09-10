@@ -16,6 +16,10 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- MapLibre's connectivity receiver reads this to know when tiles can be fetched again. Without
+         it the map keeps retrying dead requests instead of resuming cleanly when the network returns. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Phase 10. Runtime-requested on API 33+ only; below that a notification needs no permission at
          all. Refusing it leaves the in-app inbox and the bell badge working — nothing is gated on it,
          the user simply stops getting tray entries. -->

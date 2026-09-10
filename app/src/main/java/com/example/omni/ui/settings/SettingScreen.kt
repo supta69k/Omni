@@ -1,5 +1,6 @@
 package com.example.omni.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Image
@@ -30,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -85,6 +87,13 @@ import com.example.omni.ui.theme.SettingsType
  * Settings is no longer a bottom-bar tab — it opens from the header avatar. The bar is still drawn so
  * the user can jump back to a tab, but passing the (now bar-absent) [OmniNavItem.Setting] simply
  * lights no pill, which is the honest read: this page is not one of the four destinations.
+ *
+ * **The back row above the profile is not in the frame** (§6 rule 9). The frame was drawn when this was
+ * a tab, and a page you *enter* needs a way out that does not require choosing a different destination
+ * first — the bar alone cannot say "back where I was". It is the same 40dp mirrored-arrow circle
+ * [SavedEmergenciesScreen] and [GoalsScreen] use, so all three pages behind Settings now leave the same
+ * way. It costs 23.3dp: the profile row moves from 36.7 below the status bar to 60, which the page
+ * absorbs by scrolling. Everything below it keeps the design's own arithmetic.
  */
 @Composable
 fun SettingScreen(
@@ -94,14 +103,18 @@ fun SettingScreen(
     pushNotifications: Boolean = true,
     offlineCache: Boolean = true,
     onNavigate: (OmniNavItem) -> Unit = {},
+    onBack: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     onAccountAction: (String) -> Unit = {},
     onSavedEmergencies: () -> Unit = {},
+    onDailyGoals: () -> Unit = {},
     onPushNotificationsChange: (Boolean) -> Unit = {},
     onOfflineCacheChange: (Boolean) -> Unit = {},
     onApplyForVerification: () -> Unit = {},
     onLogOut: () -> Unit = {},
 ) {
+    BackHandler(onBack = onBack)
+
     DesignFrame {
         Box(
             modifier = Modifier
@@ -114,7 +127,26 @@ fun SettingScreen(
                     .verticalScroll(rememberScrollState())
                     .statusBarsPadding(),
             ) {
-                Spacer(Modifier.height(ProfileTop))
+                Spacer(Modifier.height(BackRowTop))
+
+                Box(
+                    modifier = Modifier
+                        .padding(start = PagePadding)
+                        .size(BackButtonSize)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_set_arrow_right),
+                        contentDescription = "Back",
+                        modifier = Modifier
+                            .size(24.dp)
+                            .scale(scaleX = -1f, scaleY = 1f),
+                    )
+                }
+
+                Spacer(Modifier.height(BackRowGap))
 
                 ProfileRow(
                     name = userName,
@@ -166,6 +198,20 @@ fun SettingScreen(
                 Spacer(Modifier.height(PreferencesGroupGap))
 
                 SettingsGroup(label = "Preferences", width = 363.dp) {
+                    // First in the group because it is the only row here that changes what the other
+                    // screens *say* — the two below it change what the app does in the background.
+                    SettingsRow(
+                        title = "Daily Goals",
+                        subtitle = "Water, steps, sleep, food",
+                        textWidth = 201.dp,
+                        onClick = onDailyGoals,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_set_arrow_right),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
                     SettingsRow(
                         title = "Push Notifications",
                         subtitle = "Alerts, reminders, community",
@@ -504,11 +550,19 @@ private val AccountRows = listOf("Edit", "Change")
 private val PagePadding = 16.dp
 
 /**
- * 61 − 24.336: the profile row's y, less the mock iOS status bar the other frames draw and
- * `statusBarsPadding` replaces. This frame has no status bar node of its own, but it is the same 415
- * artboard measured from the same origin.
+ * The back row's own top gap.
+ *
+ * It stands in for the design's 36.664 (= 61 − 24.336, the profile row's y less the mock iOS status bar
+ * the other frames draw and `statusBarsPadding` replaces). The frame has no back button, so there is no
+ * measurement to copy: 12 above and 8 below the 40dp circle is [GoalsScreen]'s spacing, which puts the
+ * profile row at 60 instead of 36.7. Everything below the profile row is still the frame's arithmetic.
  */
-private val ProfileTop = 36.664.dp
+private val BackRowTop = 12.dp
+
+/** [SavedEmergenciesScreen]'s and [GoalsScreen]'s back button, unchanged so all three pages match. */
+private val BackButtonSize = 40.dp
+
+private val BackRowGap = 8.dp
 
 /** 153 − 116 */
 private val AccountGroupGap = 37.dp

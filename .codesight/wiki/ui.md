@@ -1,0 +1,160 @@
+# UI
+
+> **Navigation aid.** Component inventory and prop signatures extracted via AST. Read the source files before adding props or modifying component logic.
+
+**149 components** (jetpack-compose)
+
+## Client Components
+
+- **OmniApp** — `app\src\main\java\com\example\omni\MainActivity.kt`
+- **AuthLogo** — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **AuthHeader** — props: title, subtitle — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **AuthField** — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **AuthMessageSlot** — props: message, isError — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **AuthPrimaryButton** — props: label, onClick — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **AuthFooter** — props: prompt, action, onAction — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **DividerLine** — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **SocialButton** — props: icon, contentDescription, onClick — `app\src\main\java\com\example\omni\ui\auth\AuthCommon.kt`
+- **SignInScreen** — props: onSignUp — `app\src\main\java\com\example\omni\ui\auth\SignInScreen.kt`
+- **SignInScreenPreview** — `app\src\main\java\com\example\omni\ui\auth\SignInScreen.kt`
+- **SignInScreenErrorPreview** — `app\src\main\java\com\example\omni\ui\auth\SignInScreen.kt`
+- **SignUpScreen** — props: onSignIn — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
+- **TermsRow** — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
+- **SignUpScreenPreview** — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
+- **SignUpScreenErrorPreview** — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
+- **ComingSoonScreen** — props: title, detail, tab, onNavigate — `app\src\main\java\com\example\omni\ui\ComingSoonScreen.kt`
+- **ComingSoonScreenPreview** — `app\src\main\java\com\example\omni\ui\ComingSoonScreen.kt`
+- **OmniHeader** — props: state — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **HeaderAction** — props: icon, contentDescription, unread, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **OmniBottomNav** — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **NavCell** — props: item, selected, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **DesignFrame** — `app\src\main\java\com\example\omni\ui\DesignFrame.kt`
+- **CommentsSheet** — props: visible, comments, onDismiss — `app\src\main\java\com\example\omni\ui\feed\CommentsSheet.kt`
+- **CommentsPanel** — props: comments, onDismiss — `app\src\main\java\com\example\omni\ui\feed\CommentsSheet.kt`
+- **CommentRowCard** — props: comment — `app\src\main\java\com\example\omni\ui\feed\CommentsSheet.kt`
+- **ComposePostScreen** — props: onPost — `app\src\main\java\com\example\omni\ui\feed\ComposePostScreen.kt`
+- **AttachPhotoTile** — props: enabled, onClick — `app\src\main\java\com\example\omni\ui\feed\ComposePostScreen.kt`
+- **PickedPhoto** — props: image, enabled, onReplace — `app\src\main\java\com\example\omni\ui\feed\ComposePostScreen.kt`
+- **ComposePostScreenPreview** — `app\src\main\java\com\example\omni\ui\feed\ComposePostScreen.kt`
+- **FeedScreen** — props: header — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **FeedHeader** — props: header — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **StoryStrip** — props: onShare — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **ShareMealTile** — props: onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **FeedSegments** — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **SegmentTab** — props: label, width, selected, onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **FeedPost** — props: post, onLike — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **ActionPill** — props: text, icon, contentDescription, emphasized, onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **FeedScreenPreview** — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **GuideDetailScreen** — props: state, onToggleStep — `app\src\main\java\com\example\omni\ui\firstaid\GuideDetailScreen.kt`
+- **StepCard** — props: step, done, onToggle — `app\src\main\java\com\example\omni\ui\firstaid\GuideDetailScreen.kt`
+- **TickBox** — props: done — `app\src\main\java\com\example\omni\ui\firstaid\GuideDetailScreen.kt`
+- **WarningCard** — props: warnings — `app\src\main\java\com\example\omni\ui\firstaid\GuideDetailScreen.kt`
+- **GuideDetailScreenPreview** — `app\src\main\java\com\example\omni\ui\firstaid\GuideDetailScreen.kt`
+- **GuidesScreen** — props: state — `app\src\main\java\com\example\omni\ui\firstaid\GuidesScreen.kt`
+- **GuideSearchField** — props: query, onQueryChange — `app\src\main\java\com\example\omni\ui\firstaid\GuidesScreen.kt`
+- **GuideQueryField** — props: query, onQueryChange — `app\src\main\java\com\example\omni\ui\firstaid\GuidesScreen.kt`
+- **GuideCard** — props: card, onClick — `app\src\main\java\com\example\omni\ui\firstaid\GuidesScreen.kt`
+- **SeverityPill** — props: severity — `app\src\main\java\com\example\omni\ui\firstaid\GuidesScreen.kt`
+- **GuidesScreenPreview** — `app\src\main\java\com\example\omni\ui\firstaid\GuidesScreen.kt`
+- **FirstAidCard** — props: onExplore — `app\src\main\java\com\example\omni\ui\home\HomeBento.kt`
+- **WaterCard** — props: glasses, goal, onAdd — `app\src\main\java\com\example\omni\ui\home\HomeBento.kt`
+- **WaterGlassRow** — props: filled — `app\src\main\java\com\example\omni\ui\home\HomeBento.kt`
+- **StepsCard** — props: steps, goal, permissionNeeded, onEnableTracking — `app\src\main\java\com\example\omni\ui\home\HomeBento.kt`
+- **HomeScreen** — props: header — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
+- **HomeGreeting** — props: name — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
+- **HomeScreenPreview** — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
+- **HomeScreenSleepSheetPreview** — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
+- **UpdateCard** — props: verticalPadding, innerGap — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **UpdateHeader** — props: title, value, glyph, glyphWidth — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **UpdateProgress** — props: trackHeight, lead, fill, tail — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **StatusChip** — props: status — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **UpdateAxis** — props: height, endLabel, marker, endInset, startLabel — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **FiberCard** — props: grams, goalGrams — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **SleepCard** — props: hours, goalHours, onLog — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **CprCard** — props: percent — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **SleepEntrySheet** — props: visible, hours, onDismiss — `app\src\main\java\com\example\omni\ui\home\SleepEntrySheet.kt`
+- **SleepSheet** — props: initial, onDismiss — `app\src\main\java\com\example\omni\ui\home\SleepEntrySheet.kt`
+- **StepButton** — props: glyph, enabled, onClick — `app\src\main\java\com\example\omni\ui\home\SleepEntrySheet.kt`
+- **ChatScreen** — props: state, onBack — `app\src\main\java\com\example\omni\ui\messages\ChatScreen.kt`
+- **MessageBubble** — props: message, mine — `app\src\main\java\com\example\omni\ui\messages\ChatScreen.kt`
+- **ChatInput** — props: draft, canSend, onDraftChange — `app\src\main\java\com\example\omni\ui\messages\ChatScreen.kt`
+- **ChatScreenPreview** — `app\src\main\java\com\example\omni\ui\messages\ChatScreen.kt`
+- **ChatScreenEmptyPreview** — `app\src\main\java\com\example\omni\ui\messages\ChatScreen.kt`
+- **MessagesScreen** — props: state, onBack — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **ConversationRow** — props: conversation, onClick — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **ProfessionalPicker** — props: professionals, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **Avatar** — props: name, photoUrl, size — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **MessagesScreenPreview** — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **MessagesScreenPickerPreview** — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **MessagesScreenEmptyPreview** — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **NotificationsScreen** — props: state, onBack — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
+- **NotificationRow** — props: item, onClick — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
+- **NotificationsScreenPreview** — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
+- **NotificationsScreenEmptyPreview** — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
+- **MealEntrySheet** — props: visible, editing, onDismiss — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **MealSheet** — props: editing, onDismiss — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **SlotRow** — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **LabelledField** — props: label, value, unit, onValueChange — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **MacroField** — props: label, value, onValueChange — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **FieldLabel** — props: text — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **SheetField** — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **NutritionScreen** — props: header — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **DayRow** — props: week, selected, onSelect — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **DayChip** — props: day, selected, enabled, onClick — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **GoalGauge** — props: calories, calorieGoal — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **Measurement** — props: value, unit — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **ArcGauge** — props: progress — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **RingPager** — props: state, pages — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **RingGauge** — props: ring — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **PageDots** — props: current, count — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **FoodLogHeader** — props: onLog — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **FoodLogEntry** — props: meal, onClick — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **MacroChip** — props: amount, fill — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **NutritionScreenPreview** — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **OnboardingScreen** — props: onFinish — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
+- **OnboardingPageContent** — props: page — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
+- **PageIndicator** — props: pageCount, currentPage — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
+- **BottomActions** — props: isLastPage, onNext — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
+- **OnboardingScreenPreview** — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
+- **GoalsScreen** — props: state — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **GoalCard** — props: row, onStep — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **StepButton** — props: glyph, enabled, label, onClick — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **SaveButton** — props: state, onSave — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **GoalsScreenPreview** — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **GoalsScreenDirtyPreview** — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **SavedEmergenciesScreen** — props: state, onBack — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **ContactRow** — props: contact, onCall — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **AddContactForm** — props: state, onNameChange — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **ContactField** — props: label, value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **AddContactButton** — props: atCapacity, onClick — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **SavedEmergenciesScreenPreview** — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **SavedEmergenciesScreenEmptyPreview** — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **SavedEmergenciesScreenFormPreview** — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
+- **SettingScreen** — props: userName, userEmail, photoUrl, pushNotifications, offlineCache, onNavigate — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **ProfileRow** — props: name, email, photoUrl, onEdit — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **SettingsGroup** — props: label, width — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **SettingsRow** — props: title, subtitle, textWidth, onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **PreferenceSwitch** — props: checked, trackOn, onCheckedChange — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **HealthcareCard** — props: onApply — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **LogOutButton** — props: onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **SettingScreenPreview** — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **OmniMap** — props: hospitals, selectedId, nearestId, userLocation, route, recenterTick, onSelectHospital — `app\src\main\java\com\example\omni\ui\sos\OmniMap.kt`
+- **SosScreen** — props: header — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **MapSearchField** — props: query, onQueryChange — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **NoticeBanner** — props: notice — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **RecenterButton** — props: onClick — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **SosSwipeTrack** — props: onActivate — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **HospitalSheet** — props: hospitals, selectedId, nearestId, hasLocation, routeStatus, query, directorySize, contactCount, onDismiss — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **EmptyRail** — props: message, icon, label, fill, onClick — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **HospitalCard** — props: hospital, isNearest, routeStatus, onSelect — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **HospitalAction** — props: icon, label, fill, labelColor, labelStart, enabled, onClick — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **SosScreenPreview** — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **SosScreenSheetPreview** — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **SosScreenEmptyDirectoryPreview** — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **SosScreenLocationBlockedPreview** — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **SplashScreen** — `app\src\main\java\com\example\omni\ui\SplashScreen.kt`
+- **SplashScreenPreview** — `app\src\main\java\com\example\omni\ui\SplashScreen.kt`
+- **OmniTheme** — `app\src\main\java\com\example\omni\ui\theme\Theme.kt`
+
+---
+_Back to [overview.md](./overview.md)_

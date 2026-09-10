@@ -23,11 +23,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -151,14 +151,16 @@ private fun CommentsPanel(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
             )
         } else {
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = ListMaxHeight)
-                    .verticalScroll(rememberScrollState()),
+                    .heightIn(max = ListMaxHeight),
                 verticalArrangement = Arrangement.spacedBy(CommentGap),
             ) {
-                comments.forEach { comment ->
+                // Keyed, so a comment arriving on a live listener slides the others rather than
+                // rebuilding them — and so only what fits inside [ListMaxHeight] is ever composed
+                // instead of all fifty the query now carries.
+                items(items = comments, key = { it.id }) { comment ->
                     CommentRowCard(comment = comment)
                 }
             }

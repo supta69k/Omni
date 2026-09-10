@@ -16,3 +16,8 @@ local.properties
 
 # Firebase config — contains the project API key; each dev downloads their own.
 google-services.json
+
+# The seed script's service-account key — full database access, never commit it.
+tools/service-account.json
+tools/node_modules/
+tools/package-lock.json

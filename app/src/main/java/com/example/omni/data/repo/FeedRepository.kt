@@ -39,6 +39,16 @@ interface FeedRepository {
     fun observeFirstPage(uid: String, pageSize: Int): Flow<List<Post>>
 
     /**
+     * One author's posts, newest first, live — the profile screen's list.
+     *
+     * Like [observeFirstPage] but filtered to `authorId == [authorId]` and without the like-state
+     * join: the profile is a reading surface, and a like from there is a feed action the feed
+     * performs. Capped for the same reason the feed pages — a profile is a page, not a scroll
+     * that grows without bound.
+     */
+    fun observeByAuthor(authorId: String, limit: Int): Flow<List<Post>>
+
+    /**
      * One further page, oldest-of-the-loaded as the cursor — a one-shot `get()`, not a listener, so
      * a growing feed does not re-read everything it has already shown.
      */

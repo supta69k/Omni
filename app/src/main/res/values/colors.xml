@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!--
+        The launcher icon's back layer. Held here rather than inlined so the adaptive icon and any
+        future splash-screen theme read one value; it is `OmniBackground` from the Compose palette,
+        which is the field this mark is drawn on everywhere else in the app.
+    -->
+    <color name="omni_launcher_background">#FFFFFFFF</color>
 </resources>

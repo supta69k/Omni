@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,11 +19,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,13 +80,19 @@ fun ChatScreen(
 ) {
     BackHandler(onBack = onBack)
 
-    val scroll = rememberScrollState()
+    val scroll = rememberLazyListState()
 
     // A chat opens at the bottom and stays there as messages arrive — including the one just sent, which
     // Firestore's local cache appends before the round-trip. Keyed on the count rather than the list so a
     // re-render that changes nothing does not fight a user who has scrolled up to read.
+    //
+    // Asking for the last index rather than a pixel offset: the list clamps the request to its own
+    // maximum, so "put the newest message at the top" resolves to "show the end of the thread", which
+    // is the same place `maxValue` used to mean and does not need the whole thread measured to find.
     LaunchedEffect(state.messages.size) {
-        scroll.animateScrollTo(scroll.maxValue)
+        if (state.messages.isNotEmpty()) {
+            scroll.animateScrollToItem(state.messages.lastIndex)
+        }
     }
 
     DesignFrame {
@@ -138,28 +146,39 @@ fun ChatScreen(
 
             Spacer(Modifier.height(ThreadTop))
 
-            Column(
+            LazyColumn(
+                state = scroll,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(scroll)
-                    .padding(horizontal = PagePadding),
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(
+                    start = PagePadding,
+                    end = PagePadding,
+                    bottom = ThreadBottomGap,
+                ),
                 verticalArrangement = Arrangement.spacedBy(BubbleGap),
             ) {
                 if (state.messages.isEmpty()) {
-                    Text(
-                        text = "Say hello. Describe what's wrong in your own words — this thread is " +
-                            "only between the two of you.",
-                        style = HomeType.CardFootnoteWrapped,
-                        color = OmniSetRowSubtitle,
-                    )
+                    item(key = EmptyThreadKey) {
+                        Text(
+                            text = "Say hello. Describe what's wrong in your own words — this thread is " +
+                                "only between the two of you.",
+                            style = HomeType.CardFootnoteWrapped,
+                            color = OmniSetRowSubtitle,
+                        )
+                    }
                 }
 
-                state.messages.forEach { message ->
+                // Keyed on the message id, which is what lets the list survive the one update a chat
+                // gets constantly: a new message on the end. Without a key every bubble above it is
+                // considered new and re-measured; with one, only the arrival is.
+                items(
+                    items = state.messages,
+                    key = { it.id },
+                    contentType = { BubbleKey },
+                ) { message ->
                     MessageBubble(message = message, mine = message.senderId == state.selfUid)
                 }
-
-                Spacer(Modifier.height(ThreadBottomGap))
             }
 
             ChatInput(
@@ -317,6 +336,10 @@ private val BubbleMaxWidth = 250.dp
 
 /** Clears the input row when the thread is scrolled to the bottom. */
 private val ThreadBottomGap = 8.dp
+
+/** The thread list's item identities — see the `key` note at the `items` call. */
+private const val BubbleKey = "bubble"
+private const val EmptyThreadKey = "empty-thread"
 
 private val InputGap = 10.dp
 private val InputCorner = 20.dp

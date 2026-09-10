@@ -1,5 +1,6 @@
 package com.example.omni.data.repo
 
+import com.example.omni.data.model.HealthGoals
 import com.example.omni.data.model.User
 import kotlinx.coroutines.flow.Flow
 
@@ -30,6 +31,15 @@ interface UserRepository {
 
     /** Merges [fields] into the document; absent keys are left alone. */
     suspend fun updateProfile(uid: String, fields: Map<String, Any?>)
+
+    /**
+     * Replaces the account's five daily targets.
+     *
+     * On the account rather than on a day, which is the whole reason goals live here: raising the water
+     * target tomorrow must not rewrite what yesterday's card said. Implementations clamp — the caller is
+     * a stepper today, but the range is a data rule, not a UI one.
+     */
+    suspend fun updateGoals(uid: String, goals: HealthGoals)
 }
 
 /**

@@ -74,7 +74,7 @@ fun DocumentSnapshot.toAppNotification(): AppNotification? {
         body = getString("body").orEmpty().take(MaxNotificationBodyLength),
         deeplink = getString("deeplink"),
         read = getBoolean("read") ?: false,
-        createdAt = (get("createdAt") as? Number)?.toLong() ?: 0L,
+        createdAt = millisOf("createdAt"),
     )
 }
 

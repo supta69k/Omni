@@ -121,5 +121,15 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if false;
     }
+
+    // Stories (§7's social surface): a 24-hour image with optional text. Any signed-in user reads
+    // the strip; only the author creates or deletes, and the create must carry their own uid.
+    // `update` is closed deliberately — a story is published once and taken down, never edited.
+    match /stories/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.authorId == request.auth.uid;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
   }
 }

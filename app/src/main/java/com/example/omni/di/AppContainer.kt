@@ -9,6 +9,7 @@ import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.DeviceStepsRepository
 import com.example.omni.data.repo.EmergencyContactRepository
 import com.example.omni.data.repo.FirebaseAuthRepository
+import com.example.omni.data.repo.CloudinaryMediaRepository
 import com.example.omni.data.repo.FeedRepository
 import com.example.omni.data.repo.FirestoreEmergencyContactRepository
 import com.example.omni.data.repo.FirestoreFeedRepository
@@ -25,6 +26,7 @@ import com.example.omni.data.repo.GuideRepository
 import com.example.omni.data.repo.HospitalRepository
 import com.example.omni.data.repo.LocationRepository
 import com.example.omni.data.repo.MealRepository
+import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.MessageRepository
 import com.example.omni.data.repo.FirestoreMessageRepository
 import com.example.omni.data.repo.MetricsRepository
@@ -37,8 +39,15 @@ import com.example.omni.data.repo.PreviewMealRepository
 import com.example.omni.data.repo.PreviewMessageRepository
 import com.example.omni.data.repo.PreviewMetricsRepository
 import com.example.omni.data.repo.PreviewNotificationRepository
+import com.example.omni.data.repo.PreviewRoutingRepository
 import com.example.omni.data.repo.PreviewStepsRepository
 import com.example.omni.data.repo.PreviewUserRepository
+import com.example.omni.data.repo.OsrmRoutingRepository
+import com.example.omni.data.repo.RoutingRepository
+import com.example.omni.data.repo.StoryRepository
+import com.example.omni.data.repo.FirestoreFollowRepository
+import com.example.omni.data.repo.FirestoreStoryRepository
+import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.SosRepository
 import com.example.omni.data.repo.StepsRepository
 import com.example.omni.data.repo.UserRepository
@@ -46,16 +55,19 @@ import com.example.omni.ui.SessionViewModel
 import com.example.omni.ui.auth.SignInViewModel
 import com.example.omni.ui.auth.SignUpViewModel
 import com.example.omni.ui.feed.FeedViewModel
+import com.example.omni.ui.feed.StoriesViewModel
+import com.example.omni.ui.profile.ProfileViewModel
 import com.example.omni.ui.firstaid.GuidesViewModel
 import com.example.omni.ui.home.HomeViewModel
 import com.example.omni.ui.messages.MessagesViewModel
 import com.example.omni.ui.notifications.NotificationsViewModel
 import com.example.omni.ui.nutrition.NutritionViewModel
 import com.example.omni.ui.settings.EmergencyContactsViewModel
+import com.example.omni.ui.settings.GoalsViewModel
 import com.example.omni.ui.sos.SosViewModel
+import com.example.omni.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 
 /**
  * The app's manual dependency container — the whole DI story, on purpose (see
@@ -76,16 +88,22 @@ class AppContainer private constructor(
     val emergencyContactRepository: EmergencyContactRepository,
     val notificationRepository: NotificationRepository,
     val messageRepository: MessageRepository,
+    val storyRepository: StoryRepository,
+    val followRepository: FollowRepository,
     private val hospitalRepositoryProvider: () -> HospitalRepository,
     private val sosRepositoryProvider: () -> SosRepository,
     private val locationRepositoryProvider: () -> LocationRepository,
-    private val storageProvider: () -> FirebaseStorage,
+    private val routingRepositoryProvider: () -> RoutingRepository,
+    private val mediaRepositoryProvider: () -> MediaRepository,
     private val preferencesProvider: () -> PreferencesStore,
     private val stepsProvider: (AppContainer) -> StepsRepository,
 ) {
 
-    /** Lazy because previews never touch Storage and must not initialise Firebase for it. */
-    val storage: FirebaseStorage by lazy { storageProvider() }
+    /**
+     * The post composer's image uploader — lazy, and provider-built, so a preview that never
+     * composes a post never constructs an OkHttp client for uploads it cannot make anyway.
+     */
+    val mediaRepository: MediaRepository by lazy { mediaRepositoryProvider() }
 
     /** Lazy for the same reason: DataStore needs a real `Context`, which a preview has not got. */
     val preferences: PreferencesStore by lazy { preferencesProvider() }
@@ -100,6 +118,15 @@ class AppContainer private constructor(
     /** Lazy: Play Services should not be dragged into a preview that never asks for a location. */
     val sosRepository: SosRepository by lazy { sosRepositoryProvider() }
     val locationRepository: LocationRepository by lazy { locationRepositoryProvider() }
+
+    /**
+     * The SOS map's route provider — the seam that keeps the screen ignorant of who draws the line.
+     *
+     * Lazy because the real one builds an OkHttp client, and a preview that never opens the map should
+     * not pay for a thread pool it will not use. Swapping OSRM for another provider is one line in
+     * [init]: nothing above [RoutingRepository] changes.
+     */
+    val routingRepository: RoutingRepository by lazy { routingRepositoryProvider() }
 
     /**
      * Lazy for a third reason: the directory has no preview fake, so building it eagerly would call
@@ -129,10 +156,24 @@ class AppContainer private constructor(
                 emergencyContactRepository = FirestoreEmergencyContactRepository(firestore),
                 notificationRepository = FirestoreNotificationRepository(firestore),
                 messageRepository = FirestoreMessageRepository(firestore),
+                storyRepository = FirestoreStoryRepository(firestore),
+                followRepository = FirestoreFollowRepository(firestore),
                 hospitalRepositoryProvider = { FirestoreHospitalRepository(firestore) },
                 sosRepositoryProvider = { FirestoreSosRepository(firestore) },
                 locationRepositoryProvider = { LocationRepository(appContext) },
-                storageProvider = { FirebaseStorage.getInstance() },
+                routingRepositoryProvider = { OsrmRoutingRepository(BuildConfig.OSRM_BASE_URL) },
+                // Cloudinary's unsigned upload — no API secret in the APK, and the preset
+                // (`omni_mobile`) is the dashboard-side lock on what may be uploaded. The cloud
+                // name and preset are not secrets; they identify the endpoint, like a Firestore
+                // project id does. Configured in local.properties so a different environment is a
+                // properties change, not a code change.
+                mediaRepositoryProvider = {
+                    CloudinaryMediaRepository(
+                        context = appContext,
+                        cloudName = BuildConfig.CLOUDINARY_CLOUD_NAME,
+                        unsignedPreset = BuildConfig.CLOUDINARY_UPLOAD_PRESET,
+                    )
+                },
                 preferencesProvider = { PreferencesStore(appContext) },
                 stepsProvider = { container ->
                     DeviceStepsRepository(
@@ -155,13 +196,18 @@ class AppContainer private constructor(
                 emergencyContactRepository = PreviewEmergencyContactRepository(),
                 notificationRepository = PreviewNotificationRepository(),
                 messageRepository = PreviewMessageRepository(),
+                storyRepository = FirestoreStoryRepository(FirebaseFirestore.getInstance()),
+                followRepository = FirestoreFollowRepository(FirebaseFirestore.getInstance()),
                 // The directory is Firestore-backed with no fake, deliberately: a preview showing the
                 // design's own two hospitals comes from SosScreen's defaults, not from here. Behind a
                 // provider so no preview ever reaches Firebase to find that out.
                 hospitalRepositoryProvider = { FirestoreHospitalRepository(FirebaseFirestore.getInstance()) },
                 sosRepositoryProvider = { throw NotImplementedError("sosEvents are not available in previews") },
                 locationRepositoryProvider = { throw NotImplementedError("Location is not available in previews") },
-                storageProvider = { throw NotImplementedError("Storage is not available in previews") },
+                // A straight line between two points — enough for a preview to draw the polyline and
+                // render its distance and ETA, and it never touches the network.
+                routingRepositoryProvider = { PreviewRoutingRepository() },
+                mediaRepositoryProvider = { throw NotImplementedError("Uploads are not available in previews") },
                 preferencesProvider = { throw NotImplementedError("DataStore is not available in previews") },
                 stepsProvider = { PreviewStepsRepository() },
             )
@@ -208,12 +254,27 @@ class AppContainer private constructor(
                     FeedViewModel(
                         current.authRepository,
                         current.feedRepository,
+                        current.mediaRepository,
+                    ) as T
+                StoriesViewModel::class.java ->
+                    StoriesViewModel(
+                        current.authRepository,
+                        current.storyRepository,
+                        current.mediaRepository,
+                    ) as T
+                ProfileViewModel::class.java ->
+                    ProfileViewModel(
+                        current.authRepository,
+                        current.userRepository,
+                        current.feedRepository,
+                        current.followRepository,
                     ) as T
                 SosViewModel::class.java ->
                     SosViewModel(
                         current.authRepository,
                         current.hospitalRepository,
                         current.locationRepository,
+                        current.routingRepository,
                         current.sosRepository,
                         current.emergencyContactRepository,
                         current.notificationRepository,
@@ -222,6 +283,11 @@ class AppContainer private constructor(
                     EmergencyContactsViewModel(
                         current.authRepository,
                         current.emergencyContactRepository,
+                    ) as T
+                GoalsViewModel::class.java ->
+                    GoalsViewModel(
+                        current.authRepository,
+                        current.userRepository,
                     ) as T
                 NotificationsViewModel::class.java ->
                     NotificationsViewModel(

@@ -5,6 +5,12 @@ import com.example.omni.data.model.DefaultFiberGoal
 import com.example.omni.data.model.DefaultSleepGoal
 import com.example.omni.data.model.DefaultStepsGoal
 import com.example.omni.data.model.DefaultWaterGoal
+import com.example.omni.data.model.HealthGoals
+import com.example.omni.data.model.MaxCalorieGoal
+import com.example.omni.data.model.MaxFiberGoal
+import com.example.omni.data.model.MaxSleepGoal
+import com.example.omni.data.model.MaxStepsGoal
+import com.example.omni.data.model.MaxWaterGoal
 import com.example.omni.data.model.Profession
 import com.example.omni.data.model.User
 import com.example.omni.data.model.UserRole
@@ -73,20 +79,32 @@ class FirestoreUserRepository(
             .await()
     }
 
+    /**
+     * The `goals` map, written whole.
+     *
+     * A **nested** map, not five dotted keys: `set(…, merge())` treats `"goals.water"` as a field name
+     * that happens to contain a dot, so dotted paths here would quietly create five junk top-level
+     * fields beside the real map and nothing would ever read them back. Merge recurses into nested
+     * maps, so this leaves anything else on the document — and any goal a later build adds — alone.
+     */
+    override suspend fun updateGoals(uid: String, goals: HealthGoals) {
+        val safe = goals.clamped()
+        updateProfile(
+            uid = uid,
+            fields = mapOf(
+                "goals" to mapOf(
+                    "water" to safe.water,
+                    "steps" to safe.steps,
+                    "sleepHours" to safe.sleepHours,
+                    "fiberGrams" to safe.fiberGrams,
+                    "calories" to safe.calories,
+                ),
+            ),
+        )
+    }
+
     private companion object {
         const val Users = "users"
-
-        /** A sleep goal beyond half a day is not a goal, and 24 keeps the axis label two characters wide. */
-        const val MaxSleepGoal = 12f
-
-        /** Grams, matching the day value's own clamp in [FirestoreMetricsRepository]. */
-        const val MaxFiberGoal = 999f
-
-        /**
-         * Calories. Generous, and the printed percent stays three characters wide — the same
-         * layout-slack reasoning as the two above it.
-         */
-        const val MaxCalorieGoal = 99_999
 
         fun DocumentSnapshot.toUser(uid: String): User? {
             if (!exists()) return null
@@ -100,8 +118,12 @@ class FirestoreUserRepository(
                 photoUrl = getString("photoUrl"),
                 unreadMessages = unreadCount("messages"),
                 unreadNotifications = unreadCount("notifications"),
-                waterGoal = goal("water", DefaultWaterGoal),
-                stepsGoal = goal("steps", DefaultStepsGoal),
+                // The ceilings are the goals page's own, in `User.kt`, rather than three private
+                // numbers here: one screen now sets these and one mapper reads them, and the two
+                // disagreeing about what a legal target is would show a user a goal they could not
+                // then reproduce with the stepper.
+                waterGoal = goal("water", DefaultWaterGoal, max = MaxWaterGoal),
+                stepsGoal = goal("steps", DefaultStepsGoal, max = MaxStepsGoal),
                 sleepGoal = goal("sleepHours", DefaultSleepGoal, max = MaxSleepGoal),
                 fiberGoal = goal("fiberGrams", DefaultFiberGoal, max = MaxFiberGoal),
                 calorieGoal = goal("calories", DefaultCalorieGoal, max = MaxCalorieGoal),
@@ -123,14 +145,9 @@ class FirestoreUserRepository(
          * One key out of the `goals` map, or [fallback] when the map, the key or its type is missing.
          *
          * A goal of 0 would make the water card divide by zero and its progress bar meaningless, so a
-         * non-positive stored value is treated as absent rather than honoured.
-         */
-        fun DocumentSnapshot.goal(key: String, fallback: Int): Int =
-            (get("goals.$key") as? Number)?.toInt()?.takeIf { it > 0 } ?: fallback
-
-        /**
-         * The integer overload with a ceiling, for goals whose value is printed inside a fixed box
-         * (the gauge's percent, derived from the calorie goal).
+         * non-positive stored value is treated as absent rather than honoured. [max] is the goals
+         * page's own ceiling, so a value from an older build or the console is pulled back to
+         * something the stepper could have produced.
          */
         fun DocumentSnapshot.goal(key: String, fallback: Int, max: Int): Int =
             (get("goals.$key") as? Number)?.toInt()?.takeIf { it > 0 }?.coerceAtMost(max) ?: fallback

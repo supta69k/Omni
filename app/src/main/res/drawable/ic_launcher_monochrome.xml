@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The themed-icon layer (Android 13+), where the system throws away our colours and tints a silhouette
+    with the wallpaper's.
+
+    It cannot be the torus PNG: a themed icon is drawn from the layer's *alpha*, and the render's centre
+    is opaque white rather than a hole, so the mark would flatten into a plain tinted disc and lose the
+    one thing that makes it an "O". This is that O stated as geometry — a 68dp ring, outer radius 34 and
+    inner 22 about the centre of the 108dp canvas, as one even-odd path so the hole is a hole.
+
+    68dp across keeps it inside the 72dp every mask leaves visible, and the 12dp band matches the
+    proportion of the mark it stands in for.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M20,54a34,34 0 1,0 68,0a34,34 0 1,0 -68,0M32,54a22,22 0 1,0 44,0a22,22 0 1,0 -44,0" />
+</vector>

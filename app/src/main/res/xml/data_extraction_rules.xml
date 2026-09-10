@@ -1,19 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+    API 31+ backup rules. See `backup_rules.xml` for the same exclusions on older devices, and for
+    why DataStore is the one directory that may not travel: it holds the onboarding flag and the step
+    counter's device-specific anchor, neither of which means anything on a different install.
+
+    `device-transfer` repeats the exclusion rather than inheriting it — a phone-to-phone transfer is
+    exactly the case where a carried-over step anchor would silently corrupt the day's count.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore" />
     </device-transfer>
-    -->
 </data-extraction-rules>

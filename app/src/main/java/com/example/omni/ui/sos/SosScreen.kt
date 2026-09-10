@@ -1,19 +1,22 @@
 package com.example.omni.ui.sos
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,11 +31,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,17 +51,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.data.model.Hospital
+import com.example.omni.data.model.LatLng
 import com.example.omni.data.model.distanceLabel
+import com.example.omni.data.model.etaLabel
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniBottomNav
@@ -62,8 +84,10 @@ import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
 import com.example.omni.ui.theme.MapType
+import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniCallButton
+import com.example.omni.ui.theme.OmniHeroPink
 import com.example.omni.ui.theme.OmniHospitalCard
 import com.example.omni.ui.theme.OmniHospitalName
 import com.example.omni.ui.theme.OmniInk
@@ -78,50 +102,87 @@ import com.example.omni.ui.theme.OmniSheetTitle
 import com.example.omni.ui.theme.OmniSosTrack
 import com.example.omni.ui.theme.OmniTabInactive
 import com.example.omni.ui.theme.OmniTheme
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
- * Emergency SOS — Figma frames `iPhone 14 & 15 Pro - 31` (node 134:18902) and `- 30` (node 134:6382).
+ * Emergency SOS — Figma frames `iPhone 14 & 15 Pro - 31` (node 134:18902), `- 30` (node 134:6382) and
+ * the map study `172:14`.
  *
- * The two frames are one screen in two states, not two destinations: both draw the same white header,
- * the same centred search pill and a full-bleed map underneath, and they differ only in what sits over
- * the map's lower half.
+ * The frames are one screen in two states, not two destinations: both draw the same white header, the
+ * same centred search pill and a full-bleed map underneath, and they differ only in what sits over the
+ * map's lower half.
  *
  *  - **- 31, at rest:** the red "Swipe to active SOS" track at y=728.
- *  - **- 30, activated:** the "Nearest Hospitals" sheet, and a map that has gained the facility
- *    callouts (which is why the two maps ship as separate images).
+ *  - **- 30, with the sheet:** the "Nearest Hospitals" sheet over a map showing facility callouts.
  *
- * Modelling them as one composable with [startActivated] is what keeps the bottom bar honest: the SOS
- * pill stays lit across both states, because the user never left the tab. Completing the swipe moves
- * between them and the sheet's grab handle — a link in the source, not decoration — moves back.
+ * Modelling them as one composable with [startWithSheet] is what keeps the bottom bar honest: the SOS
+ * pill stays lit across both states, because the user never left the tab. Completing the swipe *or*
+ * tapping a pin moves between them, and the sheet's grab handle — a link in the source, not decoration
+ * — moves back. Only the swipe raises [onActivate]; a pin tap is navigation, not an emergency.
  *
  * Both frames draw the *Home* pill in Figma. That is the designer working from a duplicated artboard;
  * [UI_ARCHITECTURE.md](../../../../../../../../UI_ARCHITECTURE.md) §2a is explicit that a screen lights
  * the tab that opens it, so [OmniNavItem.Sos] is what ships.
  *
- * The map is a 3x raster of Figma's own `Full Map` node rather than a vector: the source is a street
- * network of several thousand paths, and the markers, the route line and the callouts are baked into it
- * exactly as drawn. Re-export both at 3x from nodes 172:12325 (`Full Map2 1`, 415x851) and 172:12321
- * (`Full Map 3`, 415x855) whenever the designer redraws them — the overlays above are placed from the
- * frame's coordinates, not the bitmap's, so a new map needs no code change.
+ * **Layout change (`UI_ARCHITECTURE.md` §6 rules 8/9/11).** The map is no longer the 3x raster of
+ * Figma's `Full Map` node — it is [OmniMap], a live MapLibre view over OpenStreetMap vector tiles, styled
+ * from `res/raw/omni_map_style.json` into the same palette the bitmap was drawn in (white land, pale
+ * blue-grey water, hero-pink primary roads, call-button teal side streets). The bitmap's baked-in pins,
+ * callouts and route line become [OmniMapPins] and the route layers, which draw the *real* directory at
+ * the *real* coordinates. Three things the design does not contain follow from that and are built out of
+ * parts it already owns:
+ *
+ *  1. The search pill becomes a real field. Same 325 x 43 box, same icon, same placeholder; "Clear"
+ *     appears in the tail only while there is something to clear.
+ *  2. A notice banner in the pill's own shape sits under it, for the eleven states a live map has and a
+ *     mock does not — no permission, location off, no directory, no match, no route, no tiles. It is the
+ *     only thing on the screen that can say "this did not work", and it replaces every silent failure.
+ *  3. A recenter control, [RecenterSize] round in the sheet surface, drawn from the palette because the
+ *     design ships no crosshair asset. It hides itself when there is no fix to centre on.
+ *
+ * Nothing the design *does* draw moves.
  */
 @Composable
 fun SosScreen(
     header: OmniHeaderState = OmniHeaderState(),
+    /** The nearby, searched, distance-sorted slice of the directory — what the rail and the pins show. */
     hospitals: List<Hospital> = DefaultHospitals,
-    hasLocation: Boolean = false,
+    selectedId: String? = DefaultHospitals.first().id,
+    nearestId: String? = DefaultHospitals.first().id,
+    /** Where the phone is, or `null` while there is no fix — the user dot and the route's origin. */
+    userLocation: LatLng? = null,
+    routeStatus: RouteStatus = RouteStatus.Idle,
+    locationStatus: LocationStatus = LocationStatus.Locating,
+    query: String = "",
+    /**
+     * How many hospitals the directory holds *before* the radius and the search cut it down. Zero and
+     * [hospitals] empty is "nothing has downloaded"; non-zero and [hospitals] empty is "nothing matches",
+     * and the two need opposite answers.
+     */
+    directorySize: Int = hospitals.size,
+    /** Bumped by the ViewModel to mean "put the camera back on the user"; see [OmniMap]. */
+    recenterTick: Int = 0,
     /**
      * How many emergency contacts the account holds — the label on the sheet's alert pill, and the
      * only thing this screen needs to know about them. Zero turns the pill into the way to add one.
      */
     contactCount: Int = 0,
+    /** True until the directory's first snapshot lands, so "empty" is not announced before it is true. */
+    loading: Boolean = false,
     onNavigate: (OmniNavItem) -> Unit = {},
-    onSearch: () -> Unit = {},
+    onQueryChange: (String) -> Unit = {},
+    onSelectHospital: (String) -> Unit = {},
+    /** Routes to this hospital, selecting it on the way — one tap from any card on the rail. */
     onFindRoute: (Hospital) -> Unit = {},
+    onRecenter: () -> Unit = {},
     onCallHospital: (Hospital) -> Unit = {},
     /**
-     * The national emergency line. Offered when the directory is empty, which is the only state in
+     * The national emergency line. Offered whenever the directory is empty, which is the only state in
      * which every other way out of this screen is gone (BACKEND_PLAN §11 Phase 9 — the dial must
      * work "regardless of network state").
      */
@@ -131,37 +192,98 @@ fun SosScreen(
      * which, because it is the same pill either way and only the router knows where that page is.
      */
     onAlertContacts: () -> Unit = {},
+    /** Re-shows the system location dialog. Offered only while the OS will still show it. */
+    onRequestLocation: () -> Unit = {},
+    /** Omni's own page in system settings — the only way back from a permanent refusal. */
+    onOpenAppSettings: () -> Unit = {},
+    /** The phone's location toggle, for when the permission is granted but the radio is off. */
+    onOpenLocationSettings: () -> Unit = {},
     /** Fires the moment the swipe completes — the screen's own signal that SOS was activated. */
     onActivate: () -> Unit = {},
     /**
      * Opens straight into the hospitals sheet. Exists so a preview can render `- 30` without a
      * gesture, and so a future alert can deep-link into it.
      */
-    startActivated: Boolean = false,
+    startWithSheet: Boolean = false,
 ) {
-    var activated by remember { mutableStateOf(startActivated) }
+    var sheetOpen by remember { mutableStateOf(startWithSheet) }
+    // The one thing about the map only the map knows. Held here because the notice banner is the
+    // screen's single place for "this did not work", including "the tiles never arrived".
+    var styleError by remember { mutableStateOf<String?>(null) }
+    val focus = LocalFocusManager.current
+
+    val notice = mapNotice(
+        styleError = styleError,
+        locationStatus = locationStatus,
+        routeStatus = routeStatus,
+        query = query,
+        visible = hospitals.size,
+        directorySize = directorySize,
+        loading = loading,
+        onRequestLocation = onRequestLocation,
+        onOpenAppSettings = onOpenAppSettings,
+        onOpenLocationSettings = onOpenLocationSettings,
+        onClearQuery = { onQueryChange("") },
+        onCallEmergency = onCallEmergency,
+    )
 
     DesignFrame {
+        // Converted here, inside the frame, because these are artboard units: only this density knows
+        // what a 480dp sheet is in the physical pixels MapLibre's camera padding is measured in.
+        val density = LocalDensity.current
+        val topInsetPx = with(density) {
+            (SearchGap + SearchHeight + if (notice != null) NoticeGap + NoticeMinHeight else 0.dp).roundToPx()
+        }
+        val bottomInsetPx = with(density) {
+            (if (sheetOpen) SheetHeight else SwipeSlot).roundToPx()
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(OmniBackground),
         ) {
             // The map starts where the header ends (Figma puts it at y=101, the header's own height)
-            // and runs off the bottom of the artboard, so it is cropped rather than letterboxed on a
-            // screen shorter than the 851 the design draws.
-            Image(
-                painter = painterResource(
-                    if (activated) R.drawable.map_hospitals else R.drawable.map_sos,
-                ),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                alignment = Alignment.TopCenter,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(top = OmniHeaderHeight),
-            )
+            // and runs off the bottom of the artboard. Its own box is therefore what the insets above
+            // are measured against, and the opaque header never covers a tile the camera paid for.
+            val mapModifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = OmniHeaderHeight)
+
+            if (LocalInspectionMode.current) {
+                // The preview renderer has no GL surface and no native library, so a real MapView
+                // would take the whole pane down with it. The land colour and a label are the honest
+                // stand-in; every overlay above still previews exactly as it ships.
+                Box(mapModifier.background(OmniBackground), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Map renders on device",
+                        style = MapType.SheetSubtitle,
+                        color = OmniTabInactive,
+                    )
+                }
+            } else {
+                OmniMap(
+                    hospitals = hospitals,
+                    selectedId = selectedId,
+                    nearestId = nearestId,
+                    userLocation = userLocation,
+                    route = (routeStatus as? RouteStatus.Ready)?.route,
+                    recenterTick = recenterTick,
+                    onSelectHospital = { id ->
+                        // A pin tap is the design's own way into the sheet, and it must not record an
+                        // SOS event — that is the swipe's job, and only the swipe's.
+                        focus.clearFocus()
+                        onSelectHospital(id)
+                        sheetOpen = true
+                    },
+                    onStyleReady = { styleError = null },
+                    onStyleFailed = { styleError = it },
+                    modifier = mapModifier,
+                    topInsetPx = topInsetPx,
+                    bottomInsetPx = bottomInsetPx,
+                )
+            }
 
             // The header is opaque white in both frames; only the search pill floats on the map.
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -175,13 +297,41 @@ fun SosScreen(
                 Spacer(Modifier.height(SearchGap))
 
                 MapSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
                     modifier = Modifier.align(Alignment.CenterHorizontally),
-                    onClick = onSearch,
                 )
+
+                if (notice != null) {
+                    Spacer(Modifier.height(NoticeGap))
+                    NoticeBanner(
+                        notice = notice,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
+                }
+            }
+
+            // Recenter sits above whatever is covering the map's bottom, so it never ends up under the
+            // sheet — and animates between the two slots for the same reason the sheet slides.
+            val recenterBottom by animateDpAsState(
+                targetValue = (if (sheetOpen) SheetHeight else SwipeSlot) + RecenterGap,
+                animationSpec = tween(StateChangeMillis),
+                label = "recenter",
+            )
+            AnimatedVisibility(
+                visible = userLocation != null,
+                enter = fadeIn(tween(StateChangeMillis)),
+                exit = fadeOut(tween(StateChangeMillis)),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = RecenterEnd, bottom = recenterBottom),
+            ) {
+                RecenterButton(onClick = onRecenter)
             }
 
             AnimatedVisibility(
-                visible = !activated,
+                visible = !sheetOpen,
                 enter = slideInVertically(tween(StateChangeMillis)) { it } + fadeIn(tween(StateChangeMillis)),
                 exit = slideOutVertically(tween(StateChangeMillis)) { it } + fadeOut(tween(StateChangeMillis)),
                 modifier = Modifier
@@ -190,13 +340,13 @@ fun SosScreen(
                     .padding(start = SliderStart, bottom = OmniNavBottomGap + OmniNavHeight + SliderNavGap),
             ) {
                 SosSwipeTrack(onActivate = {
-                    activated = true
+                    sheetOpen = true
                     onActivate()
                 })
             }
 
             AnimatedVisibility(
-                visible = activated,
+                visible = sheetOpen,
                 enter = slideInVertically(tween(StateChangeMillis)) { it } + fadeIn(tween(StateChangeMillis)),
                 exit = slideOutVertically(tween(StateChangeMillis)) { it } + fadeOut(tween(StateChangeMillis)),
                 modifier = Modifier
@@ -205,13 +355,20 @@ fun SosScreen(
             ) {
                 HospitalSheet(
                     hospitals = hospitals,
-                    hasLocation = hasLocation,
+                    selectedId = selectedId,
+                    nearestId = nearestId,
+                    hasLocation = userLocation != null,
+                    routeStatus = routeStatus,
+                    query = query,
+                    directorySize = directorySize,
                     contactCount = contactCount,
-                    onDismiss = { activated = false },
+                    onDismiss = { sheetOpen = false },
+                    onSelect = onSelectHospital,
                     onFindRoute = onFindRoute,
                     onCall = onCallHospital,
                     onCallEmergency = onCallEmergency,
                     onAlertContacts = onAlertContacts,
+                    onClearQuery = { onQueryChange("") },
                 )
             }
 
@@ -233,24 +390,66 @@ fun SosScreen(
  * It is not the feed's search row: that one is 48 tall, fully rounded and filled #F5F5F5, while this
  * is a 14-radius card in the sheet's own off-white, lifted off the map by a shadow. Same icon and
  * same placeholder, different object.
+ *
+ * **Layout change (`UI_ARCHITECTURE.md` §6 rule 8).** The design's static "Search here" becomes a real
+ * single-line field; the placeholder is what it draws while [query] is empty, so the resting state is
+ * pixel-identical to the mock. Typing filters the directory (debounced in the ViewModel, not here), and
+ * the IME's Search key only dismisses the keyboard because the results are already live.
+ *
+ * "Clear" is a word rather than an icon on purpose: the design ships no close glyph, and inventing one
+ * by rotating the feed's `+` would be a private joke rather than a component. 325 − 19 − 24 − 6 leaves
+ * 276 for the row, of which the word takes 33 at 13px, so the field itself keeps ~230 — around 26
+ * characters of a hospital name, which is more than anyone types before the list narrows to one.
+ *
+ * The field keeps its own [TextFieldValue] instead of rendering [query] straight. A hoisted value has
+ * to travel to the ViewModel and back before it reaches the glyph on screen, and at typing speed the
+ * next key lands mid-round-trip: the field redraws with the value from *before* that key and the
+ * character disappears. Local state means the text is on screen the frame it is typed; [query] is
+ * still watched, but only to obey an instruction the field did not issue itself — the notice's
+ * "Clear", or the ViewModel's length cap.
  */
 @Composable
-private fun MapSearchField(modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+private fun MapSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focus = LocalFocusManager.current
+
+    var field by remember { mutableStateOf(TextFieldValue(query)) }
+
+    /** The last text this field sent up. Anything else arriving from above is a real instruction. */
+    var sent by remember { mutableStateOf(query) }
+
+    LaunchedEffect(query) {
+        if (query != sent) {
+            field = TextFieldValue(query, TextRange(query.length))
+            sent = query
+        }
+    }
+
+    fun edit(value: TextFieldValue) {
+        field = value
+        sent = value.text
+        onQueryChange(value.text)
+    }
+
     Box(
         modifier = modifier
             .width(SearchWidth)
             .height(SearchHeight)
-            // Figma's `0 1 5.5 rgba(0,0,0,.25)` is a blur with almost no offset, which Compose's
-            // single-elevation shadow cannot express; 2dp is the closest visual match.
-            .shadow(2.dp, RoundedCornerShape(14.dp), ambientColor = OmniMapSearchShadow, spotColor = OmniMapSearchShadow)
+            // Figma's `0 1 5.5 rgba(0,0,0,.25)` is a blur with almost no offset. On the white mock 2dp
+            // read as the same lift; over live tiles it vanished into the map, so the pill is raised to
+            // 6 — the shadow the design *means*, on the background the design never had.
+            .shadow(6.dp, RoundedCornerShape(14.dp), ambientColor = OmniMapSearchShadow, spotColor = OmniMapSearchShadow)
             .clip(RoundedCornerShape(14.dp))
-            .background(OmniSheetSurface)
-            .clickable(onClick = onClick),
+            .background(OmniSheetSurface),
         contentAlignment = Alignment.CenterStart,
     ) {
         Row(
             modifier = Modifier
-                .padding(start = 19.dp)
+                .fillMaxWidth()
+                .padding(start = 19.dp, end = 14.dp)
                 .offset(y = 0.5.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -260,13 +459,215 @@ private fun MapSearchField(modifier: Modifier = Modifier, onClick: () -> Unit = 
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
             )
+
+            BasicTextField(
+                value = field,
+                onValueChange = ::edit,
+                modifier = Modifier.weight(1f),
+                textStyle = MapType.SearchHint.copy(color = OmniInk),
+                singleLine = true,
+                cursorBrush = SolidColor(OmniInk),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                // Nothing to submit — the list has been filtering since the second character. The key
+                // puts the keyboard away, which is the only thing left to want.
+                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                decorationBox = { input ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (field.text.isEmpty()) {
+                            Text(
+                                text = "Search here",
+                                style = MapType.SearchHint,
+                                color = OmniTabInactive,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                        input()
+                    }
+                },
+            )
+
+            if (field.text.isNotEmpty()) {
+                Text(
+                    text = "Clear",
+                    style = MapType.HospitalType,
+                    color = OmniAuthHeading,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.clickable {
+                        edit(TextFieldValue(""))
+                        focus.clearFocus()
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The one line on this screen that can say "that did not work" — the search pill's shape, reused.
+ *
+ * **Layout change (`UI_ARCHITECTURE.md` §6 rule 11.)** A live map has states a mock does not: no
+ * permission, a permanent refusal, the location radio off, an empty directory, a search with no match, a
+ * route that failed, tiles that never loaded. The plan requires every one of them to be *named* rather
+ * than shown as a blank rectangle, and the design has nowhere to name them. So this is built from parts
+ * the screen already owns — [SearchWidth] wide, radius 14, [OmniSheetSurface], the same shadow — and
+ * placed directly under the pill it belongs to. It wraps its own height rather than fixing it, because
+ * the longest message runs to three lines on a narrow phone.
+ *
+ * At most one shows at a time, in the priority [mapNotice] sets: the thing the user can act on first.
+ */
+@Composable
+private fun NoticeBanner(notice: MapNotice, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .width(SearchWidth)
+            .shadow(2.dp, RoundedCornerShape(14.dp), ambientColor = OmniMapSearchShadow, spotColor = OmniMapSearchShadow)
+            .clip(RoundedCornerShape(14.dp))
+            .background(OmniSheetSurface)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = notice.text,
+            style = MapType.SheetSubtitle,
+            color = OmniSheetDetail,
+            maxLines = 3,
+            modifier = Modifier.weight(1f),
+        )
+
+        if (notice.action != null) {
             Text(
-                text = "Search here",
-                style = MapType.SearchHint,
-                color = OmniTabInactive,
+                text = notice.action,
+                style = MapType.SheetSubtitle,
+                color = OmniAuthHeading,
+                textDecoration = TextDecoration.Underline,
                 maxLines = 1,
                 softWrap = false,
+                modifier = Modifier.clickable(onClick = notice.onAction),
             )
+        }
+    }
+}
+
+/** One message and, when there is something to do about it, the word that does it. */
+private class MapNotice(
+    val text: String,
+    val action: String? = null,
+    val onAction: () -> Unit = {},
+)
+
+/**
+ * Which of the map's failure states to name, in the order the user can act on them.
+ *
+ * Priority, top down: a map that never loaded beats everything, because nothing else on the screen is
+ * true without it. Then the location chain, because it is the reason "nearest" would otherwise be a
+ * guess — and each rung has a different way out (Settings for a block, the dialog for a refusal, the
+ * radio toggle for a switched-off phone). Then an empty directory, which is the state that makes 999 the
+ * only working button. Then a search that matched nothing, then a route that failed — last of the real
+ * errors because the card's own button already reads "Retry the Route", so the banner only has to
+ * explain *why*. "Finding your location…" is not an error and sits below all of them.
+ *
+ * Pure, so the whole table can be read in one place rather than traced through a composable.
+ */
+private fun mapNotice(
+    styleError: String?,
+    locationStatus: LocationStatus,
+    routeStatus: RouteStatus,
+    query: String,
+    visible: Int,
+    directorySize: Int,
+    loading: Boolean,
+    onRequestLocation: () -> Unit,
+    onOpenAppSettings: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
+    onClearQuery: () -> Unit,
+    onCallEmergency: () -> Unit,
+): MapNotice? = when {
+    styleError != null -> MapNotice(styleError)
+
+    locationStatus == LocationStatus.Blocked -> MapNotice(
+        "Location is blocked for Omni, so hospitals can't be sorted by distance.",
+        "Settings",
+        onOpenAppSettings,
+    )
+
+    locationStatus == LocationStatus.Denied -> MapNotice(
+        "Allow location and Omni will find the hospital nearest you.",
+        "Allow",
+        onRequestLocation,
+    )
+
+    locationStatus == LocationStatus.ServicesOff -> MapNotice(
+        "Your phone's location is switched off, so distances can't be measured.",
+        "Settings",
+        onOpenLocationSettings,
+    )
+
+    directorySize == 0 && !loading -> MapNotice(
+        "The hospital directory hasn't reached this phone yet. 999 works without it.",
+        "Call 999",
+        onCallEmergency,
+    )
+
+    query.isNotBlank() && visible == 0 -> MapNotice(
+        "No hospital in the directory matches that search.",
+        "Clear",
+        onClearQuery,
+    )
+
+    routeStatus is RouteStatus.Failed -> MapNotice(routeStatus.reason)
+
+    locationStatus == LocationStatus.Locating -> MapNotice("Finding your location…")
+
+    else -> null
+}
+
+/**
+ * "Put the camera back on me" — [RecenterSize] round, in the sheet's surface, with the same lift as the
+ * search pill.
+ *
+ * **Layout change (`UI_ARCHITECTURE.md` §6 rule 11.)** A live map can be panned, so it needs a way back;
+ * the design, drawing a bitmap that could not move, ships no crosshair asset. The glyph is drawn from the
+ * palette instead of exported — a ring, a dot and four ticks, in the route's own purple, so the button
+ * and the thing it centres on are visibly the same colour. It is only composed while there is a fix to
+ * centre on, which is what keeps it from being a dead tap (§2a rule 4).
+ */
+@Composable
+private fun RecenterButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(RecenterSize)
+            .shadow(3.dp, RoundedCornerShape(percent = 50), ambientColor = OmniMapSearchShadow, spotColor = OmniMapSearchShadow)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(OmniSheetSurface)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(RecenterGlyph)) {
+            val centre = Offset(size.width / 2f, size.height / 2f)
+            val outer = size.minDimension / 2f
+            val ring = outer * RingRadius
+            val line = outer * GlyphStroke
+
+            drawCircle(RecenterTint, radius = ring, center = centre, style = Stroke(line))
+            drawCircle(RecenterTint, radius = outer * DotRadius, center = centre)
+
+            // Four ticks at the compass points, from the ring out to the edge — the crosshair half of
+            // the glyph, and what stops the ring from reading as a plain circle.
+            for (degrees in 0 until 360 step 90) {
+                val radians = Math.toRadians(degrees.toDouble())
+                val dx = cos(radians).toFloat()
+                val dy = sin(radians).toFloat()
+                drawLine(
+                    color = RecenterTint,
+                    start = Offset(centre.x + dx * ring, centre.y + dy * ring),
+                    end = Offset(centre.x + dx * outer, centre.y + dy * outer),
+                    strokeWidth = line,
+                    cap = StrokeCap.Round,
+                )
+            }
         }
     }
 }
@@ -278,12 +679,23 @@ private fun MapSearchField(modifier: Modifier = Modifier, onClick: () -> Unit = 
  * the knob is dragged rather than tapped: it follows the finger across the track, the label fades out
  * behind it, and a release short of [ActivateAt] springs it back. Nothing here is drawn that Figma
  * does not draw — the travel is the same knob moving inside the same track.
+ *
+ * **Why the progress is a plain float and not an `Animatable`.** It was one, written from
+ * `scope.launch { progress.snapTo(...) }` inside the drag callback, and on a real phone the gesture
+ * stuck about one swipe in three. `Animatable` serialises through a mutator mutex, so every launched
+ * `snapTo` cancels the one before it; deltas arrive faster than coroutines get dispatched, so the
+ * cancelled ones took their movement with them and the knob stalled under the finger. A drag is
+ * already synchronous — [rememberDraggableState] hands over the delta on the input frame — so the
+ * value it moves must be settable on that frame too. Only the release, which really is an animation,
+ * goes through a coroutine, and it holds the one [Job] that can be cancelled by the next touch.
  */
 @Composable
 private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit) {
     val travel = SliderWidth - SliderInset * 2 - SliderKnob
     val travelPx = with(LocalDensity.current) { travel.toPx() }
-    val progress = remember { Animatable(0f) }
+
+    var progress by remember { mutableFloatStateOf(0f) }
+    var settle by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
 
     Box(
@@ -294,16 +706,34 @@ private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit)
             .background(OmniSosTrack)
             .draggable(
                 state = rememberDraggableState { delta ->
-                    scope.launch { progress.snapTo((progress.value + delta / travelPx).coerceIn(0f, 1f)) }
+                    progress = (progress + delta / travelPx).coerceIn(0f, 1f)
                 },
                 orientation = Orientation.Horizontal,
-                onDragStopped = {
-                    if (progress.value >= ActivateAt) {
-                        progress.animateTo(1f)
+                // A finger landing on a knob that is still springing home should catch it, not wait
+                // for the animation to finish and the touch slop to be crossed all over again. That
+                // wait is the other half of what "sometimes stuck" felt like.
+                startDragImmediately = true,
+                onDragStarted = { settle?.cancel() },
+                onDragStopped = { velocity ->
+                    settle?.cancel()
+                    // Past three quarters, or flicked hard enough from past the halfway mark: a
+                    // deliberate throw is as clear a "yes" as carrying the knob all the way, and in an
+                    // emergency the shorter gesture is the one that gets made.
+                    if (progress >= ActivateAt || (velocity >= FlingActivate && progress >= FlingFrom)) {
+                        progress = 1f
                         onActivate()
-                        progress.snapTo(0f)
+                        // The sheet takes the track's place, so this usually never runs — the track is
+                        // disposed mid-delay and `remember` hands back a fresh 0 next time it is
+                        // shown. It exists for the case where the swipe changes nothing on screen,
+                        // where a knob abandoned at the far end would be a dead control.
+                        settle = scope.launch {
+                            delay(ResetDelayMillis)
+                            animate(1f, 0f) { value, _ -> progress = value }
+                        }
                     } else {
-                        progress.animateTo(0f)
+                        settle = scope.launch {
+                            animate(progress, 0f, animationSpec = SpringBack) { value, _ -> progress = value }
+                        }
                     }
                 },
             ),
@@ -319,7 +749,7 @@ private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit)
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = SosLabelStart)
-                .graphicsLayer { alpha = 1f - progress.value },
+                .graphicsLayer { alpha = 1f - progress },
         )
 
         Image(
@@ -328,7 +758,7 @@ private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit)
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = SliderInset)
-                .offset { IntOffset((progress.value * travelPx).roundToInt(), 0) }
+                .offset { IntOffset((progress * travelPx).roundToInt(), 0) }
                 .size(SliderKnob),
         )
     }
@@ -342,24 +772,40 @@ private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit)
  * 322-wide window onto a horizontal scroll, exactly as the source marks it — the second hospital is
  * off to the right, not below.
  *
- * **Layout change (`UI_ARCHITECTURE.md` §6 rule 8/11).** BACKEND_PLAN §11 Phase 9 asks activation to
- * "notify saved emergency contacts", and the design has nowhere to say so. Rather than a Material
- * component that would hoist itself out of `DesignFrame`, the alert pill is the sheet's *own*
- * `Call Container` shape dropped into that empty tail: bottom-anchored at [AlertPillBottom], which is
- * the floating bar's slot plus four, so it lands at y=343 — three clear of where the design's content
- * ends and 34 clear of the bar. Nothing the design draws moves.
+ * **Layout change (`UI_ARCHITECTURE.md` §6 rule 8/11).** Three, all forced by the rail now holding the
+ * real directory rather than two mock cards:
+ *
+ *  1. The scroll becomes a [LazyRow] keyed on hospital id, and follows [selectedId]. Tapping a pin on
+ *     the map scrolls the rail to that hospital; tapping a card selects it, which moves the map. One
+ *     selection, two views of it — the source's own 322 window, item-snapped so a card is never half on
+ *     screen. Lazy because the directory runs to a hundred-odd entries and the design's card is not
+ *     cheap.
+ *  2. BACKEND_PLAN §11 Phase 9 asks activation to "notify saved emergency contacts", and the design has
+ *     nowhere to say so. Rather than a Material component that would hoist itself out of `DesignFrame`,
+ *     the alert pill is the sheet's *own* `Call Container` shape dropped into that empty tail:
+ *     bottom-anchored at [AlertPillBottom], which is the floating bar's slot plus four, so it lands at
+ *     y=343 — three clear of where the design's content ends and 34 clear of the bar.
+ *  3. An empty rail is two different facts, and each gets the pill that answers it: no directory at all
+ *     offers 999, a search that matched nothing offers to clear itself.
  */
 @Composable
 private fun HospitalSheet(
     hospitals: List<Hospital>,
+    selectedId: String?,
+    nearestId: String?,
     hasLocation: Boolean,
+    routeStatus: RouteStatus,
+    query: String,
+    directorySize: Int,
     contactCount: Int,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit = {},
+    onSelect: (String) -> Unit = {},
     onFindRoute: (Hospital) -> Unit = {},
     onCall: (Hospital) -> Unit = {},
     onCallEmergency: () -> Unit = {},
     onAlertContacts: () -> Unit = {},
+    onClearQuery: () -> Unit = {},
 ) {
     Box(
         modifier = modifier
@@ -399,9 +845,12 @@ private fun HospitalSheet(
                 // trailing space; the count is the list's own, the radius is the eight kilometres
                 // the screen actually searches, and the unit is kilometres because the app targets
                 // Bangladesh (BACKEND_PLAN §11 Phase 9). Without a location the line says so —
-                // an unsorted directory pretending to be "nearest" would be a lie.
+                // an unsorted directory pretending to be "nearest" would be a lie. The search case
+                // does not quote the query back: a 60-character one would not fit the two lines the
+                // design leaves here, and the field above still shows it.
                 text = when {
-                    hospitals.isEmpty() -> "The hospital directory hasn't reached this phone yet"
+                    directorySize == 0 -> "The hospital directory hasn't reached this phone yet"
+                    hospitals.isEmpty() -> "Nothing in the directory matches that search"
                     hasLocation -> "Found ${hospitals.size} facilities within 8 km"
                     else -> "${hospitals.size} facilities — turn on location to sort by distance"
                 },
@@ -412,41 +861,59 @@ private fun HospitalSheet(
 
             Spacer(Modifier.height(HospitalRailGap))
 
-            if (hospitals.isEmpty()) {
+            when {
                 // The one state BACKEND_PLAN §11 Phase 9 refuses to leave dead: "always keep the
                 // emergency dial button working regardless of network state". Every other route out
                 // of this screen goes through a hospital card, so with no directory — a first run
                 // that has never been online, and nothing in Firestore's cache — the sheet would
                 // otherwise be an empty box in the middle of an emergency. 999 is Bangladesh's
                 // national emergency line and needs neither the directory nor a data connection.
-                Column(
-                    modifier = Modifier.width(HospitalCardWidth),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Text(
-                        text = "It needs one online moment to download, then works offline for good.",
-                        style = MapType.SheetSubtitle,
-                        color = OmniSheetDetail,
-                        maxLines = 3,
-                    )
-                    HospitalAction(
-                        icon = R.drawable.ic_hosp_call,
-                        label = "Call 999",
-                        fill = OmniCallButton,
-                        labelColor = OmniInk,
-                        labelStart = 78.dp,
-                        onClick = onCallEmergency,
-                    )
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .width(HospitalCardWidth)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(26.dp),
-                ) {
-                    hospitals.forEach { hospital ->
-                        HospitalCard(hospital = hospital, onFindRoute = onFindRoute, onCall = onCall)
+                directorySize == 0 -> EmptyRail(
+                    message = "It needs one online moment to download, then works offline for good.",
+                    icon = R.drawable.ic_hosp_call,
+                    label = "Call 999",
+                    fill = OmniCallButton,
+                    onClick = onCallEmergency,
+                )
+
+                // A directory that exists and a search that matched none of it. Nothing is wrong, so
+                // nothing shouts: the tray's own grey, and the way back is to drop the filter.
+                hospitals.isEmpty() -> EmptyRail(
+                    message = "Clear the search to see every hospital near you again.",
+                    icon = R.drawable.ic_feed_search,
+                    label = "Clear the Search",
+                    fill = OmniHospitalCard,
+                    onClick = onClearQuery,
+                )
+
+                else -> {
+                    val rail = rememberLazyListState()
+                    val selectedIndex = hospitals.indexOfFirst { it.id == selectedId }
+
+                    // The rail's half of "one selection, two views": a pin tap on the map lands here.
+                    // Keyed on the index rather than the id so a re-sort — which is what walking does
+                    // to a distance-ordered list — also brings the card back into view.
+                    LaunchedEffect(selectedIndex) {
+                        if (selectedIndex >= 0) rail.animateScrollToItem(selectedIndex)
+                    }
+
+                    LazyRow(
+                        state = rail,
+                        modifier = Modifier.width(HospitalCardWidth),
+                        horizontalArrangement = Arrangement.spacedBy(26.dp),
+                    ) {
+                        items(hospitals, key = { it.id }) { hospital ->
+                            HospitalCard(
+                                hospital = hospital,
+                                isNearest = hospital.id == nearestId,
+                                // Only the selected card can be routing, so only it shows a route's
+                                // state; the rest keep the design's own "Find the Route".
+                                routeStatus = if (hospital.id == selectedId) routeStatus else RouteStatus.Idle,
+                                onSelect = { onSelect(hospital.id) },
+                                onFindRoute = onFindRoute,
+                                onCall = onCall,
+                            )
+                        }
                     }
                 }
             }
@@ -477,9 +944,46 @@ private fun HospitalSheet(
     }
 }
 
+/** A sentence and the one pill that answers it, in the rail's slot. Both empty states are this shape. */
+@Composable
+private fun EmptyRail(
+    message: String,
+    icon: Int,
+    label: String,
+    fill: Color,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.width(HospitalCardWidth),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = message,
+            style = MapType.SheetSubtitle,
+            color = OmniSheetDetail,
+            maxLines = 3,
+        )
+        HospitalAction(
+            icon = icon,
+            label = label,
+            fill = fill,
+            labelColor = OmniInk,
+            labelStart = 78.dp,
+            onClick = onClick,
+        )
+    }
+}
+
 /** One hospital — Figma `Hospital Container` (node 134:12631), 322 x 242. */
 @Composable
-private fun HospitalCard(hospital: Hospital, onFindRoute: (Hospital) -> Unit, onCall: (Hospital) -> Unit) {
+private fun HospitalCard(
+    hospital: Hospital,
+    isNearest: Boolean,
+    routeStatus: RouteStatus,
+    onSelect: () -> Unit,
+    onFindRoute: (Hospital) -> Unit,
+    onCall: (Hospital) -> Unit,
+) {
     Column(
         modifier = Modifier.width(HospitalCardWidth),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -489,31 +993,55 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: (Hospital) -> Unit, on
                 .fillMaxWidth()
                 .height(114.dp)
                 .clip(RoundedCornerShape(8.dp))
-                .background(OmniHospitalCard),
+                .background(OmniHospitalCard)
+                // Tapping the card is the other way to choose a hospital: it moves the map's camera,
+                // darkens that pin and makes this card's route button the live one.
+                .clickable(onClick = onSelect),
         ) {
             Row(
                 modifier = Modifier.padding(start = 6.dp, top = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(13.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // The photo alternates between the design's two — the directory carries no photo,
-                // and two real photographs read better than one repeated six times.
-                Image(
-                    painter = painterResource(
-                        if (hospital.id.hashCode() % 2 == 0) {
-                            R.drawable.hospital_photo_1
-                        } else {
-                            R.drawable.hospital_photo_2
-                        },
-                    ),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .width(78.dp)
-                        .height(103.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(OmniBackground),
-                )
+                Box {
+                    // The photo alternates between the design's two — the directory carries no photo,
+                    // and two real photographs read better than one repeated six times.
+                    Image(
+                        painter = painterResource(
+                            if (hospital.id.hashCode() % 2 == 0) {
+                                R.drawable.hospital_photo_1
+                            } else {
+                                R.drawable.hospital_photo_2
+                            },
+                        ),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .width(78.dp)
+                            .height(103.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(OmniBackground),
+                    )
+
+                    // The rail's half of the map's haloed pin, and the reason it is a tag over the
+                    // photo rather than a word in the distance row: "Nearest · 0.8 km" needs 112 of
+                    // the 85 that row leaves, while 58 fits inside the 78-wide photo with room to
+                    // spare. Same radius as the photo, the hero pink of the pin's own halo.
+                    if (isNearest) {
+                        Text(
+                            text = "Nearest",
+                            style = MapType.HospitalType,
+                            color = OmniInk,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier
+                                .padding(start = 4.dp, top = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(OmniHeroPink)
+                                .padding(horizontal = 6.dp, vertical = 1.dp),
+                        )
+                    }
+                }
 
                 Column(
                     modifier = Modifier.width(194.dp),
@@ -553,9 +1081,9 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: (Hospital) -> Unit, on
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp),
                             )
-                            // The haversine distance in kilometres — the design's "4 mins (0.8 mi)"
-                            // was a mock; a drive *time* would need the paid Routes API, which the
-                            // plan explicitly declines (§11 Phase 9).
+                            // The straight-line haversine distance, until a route replaces it with the
+                            // road one. The design's "4 mins (0.8 mi)" was a mock: a drive *time* has
+                            // to be routed for, which is what the button underneath is.
                             Text(
                                 text = hospital.distanceLabel(),
                                 style = MapType.SheetSubtitle,
@@ -595,15 +1123,21 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: (Hospital) -> Unit, on
         // padding — 85 on the route button, 78 on the call button — rather than centred.
         HospitalAction(
             icon = R.drawable.ic_hosp_location,
-            label = "Find the Route",
+            label = routeStatus.routeLabel(),
             fill = OmniRouteButton,
             labelColor = OmniOnInk,
             labelStart = 85.dp,
+            // Not tappable mid-request: a second tap would cancel the first and start again, which
+            // looks like the button not working.
+            enabled = routeStatus !is RouteStatus.Loading,
             onClick = { onFindRoute(hospital) },
         )
         HospitalAction(
             icon = R.drawable.ic_hosp_call,
-            label = "Call the Hospital",
+            // OpenStreetMap carries a number for maybe half of these. Naming the fallback rather than
+            // dialling it silently is the difference between a button that lies and one that does not
+            // (`UI_ARCHITECTURE.md` §6 rule 9).
+            label = if (hospital.phone != null) "Call the Hospital" else "Call 999",
             fill = OmniCallButton,
             // The source sets this #302E2E on the first card and pure black on the second; the two
             // are indistinguishable at 18px, so the ink token carries both.
@@ -614,6 +1148,21 @@ private fun HospitalCard(hospital: Hospital, onFindRoute: (Hospital) -> Unit, on
     }
 }
 
+/**
+ * What the route button says, which is the only place a route's state is visible on the card.
+ *
+ * Every label is measured against the 201 the design leaves after its own 85 inset, the 24 icon and the
+ * 12 gap: the longest here is the ready state's "12.4 km · 18 min" at ~150. "Route Unavailable — Retry"
+ * would have needed 237, which is why a failure says "Retry" on the button and explains itself in the
+ * notice banner instead.
+ */
+private fun RouteStatus.routeLabel(): String = when (this) {
+    RouteStatus.Idle -> "Find the Route"
+    RouteStatus.Loading -> "Finding the Route…"
+    is RouteStatus.Ready -> "${route.distanceLabel()} · ${route.etaLabel()}"
+    is RouteStatus.Failed -> "Retry the Route"
+}
+
 /** A 322 x 50 action pill at radius 28 — Figma `Route Container` / `Call Container`. */
 @Composable
 private fun HospitalAction(
@@ -622,6 +1171,7 @@ private fun HospitalAction(
     fill: Color,
     labelColor: Color,
     labelStart: Dp,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Row(
@@ -629,7 +1179,7 @@ private fun HospitalAction(
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
             .background(fill)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(start = labelStart, top = 13.dp, bottom = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -661,6 +1211,7 @@ private val DefaultHospitals = listOf(
         type = "Trauma Center Level 1 • 24/7 ER",
         lat = 22.3569,
         lng = 91.7832,
+        phone = "+8802333350000",
         rating = 4.3,
         distanceKm = 0.8,
     ),
@@ -691,6 +1242,17 @@ private val SearchGap = 12.dp
 private val SearchWidth = 325.dp
 private val SearchHeight = 43.dp
 
+/** The pill's own 12 gap, reused between it and the notice under it. */
+private val NoticeGap = 12.dp
+
+/**
+ * What the camera assumes a notice covers: one line of `SheetSubtitle` plus its 11 padding, rounded up.
+ * An estimate on purpose — the banner wraps to two or three lines on a narrow phone, and this number
+ * only feeds bounds-fitting's top margin, where being twenty pixels generous costs nothing and being
+ * exact would mean measuring the text to place the camera.
+ */
+private val NoticeMinHeight = 44.dp
+
 private val SliderWidth = 376.dp
 private val SliderHeight = 61.dp
 
@@ -707,8 +1269,28 @@ private val SosLabelStart = 96.dp
 /** 834 − 789: the clear air the design leaves between the track and the bar under it. */
 private val SliderNavGap = 45.dp
 
+/** Everything the swipe state puts over the map's bottom: the bar's slot, the gap, and the track. */
+private val SwipeSlot = OmniNavBottomGap + OmniNavHeight + SliderNavGap + SliderHeight
+
 /** How far the knob must travel before releasing it counts as a swipe rather than a fumble. */
 private const val ActivateAt = 0.75f
+
+/**
+ * The flick escape hatch, in pixels per second, and the point from which a flick is believed.
+ *
+ * [ActivateAt] alone punishes a fast, confident swipe: the finger leaves the screen before the knob
+ * catches up and the gesture is read as a fumble. Past halfway with real speed behind it, the intent
+ * is not in doubt. 900 px/s is roughly a deliberate throw — a slow drag that drifts to a stop comes
+ * in under 200.
+ */
+private const val FlingActivate = 900f
+private const val FlingFrom = 0.5f
+
+/** How long an activated knob rests at the far end before gliding home, if it is still on screen. */
+private const val ResetDelayMillis = 320L
+
+/** A release short of the threshold: quick, and just springy enough to read as a rejection. */
+private val SpringBack = spring<Float>(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)
 
 /** Long enough for the eye to follow the sheet up, short enough not to delay an emergency. */
 private const val StateChangeMillis = 280
@@ -742,6 +1324,20 @@ private val AlertPillBottom = OmniNavHeight + OmniNavBottomGap + 4.dp
  */
 private val AlertLabelStart = 78.dp
 
+/** The recenter control: the pages' own 21 gutter in from the edge, the pill's 12 up from what it clears. */
+private val RecenterSize = 44.dp
+private val RecenterGlyph = 22.dp
+private val RecenterEnd = 21.dp
+private val RecenterGap = 12.dp
+
+/** The route's purple, so the button and the dot it centres on read as the same thing. */
+private val RecenterTint = OmniAuthHeading
+
+/** The glyph, in fractions of its own radius: the ring, the centre dot, and the line weight. */
+private const val RingRadius = 0.6f
+private const val DotRadius = 0.2f
+private const val GlyphStroke = 0.14f
+
 @DevicePreviews
 @Composable
 private fun SosScreenPreview() {
@@ -750,13 +1346,36 @@ private fun SosScreenPreview() {
 
 @DevicePreviews
 @Composable
-private fun SosScreenActivatedPreview() {
-    OmniTheme { SosScreen(startActivated = true, hasLocation = true, contactCount = 2) }
+private fun SosScreenSheetPreview() {
+    OmniTheme {
+        SosScreen(
+            startWithSheet = true,
+            userLocation = LatLng(22.3600, 91.7800),
+            locationStatus = LocationStatus.Fixed,
+            contactCount = 2,
+        )
+    }
 }
 
 /** The state a fresh install in airplane mode lands on: no directory, and 999 as the way out. */
 @DevicePreviews
 @Composable
 private fun SosScreenEmptyDirectoryPreview() {
-    OmniTheme { SosScreen(startActivated = true, hospitals = emptyList()) }
+    OmniTheme {
+        SosScreen(
+            startWithSheet = true,
+            hospitals = emptyList(),
+            selectedId = null,
+            nearestId = null,
+            directorySize = 0,
+            locationStatus = LocationStatus.Fixed,
+        )
+    }
+}
+
+/** A refusal, which is the state the notice banner exists for. */
+@DevicePreviews
+@Composable
+private fun SosScreenLocationBlockedPreview() {
+    OmniTheme { SosScreen(locationStatus = LocationStatus.Blocked) }
 }

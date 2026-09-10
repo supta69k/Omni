@@ -1,8 +1,10 @@
 package com.example.omni
 
 import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,9 +13,11 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -37,7 +41,6 @@ import com.example.omni.data.model.DefaultStepsGoal
 import com.example.omni.data.model.DefaultWaterGoal
 import com.example.omni.di.AppContainer
 import com.example.omni.data.repo.PostAuthor
-import com.example.omni.ui.ComingSoonScreen
 import com.example.omni.ui.SessionViewModel
 import com.example.omni.ui.SplashScreen
 import com.example.omni.ui.auth.SignInScreen
@@ -47,8 +50,11 @@ import com.example.omni.ui.auth.SignUpViewModel
 import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavItem
 import com.example.omni.ui.feed.ComposePostScreen
+import com.example.omni.ui.feed.CreateStorySheet
 import com.example.omni.ui.feed.FeedScreen
 import com.example.omni.ui.feed.FeedViewModel
+import com.example.omni.ui.feed.StoriesViewModel
+import com.example.omni.ui.feed.StoryViewer
 import com.example.omni.ui.firstaid.GuideDetailScreen
 import com.example.omni.ui.firstaid.GuidesScreen
 import com.example.omni.ui.firstaid.GuidesViewModel
@@ -61,8 +67,13 @@ import com.example.omni.ui.nutrition.NutritionViewModel
 import com.example.omni.ui.messages.ChatScreen
 import com.example.omni.ui.messages.MessagesScreen
 import com.example.omni.ui.messages.MessagesViewModel
+import com.example.omni.ui.messages.ProfessionalRowState
+import com.example.omni.ui.profile.ProfileScreen
+import com.example.omni.ui.profile.ProfileViewModel
 import com.example.omni.ui.onboarding.OnboardingScreen
 import com.example.omni.ui.settings.EmergencyContactsViewModel
+import com.example.omni.ui.settings.GoalsScreen
+import com.example.omni.ui.settings.GoalsViewModel
 import com.example.omni.ui.settings.SavedEmergenciesScreen
 import com.example.omni.ui.settings.SettingScreen
 import com.example.omni.ui.sos.SosScreen
@@ -140,6 +151,37 @@ private fun OmniApp() {
 
     var screen by remember { mutableStateOf(DesignPreviewScreen ?: AppScreen.Splash) }
 
+    /**
+     * Whose profile [AppScreen.Profile] shows. Beside the screen state because the destination is
+     * a parameter of the navigation, not a destination of its own: opening another profile from
+     * one profile replaces the page, and back still walks to where the first profile was opened
+     * from — the one stack the enum router has.
+     */
+    var profileUid by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * The last bottom-bar tab the user stood on — where the three header pages go back to.
+     *
+     * This is the whole of the back stack, and one slot is all the app needs: the header sits on every
+     * tab, so "back" from Settings, Messages or the bell means "the tab I was reading", which used to be
+     * hardcoded to Home. Opening Settings from the feed and landing on the dashboard is the kind of
+     * wrongness a real back button is judged by.
+     *
+     * It only ever holds one of the four tabs, so it can never point at a page that has its own back.
+     */
+    var lastTab by remember { mutableStateOf(AppScreen.Home) }
+
+    /**
+     * Android's own convention for a bar: back from a secondary tab returns to the start destination,
+     * and back from the start destination leaves the app.
+     *
+     * Registered here rather than inside the four screens because it is a statement about the *bar*, not
+     * about any one page. Inner pages compose their own [BackHandler] after this one and therefore win
+     * while they are open; `enabled` keeps this one out of their way regardless, including during the
+     * crossfade when both the outgoing and incoming pages are briefly composed.
+     */
+    BackHandler(enabled = screen in SecondaryTabScreens) { screen = AppScreen.Home }
+
     // Hoisted for the same reason as the session: the launcher and the resume check belong to the
     // Activity, not to the Home tab, so tabbing away and back must not rebuild them.
     val stepPermission = rememberStepPermission()
@@ -190,18 +232,26 @@ private fun OmniApp() {
     LaunchedEffect(authState, onboardingSeen) {
         if (DesignPreviewScreen != null) return@LaunchedEffect
         val seen = onboardingSeen ?: return@LaunchedEffect
+
+        // Onboarding outranks the session. It used to sit inside the UNAUTHENTICATED branch, so a
+        // phone that had never been introduced to the app still went straight to Home whenever
+        // Firebase restored a login from a previous build — which is every reinstall over the top of
+        // an existing one, and is why the carousel appeared to have vanished. A first launch is a
+        // first launch; who is signed in is the *next* question, answered below once this one is.
+        if (!seen) {
+            if (screen == AppScreen.Splash) screen = AppScreen.Onboarding
+            return@LaunchedEffect
+        }
+
         when (authState) {
             AuthState.LOADING -> Unit
 
             AuthState.AUTHENTICATED ->
                 if (screen == AppScreen.Splash || screen in EntryScreens) screen = AppScreen.Home
 
-            // Covers both a cold start and a sign-out from deep inside the app. Onboarding is only
-            // for someone who has genuinely never seen it; everyone else gets sign-in.
+            // Covers both a cold start and a sign-out from deep inside the app.
             AuthState.UNAUTHENTICATED ->
-                if (screen == AppScreen.Splash || screen !in EntryScreens) {
-                    screen = if (seen) AppScreen.SignIn else AppScreen.Onboarding
-                }
+                if (screen == AppScreen.Splash || screen !in EntryScreens) screen = AppScreen.SignIn
         }
     }
 
@@ -213,9 +263,13 @@ private fun OmniApp() {
     /**
      * Every destination the shared chrome can reach — the four bottom-bar tabs plus the three the
      * header opens. One lambda for all of them, which is why they are all [OmniNavItem] members.
+     *
+     * Tapping a tab also records it as [lastTab], so the header pages know where they were opened from.
+     * Tapping a header icon deliberately does not: Settings → bell → back should return to the tab, not
+     * bounce between the two header pages.
      */
     val navigate: (OmniNavItem) -> Unit = { item ->
-        screen = when (item) {
+        val target = when (item) {
             OmniNavItem.Home -> AppScreen.Home
             OmniNavItem.Feed -> AppScreen.Feed
             OmniNavItem.Sos -> AppScreen.Sos
@@ -224,6 +278,8 @@ private fun OmniApp() {
             OmniNavItem.Messages -> AppScreen.Messages
             OmniNavItem.Notifications -> AppScreen.Notifications
         }
+        if (target in TabScreens) lastTab = target
+        screen = target
     }
 
     // Pages simply crossfade into one another. The old horizontal slide fought the bottom bar's
@@ -237,14 +293,18 @@ private fun OmniApp() {
         when (current) {
             AppScreen.Splash -> SplashScreen()
 
+            // Both exits mark the carousel passed, then route by session rather than assuming there
+            // isn't one: with the gate now showing onboarding to a restored login too, "Get Started"
+            // can be tapped by somebody who is already signed in, and sending them to sign-up would
+            // be a form they have no reason to fill in.
             AppScreen.Onboarding -> OnboardingScreen(
                 onFinish = {
                     markOnboardingSeen()
-                    screen = AppScreen.SignUp
+                    screen = if (authState == AuthState.AUTHENTICATED) AppScreen.Home else AppScreen.SignUp
                 },
                 onSignIn = {
                     markOnboardingSeen()
-                    screen = AppScreen.SignIn
+                    screen = if (authState == AuthState.AUTHENTICATED) AppScreen.Home else AppScreen.SignIn
                 },
             )
 
@@ -295,11 +355,15 @@ private fun OmniApp() {
                     stepPermission.askOnce()
                 }
 
+                // Hoisted so the card and the tap cannot disagree about where the day ends: the
+                // button dims at this number and the ViewModel refuses past it, and both read it
+                // from here. The goals belong to the account, not the day — see [User.waterGoal].
+                val waterGoal = user?.waterGoal ?: DefaultWaterGoal
+
                 HomeScreen(
                     header = header,
                     glasses = state.glasses,
-                    // The goals belong to the account, not the day — see [User.waterGoal].
-                    waterGoal = user?.waterGoal ?: DefaultWaterGoal,
+                    waterGoal = waterGoal,
                     steps = state.steps,
                     stepsGoal = user?.stepsGoal ?: DefaultStepsGoal,
                     stepPermissionNeeded = state.stepPermissionNeeded,
@@ -308,7 +372,7 @@ private fun OmniApp() {
                     sleepHours = state.sleepHours,
                     sleepGoal = user?.sleepGoal ?: DefaultSleepGoal,
                     cprPercent = state.cprPercent,
-                    onAddGlass = home::addGlass,
+                    onAddGlass = { home.addGlass(waterGoal) },
                     onEnableStepTracking = stepPermission::openSystemSettings,
                     onLogSleep = home::logSleep,
                     onExploreFirstAid = { screen = AppScreen.FirstAid },
@@ -322,35 +386,162 @@ private fun OmniApp() {
             AppScreen.Feed -> {
                 val feed: FeedViewModel = viewModel(factory = AppContainer.factory())
                 val feedState by feed.uiState.collectAsStateWithLifecycle()
+                val stories: StoriesViewModel = viewModel(factory = AppContainer.factory())
+                val storyState by stories.uiState.collectAsStateWithLifecycle()
                 LaunchedEffect(user?.name) {
                     feed.onAuthorName(user?.name.orEmpty())
                 }
 
-                FeedScreen(
-                    header = header,
-                    state = feedState,
-                    onSegmentChange = feed::onSegmentChange,
-                    onLike = feed::toggleLike,
-                    onOpenComments = feed::openComments,
-                    onCloseComments = feed::closeComments,
-                    onSendComment = feed::addComment,
-                    onCompose = { screen = AppScreen.ComposePost },
-                    onLoadMore = feed::loadMore,
-                    onNavigate = navigate,
-                )
+                // The story surface's own state, held beside the feed's because the sheet and the
+                // viewer both overlay the feed without being destinations of their own — closing
+                // either lands exactly where the user already was.
+                var storySheetOpen by remember { mutableStateOf(false) }
+                var storyImage by remember { mutableStateOf<Uri?>(null) }
+                var storyPublishing by remember { mutableStateOf(false) }
+                var storyError by remember { mutableStateOf<String?>(null) }
+
+                val pickStoryImage = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickVisualMedia(),
+                ) { uri ->
+                    storyImage = uri?.let { context.copyToCache(it) }
+                    if (storyImage != null) storySheetOpen = true
+                }
+
+                // The full-screen viewer draws over everything, above the sheet in the z-order of
+                // the composable tree — but only while it is open, so the feed beneath it keeps
+                // rendering and returning from a story is instant.
+                val viewerOpen = storyState.viewerIndex != null
+                if (viewerOpen) {
+                    val tile = storyState.tiles.getOrNull(storyState.viewerIndex ?: 0)
+                    StoryViewer(
+                        authorName = tile?.authorName.orEmpty(),
+                        stories = storyState.viewerStories,
+                        storyIndex = storyState.viewerStoryIndex,
+                        isMine = tile?.authorId == container.authRepository.currentUid,
+                        onAdvance = stories::advance,
+                        onRewind = stories::rewind,
+                        onClose = stories::closeViewer,
+                        onDelete = stories::deleteMyStory,
+                    )
+                } else {
+                    // The sheet draws its own full-size overlay Box (the same construction the
+                    // sleep and meal sheets use), so it wraps the screen from here directly.
+                    FeedScreen(
+                            header = header,
+                            state = feedState,
+                            stories = storyState,
+                            myUid = container.authRepository.currentUid,
+                            myPhotoUrl = user?.photoUrl,
+                            onSegmentChange = feed::onSegmentChange,
+                            onLike = feed::toggleLike,
+                            onOpenComments = feed::openComments,
+                            onCloseComments = feed::closeComments,
+                            onSendComment = feed::addComment,
+                            onCompose = { screen = AppScreen.ComposePost },
+                            onLoadMore = feed::loadMore,
+                            onRepost = feed::repost,
+                            onOpenStory = stories::openViewer,
+                            onOpenProfile = { authorId ->
+                                profileUid = authorId
+                                screen = AppScreen.Profile
+                            },
+                            onNavigate = navigate,
+                        )
+
+                        // "Add to your story" — the share tile's own picker, the composer's reason
+                        // again: the picker's read grant is process-scoped and the Activity survives.
+                        CreateStorySheet(
+                            visible = storySheetOpen,
+                            image = storyImage,
+                            isPublishing = storyPublishing,
+                            errorText = storyError,
+                            onPickImage = {
+                                storyError = null
+                                pickStoryImage.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                            },
+                            onRemoveImage = { storyImage = null },
+                            onDismiss = {
+                                storySheetOpen = false
+                                storyImage = null
+                                storyError = null
+                            },
+                            onPublish = { caption ->
+                                storyPublishing = true
+                                storyError = null
+                                val image = storyImage ?: run {
+                                    storyPublishing = false
+                                    return@CreateStorySheet
+                                }
+                                stories.createStory(
+                                    author = PostAuthor(
+                                        name = user?.name.orEmpty().ifBlank { "You" },
+                                        photoUrl = user?.photoUrl,
+                                        verified = user?.verified == true,
+                                        profession = user?.profession,
+                                    ),
+                                    image = image,
+                                    caption = caption,
+                                ) { failure ->
+                                    storyPublishing = false
+                                    if (failure == null) {
+                                        storySheetOpen = false
+                                        storyImage = null
+                                    } else {
+                                        storyError = failure
+                                    }
+                                }
+                            },
+                        )
+                }
             }
 
             // The composer, opened from the feed's add button and its share tile. Back returns to the
             // feed; a successful post also returns there, where the live first page shows it.
+            // The composer. The picked image lives here rather than inside the screen so that the
+            // picker's round-trip (which the Activity survives) does not strand the composer
+            // without its photo. A failed upload keeps the photo and the text where they are —
+            // throwing the user's work away because the network blinked is the worse failure.
             AppScreen.ComposePost -> {
                 val feed: FeedViewModel = viewModel(factory = AppContainer.factory())
                 var posting by remember { mutableStateOf(false) }
+                var pickedImage by remember { mutableStateOf<Uri?>(null) }
+                var composerError by remember { mutableStateOf<String?>(null) }
+
+                // The picked image lives here rather than inside the screen so that the picker's
+                // round-trip does not strand the composer without its photo — and it is **copied to
+                // the cache on pick**, because the picker's read grant is process-scoped: holding
+                // the original Uri across a process death is exactly how "that image is no longer
+                // available" happened. A cache file has no grant to lose.
+                val pickImage = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickVisualMedia(),
+                ) { uri ->
+                    pickedImage = uri?.let { context.copyToCache(it) }
+                    if (pickedImage == null) {
+                        composerError = "That photo could not be opened. Pick it again."
+                    }
+                }
 
                 ComposePostScreen(
+                    image = pickedImage,
+                    errorText = composerError,
                     isPosting = posting,
-                    onBack = { screen = AppScreen.Feed },
+                    onPickImage = {
+                        composerError = null
+                        pickImage.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                    onRemoveImage = { pickedImage = null },
+                    onBack = {
+                        pickedImage = null
+                        composerError = null
+                        screen = AppScreen.Feed
+                    },
                     onPost = { body ->
                         posting = true
+                        composerError = null
                         feed.createPost(
                             author = PostAuthor(
                                 name = user?.name.orEmpty().ifBlank { "You" },
@@ -359,9 +550,15 @@ private fun OmniApp() {
                                 profession = user?.profession,
                             ),
                             body = body,
-                        ) {
+                            image = pickedImage,
+                        ) { failure ->
                             posting = false
-                            screen = AppScreen.Feed
+                            if (failure == null) {
+                                pickedImage = null
+                                screen = AppScreen.Feed
+                            } else {
+                                composerError = failure
+                            }
                         }
                     },
                 )
@@ -374,8 +571,11 @@ private fun OmniApp() {
                 val sos: SosViewModel = viewModel(factory = AppContainer.factory())
                 val sosState by sos.uiState.collectAsStateWithLifecycle()
 
-                LaunchedEffect(locationPermission.granted) {
-                    sos.onLocationPermission(locationPermission.granted)
+                LaunchedEffect(locationPermission.granted, locationPermission.permanentlyDenied) {
+                    sos.onLocationPermission(
+                        granted = locationPermission.granted,
+                        permanentlyDenied = locationPermission.permanentlyDenied,
+                    )
                     // The offer, once per process. Without this the launcher built above was never
                     // fired and the directory could only ever be the unsorted one.
                     locationPermission.askOnce(locationAsked)
@@ -384,27 +584,32 @@ private fun OmniApp() {
                 SosScreen(
                     header = header,
                     hospitals = sosState.hospitals,
-                    hasLocation = sosState.hasLocation,
+                    selectedId = sosState.selected?.id,
+                    nearestId = sosState.nearestId,
+                    userLocation = sosState.userLocation,
+                    routeStatus = sosState.routeStatus,
+                    locationStatus = sosState.locationStatus,
+                    query = sosState.query,
+                    directorySize = sosState.directorySize,
+                    recenterTick = sosState.recenterTick,
                     contactCount = sosState.contactCount,
+                    loading = sosState.loading,
                     onActivate = sos::onActivated,
-                    onFindRoute = { hospital ->
-                        // Hand off to Google Maps — free, familiar, and better than anything the app
-                        // would build itself (BACKEND_PLAN §11 Phase 9, "Routing").
-                        context.startActivitySafely(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse("geo:${hospital.lat},${hospital.lng}?q=${hospital.lat},${hospital.lng}(${hospital.name})"),
-                            ),
-                        )
-                    },
+                    onQueryChange = sos::onQueryChange,
+                    onSelectHospital = sos::onSelectHospital,
+                    onRecenter = sos::onRecenter,
+                    // The route is drawn *in* the app now, over MapLibre tiles. What used to be a
+                    // `geo:` hand-off to Google Maps is gone: it left the app in the middle of an
+                    // emergency, and the whole point of Phase 9 is that it no longer has to.
+                    onFindRoute = sos::onFindRoute,
                     onCallHospital = { hospital ->
                         // ACTION_DIAL, deliberately not ACTION_CALL: the dialer opens pre-filled
                         // without a permission, and the extra tap is a feature in an emergency —
                         // it is the difference between "call this hospital" and "call someone".
                         //
                         // OpenStreetMap carries a number for maybe half of these, and a dialer that
-                        // opens blank is a dead tap. With none listed the button falls back to the
-                        // national line, which is the useful answer to "call this hospital" when the
+                        // opens blank is a dead tap. With none listed the button says "Call 999" and
+                        // dials that, which is the useful answer to "call this hospital" when the
                         // hospital has no number to call.
                         context.startActivitySafely(
                             Intent(
@@ -435,6 +640,14 @@ private fun OmniApp() {
                                 ).putExtra("sms_body", alert.body),
                             )
                         }
+                    },
+                    // The three ways out of a location problem, each matched to its own state by the
+                    // screen's notice banner. The launchers and the intents stay here, because a
+                    // screen never asks the system anything itself (`UI_ARCHITECTURE.md` §6 rule 10).
+                    onRequestLocation = locationPermission::request,
+                    onOpenAppSettings = locationPermission::openSystemSettings,
+                    onOpenLocationSettings = {
+                        context.startActivitySafely(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                     },
                     onNavigate = navigate,
                 )
@@ -506,7 +719,9 @@ private fun OmniApp() {
                 pushNotifications = user?.pushNotifications ?: true,
                 offlineCache = user?.offlineCache ?: true,
                 onNavigate = navigate,
+                onBack = { screen = lastTab },
                 onSavedEmergencies = { screen = AppScreen.SavedEmergencies },
+                onDailyGoals = { screen = AppScreen.Goals },
                 onPushNotificationsChange = { enabled ->
                     val uid = container.authRepository.currentUid ?: return@SettingScreen
                     scope.launch {
@@ -579,9 +794,68 @@ private fun OmniApp() {
                 )
             }
 
+            // The page behind Settings' "Daily Goals" row. Back lands on Settings, like the other
+            // inner page above it. Nothing is hoisted from here: the five targets it edits are the
+            // same `goals` map the profile stream already carries, so saving moves the cards on Home
+            // and Fitness through `user`, with no second copy of the numbers passing through here.
+            AppScreen.Goals -> {
+                val goals: GoalsViewModel = viewModel(factory = AppContainer.factory())
+                val state by goals.uiState.collectAsStateWithLifecycle()
+
+                GoalsScreen(
+                    state = state,
+                    onBack = { screen = AppScreen.Setting },
+                    onStep = goals::step,
+                    onSave = goals::save,
+                    onDiscard = goals::discard,
+                )
+            }
+
+            // A public profile — reached from a post's or comment's avatar, and from the story
+            // strip's authors. The uid travels in [profileUid]; the ViewModel is told on entry so
+            // its listeners re-key, the same open-a-page pattern the guides and messages use.
+            AppScreen.Profile -> {
+                val profile: ProfileViewModel = viewModel(factory = AppContainer.factory())
+                val profileState by profile.uiState.collectAsStateWithLifecycle()
+                val profileUser = profileState.user
+                val selfName = user?.name.orEmpty()
+                val selfPhoto = user?.photoUrl
+
+                // Built here in the composable scope, because the message button's lambda is not
+                // one — the same reason the messages destination builds its own above.
+                val messages: MessagesViewModel = viewModel(factory = AppContainer.factory())
+
+                LaunchedEffect(profileUid) {
+                    profile.setProfileUid(profileUid)
+                }
+
+                ProfileScreen(
+                    state = profileState,
+                    onBack = { screen = AppScreen.Feed },
+                    onFollowToggle = profile::toggleFollow,
+                    onMessage = {
+                        // The chat the messages screen already knows how to open, seeded with this
+                        // user's identity — `startWith` builds the conversation idempotently.
+                        val target = profileUser ?: return@ProfileScreen
+                        messages.startWith(
+                            professional = ProfessionalRowState(
+                                uid = target.uid,
+                                name = target.name,
+                                discipline = target.profession?.name.orEmpty(),
+                                photoUrl = target.photoUrl,
+                            ),
+                            selfName = selfName,
+                            selfPhotoUrl = selfPhoto,
+                        )
+                        screen = AppScreen.Messages
+                    },
+                )
+            }
+
             // Phase 11. One ViewModel owns both pages, exactly as first aid does: `open` inside it is
             // what makes the thread list and a chat one destination, so back from a chat lands on the
-            // list rather than leaving the tab, and back from the list goes Home like every other tab.
+            // list rather than leaving the tab, and back from the list returns to the tab the header
+            // was tapped on.
             AppScreen.Messages -> {
                 val messages: MessagesViewModel = viewModel(factory = AppContainer.factory())
                 val state by messages.uiState.collectAsStateWithLifecycle()
@@ -597,7 +871,7 @@ private fun OmniApp() {
                 } else {
                     MessagesScreen(
                         state = state,
-                        onBack = { screen = AppScreen.Home },
+                        onBack = { screen = lastTab },
                         onNavigate = navigate,
                         onOpen = messages::open,
                         onTogglePicker = messages::togglePicker,
@@ -615,8 +889,8 @@ private fun OmniApp() {
                 }
             }
 
-            // The bell's inbox. Reached from the header, so it keeps the bottom bar and back lands on
-            // Home — the header is on all four tabs, and Home is the one they all return through.
+            // The bell's inbox. Reached from the header, so it keeps the bottom bar and back returns to
+            // the tab it was opened from — the header is on all four of them.
             AppScreen.Notifications -> {
                 val notifications: NotificationsViewModel = viewModel(factory = AppContainer.factory())
                 val state by notifications.uiState.collectAsStateWithLifecycle()
@@ -628,7 +902,7 @@ private fun OmniApp() {
 
                 NotificationsScreen(
                     state = state,
-                    onBack = { screen = AppScreen.Home },
+                    onBack = { screen = lastTab },
                     onNavigate = navigate,
                     onOpen = { notifications.markRead(it.id) },
                     onMarkAllRead = notifications::markAllRead,
@@ -646,6 +920,27 @@ private fun OmniApp() {
  * ViewModel is simply told the answer (BACKEND_PLAN §4 rule 1 — screens and ViewModels take data in,
  * not framework handles).
  */
+/**
+ * Copies a picked photo into the app's own cache and returns a `file://` Uri for it.
+ *
+ * The photo picker's read grant is scoped to this process. Holding the picked Uri past a process
+ * death — which is exactly what happens when Android recreates the Activity around the composer —
+ * left the uploader reading a grant it no longer held, the "that image is no longer available"
+ * failure seen on a real phone. The cache file has no grant to lose; the copy costs one disk pass
+ * on a photo about to be re-encoded anyway, and cache files are the system's to reclaim.
+ *
+ * Returns `null` only when the picker handed back something the resolver cannot even open — the
+ * caller treats that as "pick it again" rather than silently keeping a dead Uri.
+ */
+private fun Context.copyToCache(picked: Uri): Uri? = runCatching {
+    val directory = cacheDir.resolve("picked").apply { mkdirs() }
+    val file = directory.resolve("pick-${System.currentTimeMillis()}.jpg")
+    contentResolver.openInputStream(picked)?.use { input ->
+        file.outputStream().use { output -> input.copyTo(output) }
+    } ?: return null
+    Uri.fromFile(file)
+}.getOrNull()
+
 @Composable
 private fun rememberStepPermission(): StepPermission {
     val context = LocalContext.current
@@ -721,9 +1016,11 @@ private class StepPermission(
 private fun rememberLocationPermission(): LocationPermission {
     val context = LocalContext.current
     var granted by remember { mutableStateOf(hasLocationPermission(context)) }
+    var refused by remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         granted = it
+        refused = !it
     }
 
     LifecycleResumeEffect(Unit) {
@@ -731,10 +1028,28 @@ private fun rememberLocationPermission(): LocationPermission {
         onPauseOrDispose { }
     }
 
-    return remember(granted) {
+    // "Permanently denied" is not a state Android reports. It is the pair of facts that the user has
+    // refused at least once and the OS will no longer show the dialog — `shouldShowRequestPermissionRationale`
+    // is false both before the first ask and after a permanent refusal, so the refusal has to be
+    // remembered to tell the two apart. It matters because asking again in that state is a dead tap
+    // (`UI_ARCHITECTURE.md` §2a rule 4): the SOS screen offers Settings instead.
+    val blocked = refused && !granted &&
+        context.findActivity()
+            ?.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION) == false
+
+    return remember(granted, blocked) {
         LocationPermission(
             granted = granted,
+            permanentlyDenied = blocked,
             ask = { launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+            openSettings = {
+                context.startActivitySafely(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.fromParts("package", context.packageName, null),
+                    ),
+                )
+            },
         )
     }
 }
@@ -742,7 +1057,14 @@ private fun rememberLocationPermission(): LocationPermission {
 /** The state [rememberLocationPermission] hands to the SOS screen. */
 private class LocationPermission(
     val granted: Boolean,
+    /**
+     * True once the user has refused and Android has stopped offering the dialog. Defaults to false
+     * because the other holders built on this class — push notifications — have nowhere to show the
+     * distinction and never ask a second time.
+     */
+    val permanentlyDenied: Boolean = false,
     private val ask: () -> Unit,
+    private val openSettings: () -> Unit = {},
 ) {
     /** Asks once per composition-lifetime holder; a refusal is handled by the honest unsorted list. */
     fun askOnce(asked: MutableState<Boolean>) {
@@ -750,6 +1072,28 @@ private class LocationPermission(
         asked.value = true
         ask()
     }
+
+    /** The notice banner's "Allow" — shown only while [permanentlyDenied] is false, so it always does something. */
+    fun request() = ask()
+
+    /** The notice banner's "Settings", for the refusal only Android's own page can undo. */
+    fun openSystemSettings() = openSettings()
+}
+
+/**
+ * The [Activity] behind a composable's context, or null.
+ *
+ * `shouldShowRequestPermissionRationale` is an Activity method, and `LocalContext` is only *usually* the
+ * Activity — a dialog or an inspection host wraps it. Walking the wrappers is the difference between
+ * reading the permission's real state and crashing on a cast.
+ */
+private fun Context.findActivity(): Activity? {
+    var current: Context = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 private fun hasLocationPermission(context: Context): Boolean =
@@ -843,6 +1187,18 @@ private val DesignPreviewScreen: AppScreen? = null
  */
 private val EntryScreens = setOf(AppScreen.Onboarding, AppScreen.SignUp, AppScreen.SignIn)
 
+/**
+ * The four pages the bottom bar can reach — the only ones the header's back button may return to.
+ *
+ * Kept as a set rather than derived from [OmniNavItem], because the bar's membership and this list are
+ * the same fact stated twice on purpose: `Setting`, `Messages` and `Notifications` are [OmniNavItem]s
+ * too, and they are exactly what must not end up in [SecondaryTabScreens] or in the back target.
+ */
+private val TabScreens = setOf(AppScreen.Home, AppScreen.Feed, AppScreen.Sos, AppScreen.Nutrition)
+
+/** The tabs that are not the start destination, which is where the system back sends them. */
+private val SecondaryTabScreens = TabScreens - AppScreen.Home
+
 /** Confirmation for the one action whose result is invisible — the reset email has been requested. */
 private const val ResetSentMessage = "Reset link sent. Check your email."
 
@@ -857,5 +1213,7 @@ private const val PageFadeMillis = 200
 private enum class AppScreen {
     Splash, Onboarding, SignUp, SignIn,
     Home, Feed, Sos, Nutrition,
-    Setting, Messages, Notifications, FirstAid, ComposePost, SavedEmergencies,
+    Setting, Messages, Notifications, FirstAid, ComposePost, SavedEmergencies, Goals,
+    /** A public profile — the uid it shows travels beside [MainActivity]'s `profileUid`. */
+    Profile,
 }

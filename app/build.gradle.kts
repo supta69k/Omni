@@ -1,8 +1,13 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
+
+/** Escapes a raw string for embedding as a `buildConfigField` string literal. */
+fun String.asBuildConfigString(): String = "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
     namespace = "com.example.omni"
@@ -18,6 +23,43 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // The SOS map's secrets, read from local.properties (gitignored) the same way the weather
+        // project reads its API key. Every field has a safe default, so the app compiles and runs with
+        // none of them set — the map simply falls back to its "unavailable" state. See OmniMapConfig.
+        val localProperties = Properties().apply {
+            val file = rootProject.file("local.properties")
+            if (file.exists()) file.inputStream().use { load(it) }
+        }
+        buildConfigField(
+            "String",
+            "MAPTILER_KEY",
+            (localProperties.getProperty("MAPTILER_KEY") ?: "").asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "MAPTILER_STYLE_URL",
+            (localProperties.getProperty("MAPTILER_STYLE_URL") ?: "").asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "OSRM_BASE_URL",
+            (localProperties.getProperty("OSRM_BASE_URL") ?: "https://router.project-osrm.org")
+                .asBuildConfigString(),
+        )
+        // Cloudinary's unsigned upload endpoint — cloud name + preset are identifiers, not secrets
+        // (the API secret never ships; unsigned presets are the client-safe flow). In
+        // local.properties so a second environment is a properties change, not a code change.
+        buildConfigField(
+            "String",
+            "CLOUDINARY_CLOUD_NAME",
+            (localProperties.getProperty("CLOUDINARY_CLOUD_NAME") ?: "").asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "CLOUDINARY_UPLOAD_PRESET",
+            (localProperties.getProperty("CLOUDINARY_UPLOAD_PRESET") ?: "").asBuildConfigString(),
+        )
     }
 
     buildTypes {
@@ -33,6 +75,9 @@ android {
     }
     buildFeatures {
         compose = true
+        // The MapTiler key and the OSRM base URL reach the code this way rather than through a
+        // committed constant. Nothing else in the app used BuildConfig before this.
+        buildConfig = true
     }
 }
 
@@ -63,11 +108,16 @@ dependencies {
     // Phase 10. Pulls in the FirebaseMessagingService the manifest registers; the token itself is
     // stored on `users/{uid}.fcmTokens` so the Phase 12 functions have somewhere to send to.
     implementation(libs.firebase.messaging)
-    implementation(libs.firebase.storage)
     implementation(libs.kotlinx.coroutines.play.services)
     // The SOS screen's fused location (Phase 9). `getCurrentLocation` only — no ongoing updates,
     // so no foreground-service question arises.
     implementation(libs.play.services.location)
+    // The SOS map (Phase 9 rework). MapLibre renders MapTiler's vector tiles into an in-app MapView;
+    // no Google Maps SDK, no billing. Publishes to Maven Central, which is already declared.
+    implementation(libs.maplibre.android)
+    // OSRM routing calls. OkHttp is already on the classpath transitively through Coil (4.12.0);
+    // declaring it directly so the routing repository does not depend on a transitive version.
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

@@ -218,6 +218,11 @@ fun NutritionScreen(
                                 color = OmniNutriMacroLabel,
                                 maxLines = 1,
                                 softWrap = false,
+                                // The column has no horizontal padding — every child sets its own — so
+                                // without this the line started at the screen edge while "Food Log"
+                                // above it started at 18. The empty state has to hang off the same
+                                // margin as the section it is empty *of*.
+                                modifier = Modifier.padding(start = ScreenPadding),
                             )
                         } else {
                             meals.forEach { meal ->

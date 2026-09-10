@@ -1,0 +1,3 @@
+# Routes
+
+- `ACTIVITY` `/MainActivity` `[inferred]`

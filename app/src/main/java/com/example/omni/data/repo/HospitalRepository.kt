@@ -3,7 +3,6 @@ package com.example.omni.data.repo
 import android.util.Log
 import com.example.omni.data.model.Hospital
 import com.example.omni.data.model.toHospital
-import com.example.omni.data.model.withDistanceFrom
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -30,21 +29,21 @@ import kotlinx.coroutines.flow.callbackFlow
  */
 interface HospitalRepository {
     /**
-     * Every hospital within [radiusKm] of (`lat`, `lng`), nearest first, live, each carrying its
-     * distance from that point.
+     * The whole directory, alphabetical, with **no distances** — every `distanceKm` is `null`.
+     *
+     * One read rather than a geoquery, and deliberately no "near me" variant. The SOS map measures and
+     * sorts locally against the live fix ([com.example.omni.data.model.withDistanceFrom]) for two
+     * reasons the map could not work without:
+     *
+     *  - **The listener must not restart when the user walks.** A location-keyed query would tear down
+     *    and rebuild this listener every few metres; a directory of ~200 documents that never changes
+     *    would be re-read for a sort the device can do in microseconds.
+     *  - **A radius that finds nothing must still find something.** Filtering server-side to "within
+     *    8 km" leaves a user in a rural district with an empty emergency screen. Measuring locally lets
+     *    the ViewModel widen to the closest few instead, which is the only acceptable answer here.
      *
      * Emits an empty list only if the collection is genuinely empty — which means the seed script has
      * not been run, a state the screen names rather than hiding behind mock cards.
-     */
-    fun observeNearby(lat: Double, lng: Double, radiusKm: Double): Flow<List<Hospital>>
-
-    /**
-     * The whole directory, alphabetical, with **no distances** — every `distanceKm` is `null`.
-     *
-     * A separate method rather than [observeNearby] with a stand-in centre, because the two answer
-     * different questions. With no fix there is no "nearest": measuring from the middle of the city
-     * would put a confident "0.4 km" on a card belonging to someone standing in another district, and
-     * `distanceLabel()` renders `null` as "—" precisely so that number never has to be guessed.
      */
     fun observeAll(): Flow<List<Hospital>>
 }
@@ -52,16 +51,6 @@ interface HospitalRepository {
 class FirestoreHospitalRepository(
     private val firestore: FirebaseFirestore,
 ) : HospitalRepository {
-
-    override fun observeNearby(
-        lat: Double,
-        lng: Double,
-        radiusKm: Double,
-    ): Flow<List<Hospital>> = directory { all ->
-        all.map { it.withDistanceFrom(lat, lng) }
-            .filter { (it.distanceKm ?: Double.MAX_VALUE) <= radiusKm }
-            .sortedBy { it.distanceKm }
-    }
 
     override fun observeAll(): Flow<List<Hospital>> = directory { all ->
         all.sortedBy { it.name }

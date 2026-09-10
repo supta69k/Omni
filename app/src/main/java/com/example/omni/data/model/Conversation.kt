@@ -101,7 +101,7 @@ fun DocumentSnapshot.toConversation(selfUid: String): Conversation? {
             .ifBlank { "Omni member" },
         otherPhotoUrl = get("participantPhotos.$other") as? String,
         lastMessage = getString("lastMessage").orEmpty().take(MaxMessageLength),
-        lastMessageAt = (get("lastMessageAt") as? Number)?.toLong() ?: 0L,
+        lastMessageAt = millisOf("lastMessageAt"),
         lastSenderId = getString("lastSenderId").orEmpty(),
         unread = (get("unread.$selfUid") as? Number)?.toInt()?.coerceAtLeast(0) ?: 0,
     )
@@ -115,7 +115,7 @@ fun DocumentSnapshot.toMessage(): Message? {
         id = id,
         senderId = senderId,
         text = getString("text").orEmpty().take(MaxMessageLength),
-        createdAt = (get("createdAt") as? Number)?.toLong() ?: 0L,
+        createdAt = millisOf("createdAt"),
     )
 }
 

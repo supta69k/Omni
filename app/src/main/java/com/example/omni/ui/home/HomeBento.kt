@@ -213,6 +213,14 @@ internal fun WaterCard(
         .roundToInt()
         .coerceIn(0, GlassIcons)
 
+    // …but the *button* stops, which is the one place a cap belongs. Every other number on the
+    // dashboard is a record of something that happened — a pedometer reading, a stated bedtime, a
+    // logged meal — so refusing to raise one would make the app lie about the day. A glass exists only
+    // because this button was pressed, so once the target is met there is nothing left for it to do,
+    // and a control that can do nothing must not look live (`UI_ARCHITECTURE.md` §6 rule 10). The hint
+    // underneath has already switched to "goal reached, nice work", which is the page saying why.
+    val atGoal = glasses >= goal
+
     Box(
         modifier = modifier
             .height(StatCardHeight)
@@ -276,11 +284,16 @@ internal fun WaterCard(
 
         Image(
             painter = painterResource(R.drawable.home_water_plus),
-            contentDescription = "Add a glass of water",
+            contentDescription = if (atGoal) {
+                "Water goal reached"
+            } else {
+                "Add a glass of water"
+            },
+            alpha = if (atGoal) SpentPlusAlpha else 1f,
             modifier = Modifier
                 .offset(x = 140.dp, y = 3.dp)
                 .size(24.dp)
-                .clickable(onClick = onAdd),
+                .clickable(enabled = !atGoal, onClick = onAdd),
         )
     }
 }
@@ -328,6 +341,15 @@ private fun WaterGlassRow(filled: Int) {
 /** Two rows of four — the band Figma draws, and the ceiling on what the card can show. */
 private const val GlassesPerRow = 4
 private const val GlassIcons = GlassesPerRow * 2
+
+/**
+ * The `+` once the day's target is met.
+ *
+ * Faded rather than hidden: the button vanishing would leave a hole where the eye expects a control and
+ * read as a glitch, and the tile has no room for a "done" mark. Low enough to be plainly inert on the
+ * teal, high enough that the shape is still legible as the thing that was there a tap ago.
+ */
+private const val SpentPlusAlpha = 0.35f
 
 /** 4 x 26 glasses with 3 x 16 between them — Figma `Frame 95` is 152 wide for exactly this reason. */
 private val GlassBandWidth = 152.dp
@@ -391,6 +413,18 @@ internal fun StepsCard(
                 .height(140.dp),
         )
 
+        // The one bitmap in the app that lives in `drawable-xxxhdpi` rather than `drawable-nodpi`.
+        //
+        // The export is 835 x 1165 and this slot is 107 x 150, so `nodpi` — which decodes at native
+        // size and never downsamples — spent 3.8 MB of heap on a tile that needs 321 x 450 pixels on
+        // a 3x screen. Declaring it 4x lets the decoder scale it on the way in: 2.1 MB at 3x, 0.9 MB
+        // at 2x, and still a downscale at draw time, so it cannot look softer than it did. The other
+        // illustrations stay in `nodpi` because they are honestly sized for their slots — the
+        // onboarding art is 1024px for a 383dp hero, which a 4x bucket would decode *below* the size
+        // it is drawn at and blur.
+        //
+        // Layout is unaffected either way: the size below is explicit, so the intrinsic size the
+        // bucket changes never reaches the measure pass.
         Image(
             painter = painterResource(R.drawable.home_steps_runner),
             contentDescription = null,

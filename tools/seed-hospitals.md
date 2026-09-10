@@ -1,39 +1,98 @@
 # Seeding the `hospitals` collection (Phase 9)
 
-The SOS screen reads a public, read-only Firestore collection called `hospitals`. This folder holds
-everything needed to populate it once, from real OpenStreetMap data (ODbL license, attribution
-required — see the end of this file).
+The SOS screen reads a public, read-only Firestore collection called `hospitals`, seeded from real
+OpenStreetMap data (Chittagong + Dhaka, ~15 km around each city centre; © OpenStreetMap
+contributors, ODbL — carry that credit in the project report).
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `hospitals_raw.json` | The raw Overpass API response — 200 hospitals within ~15 km of Chittagong and Dhaka city centres. Do not edit by hand. |
-| `hospitals_seed.json` | The same data shaped as the app's `Hospital` model (177 kept; 23 had no name and were dropped). |
-| `hospitals_import.jsonl` | **The file you import.** One compact JSON object per line — Firestore's console import format. |
+| `hospitals_raw.json` | The raw Overpass API response (200 nodes). Do not edit by hand. |
+| `hospitals_seed.json` | The same data shaped as records (177 kept; 23 had no name). |
+| `hospitals_import.jsonl` | **The seed data the script reads.** One compact JSON object per line. |
+| `seed-hospitals.mjs` | **The seeding script.** Firebase Admin SDK, idempotent, batched. |
+| `package.json` | The script's only dependency (`firebase-admin`). |
+| `service-account.json` | *You download this* — the private key. Gitignored; never commit it. |
 
-## How to import (Firebase console, ~5 minutes)
+## How to run the seed (one-time setup, ~5 minutes)
 
-1. Open the Firebase console → project **omni-2c987** → **Firestore Database**.
-2. Start (or open) the database — region `asia-south1` is right for Bangladesh.
-3. In Firestore, click the **⋯ menu on the Collections panel → Import documents** (or "Start
-   collection" if it is empty — see the note below).
-4. Upload `hospitals_import.jsonl`.
-5. **Collection ID:** `hospitals`. **Document ID:** leave blank — the import uses each line's `id`
-   field, so the app and the OSM node ids stay in step.
-6. The security rules already deployed with the app (`firestore.rules`) allow every signed-in client
-   to *read* this collection and nobody to write it from a client. Nothing else to configure.
+1. **Download a service-account key**
+   Firebase console → ⚙️ **Project settings** → **Service accounts** tab → **Generate new private
+   key** → confirm. Save the downloaded file as:
+   `E:\Behance\Kotlin Projects\Omni\tools\service-account.json`
 
-> **If your console shows no bulk-import option** (it is available on the Firestore *data* view's
-> three-dot menu — not the Cloud Storage import), the fallback is `npx -y node-firestore-import
-> --path hospitals_import.jsonl` from this folder with a service-account key, or asking me to write
-> a one-shot seeding screen into the app. The console option exists on every project I have checked;
-> try the three-dot menu on the Collections header first.
+   That key grants full read/write on the whole database and bypasses every security rule. It is
+   `.gitignore`d and belongs on a developer machine only — never inside `app/`, never in the APK,
+   never in a commit. To keep it somewhere else, set `GOOGLE_APPLICATION_CREDENTIALS` to its path.
+
+2. **Install the dependency** (already done once on this machine; repeat after cloning elsewhere):
+   ```
+   cd "E:\Behance\Kotlin Projects\Omni\tools"
+   npm install
+   ```
+
+3. **Preview first — this writes nothing and opens no connection:**
+   ```
+   node seed-hospitals.mjs --dry-run
+   ```
+   It validates all 177 records, shows what one finished document will look like, and reports
+   anything it would skip. Add `--verbose` to list every skip rather than the first ten.
+
+4. **Run the import:**
+   ```
+   node seed-hospitals.mjs
+   ```
+   Expected output:
+   ```
+   Reading ...\hospitals_import.jsonl
+     177 records found, 177 valid, 0 skipped
+     56 enriched with an address or website from hospitals_raw.json
+
+   Connecting to project omni-2c987, (default) database
+   Writing 177 documents to "hospitals"
+     committed 177/177
+
+   ------------------------------------------------------------
+   records found      : 177
+   imported           : 177
+   skipped (invalid)  : 0
+   failed (on write)  : 0
+   ------------------------------------------------------------
+
+   Collection "hospitals" now holds 177 documents.
+   ```
+
+## What makes it safe to run again
+
+- **Deterministic ids.** The document id is the record's own `osm-<node id>`, so the same hospital
+  always lands on the same document and a second run updates in place.
+- **Merge writes.** `set(..., { merge: true })`, so a field added later by hand survives a re-run.
+- **No deletes, ever.** A record dropped from the JSONL is not removed from Firestore.
+- **Validate first, write second.** Nothing reaches the network until every record is checked, so a
+  malformed file cannot leave the collection half-seeded. Invalid records are skipped and reported
+  by line number, not silently dropped and not fatal to the rest.
+- **Wrong-project guard.** The key's `project_id` is compared with `app/google-services.json` and
+  the run aborts if they differ — seeding the wrong project is quiet and annoying to undo.
+- **Per-document failure attribution.** A batch is all-or-nothing, so if a commit fails the script
+  retries that batch one document at a time to name the record that actually caused it.
+
+## Verifying afterwards
+
+- The script's last line prints the server-side document count (expect **177**).
+- Or the Firebase console → Firestore Database → the `hospitals` collection, ~177 documents,
+  ids like `osm-266877864`, Bengali names visible.
+- Or on the phone: SOS tab → swipe to activate → the sheet lists hospitals sorted by distance
+  (location permission granted) or unsorted with an honest label (not granted).
 
 ## Field reference
 
+The first seven are the schema `Hospital.toSeedMap()` declares and `DocumentSnapshot.toHospital()`
+reads. **Renaming one here means renaming it there** — the app reads by string key, so a mismatch is
+a silently empty map, not a compile error.
+
 ```
-id      string   "osm-<openstreetmap node id>" — stable across re-seeds
+id      string   "osm-<openstreetmap node id>" — stable across re-seeds (the document id)
 name    string   the hospital's OSM name (Bengali or English, as surveyed)
 type    string   "Emergency | 24/7" when OSM tags emergency=yes, else "Hospital"
 lat/lng number   WGS-84 coordinates
@@ -42,9 +101,22 @@ rating  null     OSM has no ratings; the card shows the design's default 4.3
 source  string   "openstreetmap" — provenance for the report
 ```
 
+These are re-joined from `hospitals_raw.json`, which the JSONL flattening had dropped. The app
+ignores unknown fields, so they cost nothing today and mean the address does not have to be
+re-downloaded from OSM the day a hospital card wants to show one. Written only when present:
+
+```
+osmId        number   the numeric OSM node id (177 of 177)
+osmType      string   "node"
+address      string   "House 34, Road 4, …, Uttara, Dhaka, 1230" — joined addr:* tags (56)
+nameEn       string   the name:en tag, when it differs from `name` (32)
+website      string   website / contact:website (5)
+openingHours string   the opening_hours tag, e.g. "24/7" (5)
+```
+
 ## Re-generating after OSM data changes
 
-The queries used (15 km around Chittagong 22.3569,91.7832 and Dhaka 23.7806,90.4074):
+The Overpass queries used (15 km around Chittagong 22.3569,91.7832 and Dhaka 23.7806,90.4074):
 
 ```
 https://overpass-api.de/api/interpreter?data=[out:json][timeout:20];
@@ -53,11 +125,5 @@ https://overpass-api.de/api/interpreter?data=[out:json][timeout:20];
 out center 200;
 ```
 
-Fetch it, re-run the conversion in the git history of this file, and re-import. The app needs no
-change: it re-reads whatever the collection holds.
-
-## Attribution (required by the ODbL)
-
-The hospital data is © OpenStreetMap contributors, licensed under the Open Database License
-(ODbL). A project using it should credit OpenStreetMap — the app's About/report page should carry
-"Hospital directory data © OpenStreetMap contributors (ODbL)".
+Fetch it, re-run the PowerShell conversion from this file's git history to rebuild
+`hospitals_import.jsonl`, then re-run `node seed-hospitals.mjs`. The app needs no change.

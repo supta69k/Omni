@@ -1,0 +1,13 @@
+{
+  "mcp": {
+    "servers": {
+      "codesight": {
+        "type": "stdio",
+        "command": "C:\\Program Files\\nodejs\\npx.cmd",
+        "args": ["-y", "codesight", "--mcp"],
+        "cwd": "E:\\Behance\\Kotlin Projects\\Omni",
+        "timeoutMs": 60000
+      }
+    }
+  }
+}
