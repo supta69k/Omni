@@ -4,14 +4,16 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.Comment
 import com.example.omni.data.model.Post
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.FeedRepository
+import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.PostAuthor
+import com.example.omni.data.repo.UserRepository
+import com.example.omni.data.repo.UserSearchLimit
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,17 +32,26 @@ import kotlinx.coroutines.launch
 /**
  * The feed's segment — Discover shows every post, Following keeps the authors I follow.
  *
- * The follow graph does not exist yet (no phase before 11 builds it), so Following filters
- * client-side against the loaded page with an empty follow set — which shows only my own posts,
- * which is the honest state of "you follow nobody" rather than a lie that aliases Discover
- * (BACKEND_PLAN §7, "The 'Following' tab, honestly").
+ * Following is its **own query**, not a filter over the Discover page: the listener runs
+ * `authorId in (following ∪ me)` ordered by recency, so following one quiet person among a hundred
+ * noisy strangers shows that person's posts rather than an empty tab. (BACKEND_PLAN §7's original
+ * "filter the loaded page client-side" note is what that replaced — it answered "which of the newest
+ * twenty posts on the app are by someone I follow", which is a different question.)
+ *
+ * My own posts are in, which is what every social feed does: a tab that hides what I just wrote reads
+ * as a lost post. Following nobody therefore shows my own posts and nothing else, which is the honest
+ * state of a new account rather than a lie that aliases Discover.
  */
 enum class FeedSegment { Discover, Following }
 
 /** One comment row, flattened for the sheet. */
 data class CommentRow(
     val id: String,
+    /** Who wrote it — carried so the row's avatar can open their page, as the feed's does. */
+    val authorId: String,
     val authorName: String,
+    /** Resolved live from [authorId] through the author cache, not stored on the comment. */
+    val authorPhotoUrl: String? = null,
     val body: String,
     val timeText: String,
 )
@@ -53,6 +64,10 @@ data class CommentRow(
  * @property canLoadMore whether a further page exists — `true` until a page comes back short.
  * @property commentsOpenId the post whose comments sheet is up, or `null`.
  * @property comments the open post's comments, newest first.
+ * @property myUid the signed-in account, carried so a row can tell my own post from someone else's
+ *   without asking the auth repository during composition.
+ * @property following the uids I follow, live from `users/{myUid}/following` — the *same* set the
+ *   Following segment filters on, so the pill on a row and the tab above it can never disagree.
  */
 data class FeedUiState(
     val segment: FeedSegment = FeedSegment.Discover,
@@ -60,7 +75,40 @@ data class FeedUiState(
     val canLoadMore: Boolean = false,
     val commentsOpenId: String? = null,
     val comments: List<CommentRow> = emptyList(),
+    val myUid: String? = null,
+    val following: Set<String> = emptySet(),
 )
+
+/**
+ * Below this, a prefix match is everyone.
+ *
+ * One letter would return the first [com.example.omni.data.repo.UserSearchLimit] accounts
+ * alphabetically, which looks like a broken search rather than a broad one. Declared beside the
+ * state rather than inside the ViewModel because the panel needs it too: "we have not searched yet"
+ * and "nobody by that name" are different answers, and only this number tells them apart.
+ */
+const val MinSearchQuery = 2
+
+/**
+ * The search field above the feed, and what it found.
+ *
+ * [query] is what is in the field — kept verbatim, untrimmed, because it is the field's own value and
+ * trimming it under the cursor would move the caret. Everything else describes the *answer*, and the
+ * states the panel can be in are told apart here rather than guessed at from an empty list: closed
+ * ([query] blank), too short to ask, searching, empty-handed, or broken ([error]).
+ */
+data class FeedSearchState(
+    val query: String = "",
+    val isSearching: Boolean = false,
+    val results: List<com.example.omni.data.model.User> = emptyList(),
+    val error: String? = null,
+) {
+    /** Whether the results panel is up at all — the field having something in it is the whole rule. */
+    val isOpen: Boolean get() = query.isNotBlank()
+
+    /** The field has something in it, but not yet enough to have asked anybody. */
+    val isTooShort: Boolean get() = query.trim().length < MinSearchQuery
+}
 
 /**
  * The feed's reads and writes: the live first page, one-shot further pages, the like toggle with its
@@ -74,11 +122,11 @@ class FeedViewModel(
     private val authRepository: AuthRepository,
     private val feedRepository: FeedRepository,
     private val mediaRepository: MediaRepository,
+    private val followRepository: FollowRepository,
+    private val userRepository: UserRepository,
 ) : ViewModel() {
 
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     private val segment = MutableStateFlow(FeedSegment.Discover)
 
@@ -97,63 +145,195 @@ class FeedViewModel(
     private val optimistic = MutableStateFlow<Map<String, Post>>(emptyMap())
 
     /**
-     * The live first page. Errors degrade to an empty feed rather than crashing — the screen's
+     * Authors by uid, resolved once each from `users/{uid}` and then reused.
+     *
+     * A post carries the name and photo its author had *when it was written* — the denormalisation
+     * that makes a feed page one query instead of twenty-one. The cost the plan accepted was that a
+     * rename or a new photo never reaches old posts, which in practice is how "my profile picture
+     * doesn't show in the feed" happens: the account had no photo when it first posted, and the post
+     * still says so.
+     *
+     * So the identity is resolved from [Post.authorId] and the post's own copy is the fallback. One
+     * read per author per session, not per post and not per recomposition — twenty posts by three
+     * people cost three reads.
+     */
+    private val authors = MutableStateFlow<Map<String, com.example.omni.data.model.User>>(emptyMap())
+
+    /** Uids already asked for, so a missing profile is not re-requested on every emission. */
+    private val requestedAuthors = mutableSetOf<String>()
+
+    /**
+     * The live page for the segment the feed is showing — Discover (everyone's newest) or
+     * Following (the people I follow, including me) — **carried with the segment it was read for**.
+     *
+     * Two real listeners, keyed together rather than held separately. Switching segments re-subscribes
+     * the listener rather than swapping in a `combine`-frozen value. Switching the follow set while on
+     * Following also re-keys, so unfollowing someone removes their posts in the same frame the pill
+     * turns. A segment change clears [olderPages] so Discover's cursor pages do not leak into
+     * Following.
+     *
+     * The segment travels *with* the page because re-subscribing is not the same as clearing. A
+     * `combine` retains each source's last value, and [segment] reaches [uiState] through [view] as
+     * well — so on the tap, `view` re-emits with `Following` while this flow is still holding
+     * Discover's twenty posts, and the combine would put them on screen under the new tab's name
+     * until the new query answered. Pairing them lets [uiState] tell "these posts are this tab's"
+     * from "these posts are the tab I just left", which is the difference between a blank moment and
+     * a wrong one.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val firstPage: Flow<Pair<FeedSegment, List<Post>>> =
+        combine(uid, segment) { me, seg -> me to seg }
+            .distinctUntilChanged()
+            .flatMapLatest { (me, seg) ->
+                when (seg) {
+                    FeedSegment.Discover -> observeDiscover(me)
+                    FeedSegment.Following -> observeFollowing(me)
+                }.map { page -> seg to page }
+            }
+
+    /**
+     * The live Discover page. Errors degrade to an empty feed rather than crashing — the screen's
      * empty state is the honest reading of a feed that could not be read.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val firstPage: Flow<List<Post>> = uid.flatMapLatest { uid ->
-        if (uid == null) {
-            flowOf(emptyList())
-        } else {
-            feedRepository.observeFirstPage(uid, PageSize).catch { cause ->
+    private fun observeDiscover(me: String?): Flow<List<Post>> =
+        if (me == null) flowOf(emptyList()) else feedRepository.observeFirstPage(me, PageSize)
+            .catch { cause ->
                 Log.w("Omni", "The feed could not be read", cause)
                 emit(emptyList())
-            }.onEach { page -> firstPageWasFull = page.size >= PageSize }
-        }
-    }
+            }
+            .onEach { page ->
+                firstPageWasFull = page.size >= PageSize
+                // Switching into Discover invalidates anything loaded under Following.
+                olderPages.value = emptyList()
+                exhausted.value = false
+            }
+
+    /**
+     * The live Following page, scoped to the people I follow plus me.
+     *
+     * The flow is keyed on the following set — adding or removing a person re-subscribes, so the
+     * query the listener runs is always the current one. [authorIds] is computed once per emission
+     * from the latest follow set, and the repository then handles the chunking for `whereIn`.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeFollowing(me: String?): Flow<List<Post>> =
+        if (me == null) flowOf(emptyList())
+        else followRepository.observeFollowing(me)
+            .map { it + me }
+            .distinctUntilChanged()
+            .flatMapLatest { authorIds ->
+                if (authorIds.isEmpty()) flowOf(emptyList()) else feedRepository.observeByAuthors(
+                    uid = me,
+                    authorIds = authorIds,
+                    limit = FollowingPageSize,
+                )
+            }
+            .catch { cause ->
+                Log.w("Omni", "The following feed could not be read", cause)
+                emit(emptyList())
+            }
+            .onEach { page ->
+                // Following is its own query, not a cursor over Discover: there is no Load more.
+                firstPageWasFull = false
+                olderPages.value = emptyList()
+                exhausted.value = false
+            }
 
     /** `true` only while the *first page* was full — a short first page means the feed is exhausted. */
     @Volatile private var firstPageWasFull = false
 
-    /** The open post's comments, live while the sheet is up. */
+    /**
+     * The open post's comments, live while the sheet is up — carried with the id they belong to.
+     *
+     * Paired rather than combined separately so the sheet can never draw one post's comments under
+     * another post's header: the id and the rows move together or not at all.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val comments: Flow<List<CommentRow>> =
+    private val sheet: Flow<Pair<String?, List<CommentRow>>> =
         combine(uid, commentsOpenId) { uid, id -> uid to id }
             .distinctUntilChanged()
             .flatMapLatest { (_, id) ->
                 if (id == null) {
-                    flowOf(emptyList())
+                    flowOf(null to emptyList())
                 } else {
                     feedRepository.observeComments(id)
                         .catch { cause ->
                             Log.w("Omni", "Comments on $id could not be read", cause)
                             emit(emptyList())
                         }
-                        .map { list -> list.map { it.toRow() } }
+                        .onEach { list -> resolveAuthors(list.map { it.authorId }) }
+                        .map { list -> id to list.map { it.toRow() } }
                 }
             }
 
     /** The loaded pages, with the optimistic overrides folded over them by id. */
-    private val loaded: Flow<List<Post>> =
-        combine(firstPage, olderPages, optimistic) { first, older, overrides ->
-            (first + older).map { post -> overrides[post.id] ?: post }
+    private val loaded: Flow<Pair<FeedSegment, List<Post>>> =
+        combine(firstPage, olderPages, optimistic) { (seg, first), older, overrides ->
+            seg to (first + older).map { post -> overrides[post.id] ?: post }
+        }.onEach { (_, posts) -> resolveAuthors(posts.map { it.authorId }) }
+
+    /**
+     * The uids I follow, live — the set the Following segment filters on.
+     *
+     * A rejected read degrades to the empty set, not to "everyone": a Following tab that quietly
+     * aliases Discover is the failure that is hardest to notice. Signed out it is empty too, which is
+     * the only truthful answer when there is no "I".
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val following: Flow<Set<String>> = uid.flatMapLatest { uid ->
+        if (uid == null) {
+            flowOf(emptySet())
+        } else {
+            followRepository.observeFollowing(uid).catch { cause ->
+                Log.w("Omni", "The follow set for $uid could not be read", cause)
+                emit(emptySet())
+            }
         }
+    }
+
+    /**
+     * Who I am, which segment is up, and who I follow — as one value.
+     *
+     * Tripled rather than passed separately because the typed [combine] overloads stop at five flows
+     * and [uiState] already uses all five. The uid belongs *here*, in a flow keyed on the auth state,
+     * rather than read imperatively inside the combine lambda: `authRepository.currentUid` there was
+     * read at the moment the lambda ran, so a result computed for the account that was signed in
+     * when the request started could be folded with the uid of whoever was signed in when it
+     * finished. Signing out and back in as someone else is exactly that race.
+     */
+    private val view: Flow<Triple<String?, FeedSegment, Set<String>>> =
+        combine(uid, segment, following) { me, seg, follows -> Triple(me, seg, follows) }
 
     val uiState: StateFlow<FeedUiState> =
-        combine(loaded, segment, exhausted, comments, commentsOpenId) { pages, seg, done, rows, openId ->
+        combine(loaded, view, exhausted, sheet, authors) { (pageSeg, pages), (me, seg, follows), done, (openId, rows), people ->
+            // Whether the page in hand was read for the tab that is up. On the frame a tab is tapped
+            // it is not: `view` has the new segment and the page is still the old tab's. Drawing it
+            // would show unrelated users' posts under "Following", which is the one thing §5 forbids
+            // — so the list is empty for that frame and fills when the new query answers, which off
+            // the local cache is the very next one.
+            val forThisTab = pageSeg == seg
+            val resolved = if (forThisTab) pages.map { it.withAuthor(people[it.authorId]) } else emptyList()
             FeedUiState(
                 segment = seg,
-                posts = when (seg) {
-                    FeedSegment.Discover -> pages
-                    // Only my own posts until a follow feature exists; see [FeedSegment].
-                    FeedSegment.Following -> pages.filter { it.authorId == authRepository.currentUid }
-                },
-                // "Load more" appears only when a further page is genuinely possible: not exhausted,
-                // something to load, and a first page that filled its limit (a 3-post feed showing a
-                // Load-more button is a lie about there being more).
-                canLoadMore = !done && pages.isNotEmpty() && firstPageWasFull,
+                // Following's filter happens at the query layer (the listener is over `authorId in
+                // follows ∪ me`, not over the global feed), so this is just the loaded pages with
+                // their identities resolved.
+                posts = resolved,
+                // "Load more" is a Discover-only affordance. Following is a single query over a
+                // capped authors set; "more" would mean a different query, and the screen has no
+                // cursor over the people I follow.
+                canLoadMore = forThisTab && !done && resolved.isNotEmpty() && firstPageWasFull &&
+                    seg == FeedSegment.Discover,
                 commentsOpenId = openId,
-                comments = rows,
+                comments = rows.map { row ->
+                    row.copy(
+                        authorName = people[row.authorId]?.name?.ifBlank { null } ?: row.authorName,
+                        authorPhotoUrl = people[row.authorId]?.photoUrl ?: row.authorPhotoUrl,
+                    )
+                },
+                myUid = me,
+                following = follows,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -161,8 +341,82 @@ class FeedViewModel(
             initialValue = FeedUiState(),
         )
 
+    /**
+     * The post as its author is *now*, falling back to the identity written onto it.
+     *
+     * Never the signed-in user's profile: the only thing consulted is [Post.authorId]'s own document,
+     * so a post by someone else cannot end up wearing my name or my face no matter who is looking.
+     */
+    private fun Post.withAuthor(author: com.example.omni.data.model.User?): Post {
+        if (author == null) return this
+        return copy(
+            authorName = author.name.ifBlank { authorName },
+            authorPhotoUrl = author.photoUrl ?: authorPhotoUrl,
+            authorVerified = author.verified,
+            authorProfession = author.profession ?: authorProfession,
+        )
+    }
+
+    /** Fetches any of [uids] not already held or already asked for. One read each, once. */
+    private fun resolveAuthors(uids: List<String>) {
+        val missing = uids.filter { it.isNotBlank() && requestedAuthors.add(it) }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            missing.forEach { uid ->
+                val user = userRepository.getUser(uid)
+                if (user != null) authors.value = authors.value + (uid to user)
+            }
+        }
+    }
+
     fun onSegmentChange(value: FeedSegment) {
         segment.value = value
+    }
+
+    /** Follow writes already in flight, so a double tap cannot race itself into a follow/unfollow pair. */
+    private val followsInFlight = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * Follows or unfollows the *post's author* from the feed row.
+     *
+     * [authorId] is the target, always — it is [Post.authorId] as the row was drawn from, never
+     * `currentUid`, which is the signed-in viewer and is only ever the *subject* of the write. The two
+     * are told apart here rather than at the call site: a row hands its own author's uid down and this
+     * refuses it when it is mine.
+     *
+     * **Nothing is faked locally.** The pill's state comes from [following], which is a live listener
+     * on `users/{me}/following` — and unlike a like (a subcollection write under `posts`, which cannot
+     * re-fire the posts listener) a follow writes into the very collection that flow observes, so the
+     * listener reports it and every screen reading the same set moves together. That is also why there
+     * is no optimistic override: there is nothing to be optimistic about, the round trip is local.
+     *
+     * Duplicate follows are impossible by construction — a follow *is* the document
+     * `users/{me}/following/{them}`, so writing it twice writes the same document — but a second tap
+     * arriving before the first write lands would read the pre-tap set and flip the wrong way. The
+     * in-flight guard is for that, not for the database.
+     */
+    fun toggleFollow(authorId: String, onResult: (String?) -> Unit = {}) {
+        val me = authRepository.currentUid
+            ?: return onResult("You are signed out. Sign in and try again.")
+        if (authorId.isBlank() || authorId == me) return
+        if (authorId in followsInFlight.value) return
+        val alreadyFollowing = authorId in uiState.value.following
+        followsInFlight.value = followsInFlight.value + authorId
+        viewModelScope.launch {
+            try {
+                if (alreadyFollowing) {
+                    followRepository.unfollow(me, authorId)
+                } else {
+                    followRepository.follow(me, authorId)
+                }
+                onResult(null)
+            } catch (cause: Exception) {
+                Log.w("Omni", "Following $authorId failed", cause)
+                onResult("That didn't go through — ${cause.reason()}")
+            } finally {
+                followsInFlight.value = followsInFlight.value - authorId
+            }
+        }
     }
 
     /**
@@ -199,6 +453,65 @@ class FeedViewModel(
         }
     }
 
+    // ---- Searching for people -------------------------------------------------------------------
+
+    /**
+     * The search field's own state, deliberately *beside* [uiState] rather than inside it.
+     *
+     * Two reasons, one mechanical and one about what the screen does. The mechanical one: the typed
+     * [combine] overloads stop at five flows and [uiState] uses all five. The real one: a keystroke
+     * must not recompose the feed. Folded into [uiState] every letter typed would produce a new
+     * `FeedUiState` holding the same twenty posts, and the list would diff them all — which is the
+     * "search bar drops characters" the device report described on the map screen.
+     */
+    private val search = MutableStateFlow(FeedSearchState())
+
+    val searchState: StateFlow<FeedSearchState> = search
+
+    /**
+     * The debounce, as a cancellable job rather than a `debounce` operator.
+     *
+     * Each keystroke cancels the last job before it has finished sleeping, so only the pause at the
+     * end of a word ever reaches Firestore — "avoid querying Firestore on every keystroke", stated as
+     * code. The same cancellation makes an in-flight query's result unable to land after a newer one.
+     */
+    private var searchJob: kotlinx.coroutines.Job? = null
+
+    fun onSearchQueryChange(value: String) {
+        val term = value.trim()
+        searchJob?.cancel()
+        // The field is never lagged behind the keyboard: the query is stored on the spot and only the
+        // *answer* is debounced.
+        search.value = search.value.copy(query = value, error = null)
+
+        if (term.length < MinSearchQuery) {
+            search.value = search.value.copy(isSearching = false, results = emptyList())
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(SearchDebounceMillis)
+            search.value = search.value.copy(isSearching = true)
+            try {
+                val found = userRepository.searchByName(term, UserSearchLimit)
+                search.value = search.value.copy(results = found, isSearching = false)
+            } catch (cause: Exception) {
+                Log.w("Omni", "Searching for \"$term\" failed", cause)
+                search.value = search.value.copy(
+                    results = emptyList(),
+                    isSearching = false,
+                    error = "Search didn't work — ${cause.reason()}",
+                )
+            }
+        }
+    }
+
+    /** Closes the search: the field empties and the results panel goes with it. */
+    fun clearSearch() {
+        searchJob?.cancel()
+        search.value = FeedSearchState()
+    }
+
     fun openComments(postId: String) {
         commentsOpenId.value = postId
     }
@@ -207,61 +520,82 @@ class FeedViewModel(
         commentsOpenId.value = null
     }
 
-    fun addComment(body: String) {
-        val uid = authRepository.currentUid ?: return
-        val postId = commentsOpenId.value ?: return
-        if (body.isBlank()) return
-        val name = authorName.ifBlank { "You" }
+    /**
+     * Posts [body] as a comment on the open post.
+     *
+     * [onResult] is handed `null` on success and a sentence otherwise, the same shape [createPost]
+     * uses — the sheet keeps the draft until the write lands, so a rejected comment is retryable
+     * rather than lost. It used to swallow the failure into the log, which is indistinguishable from
+     * a comment that simply never appeared.
+     *
+     * The uid is the signed-in account's, taken here and never from a parameter: the rules require
+     * `authorId == request.auth.uid`, and a caller has no way to name someone else.
+     */
+    fun addComment(body: String, onResult: (String?) -> Unit = {}) {
+        val uid = authRepository.currentUid
+            ?: return onResult("You are signed out. Sign in and try again.")
+        val postId = commentsOpenId.value ?: return onResult("That post is no longer open.")
+        if (body.isBlank()) return onResult("Write something first.")
+        val name = author.name.ifBlank { "You" }
         viewModelScope.launch {
             try {
                 feedRepository.addComment(uid, postId, name, body)
+                onResult(null)
             } catch (cause: Exception) {
                 Log.w("Omni", "Commenting on $postId failed", cause)
+                onResult("Your comment wasn't posted — ${cause.reason()}")
             }
         }
     }
 
     /**
-     * My display name, handed down from the hoisted profile by `MainActivity` — the same pattern as
-     * the goals on Home. Set on entry and on every profile change, because a rename should apply to
-     * the next comment without reopening the feed.
+     * Who I am when I write something here, handed down from the hoisted profile by `MainActivity` —
+     * the same pattern as the goals on Home, and the reason this ViewModel opens no second `users`
+     * listener (BACKEND_PLAN §4 rule 3).
+     *
+     * Set on entry and on every profile change, so a rename or a new photo applies to the next
+     * comment and the next repost without reopening the feed.
      */
-    fun onAuthorName(name: String) {
-        authorName = name
+    fun onAuthorIdentity(name: String, photoUrl: String?, verified: Boolean) {
+        author = PostAuthor(name = name, photoUrl = photoUrl, verified = verified, profession = null)
     }
 
-    private var authorName = ""
+    private var author = PostAuthor(name = "", photoUrl = null, verified = false, profession = null)
 
     /**
-     * Reposts [postId] — a new post of my own that quotes the original.
+     * Reposts [postId] — a new post of my own that quotes the original, plus the marker at
+     * `posts/{postId}/reposts/{uid}` that makes it countable and unrepeatable.
      *
-     * The rules forbid the client from touching a post's `repostCount` (DEVIATION 2 — counters are
-     * the Cloud Functions' job, and those do not exist yet), so the count the pill shows stays 0
-     * while the repost itself is real: a quoting post in the feed, attributed to me, crediting the
-     * original author by name. When the Phase 12 functions land, the pill can read the counter the
-     * trigger maintains — the reference post remains the durable artefact either way.
+     * One per user per post. The repository commits the quoting post and the marker in one batch and
+     * refuses a second attempt against the marker, so the pill is a *state* rather than a button that
+     * wrote a fresh post on every press — which is what it used to be, with a hardcoded "0" beside
+     * it that never moved however many times it was tapped.
      *
-     * Image reposts carry the image: the URL is already public (Cloudinary), so the new post points
-     * at the same one and the feed shows the photograph, not a description of it.
+     * The flip is optimistic so the tap is acknowledged on its own frame; a failed write rolls it
+     * back. The repost is attributed with my whole identity — name, photo and badge — not just my
+     * name: it used to pass `photoUrl = null`, so every repost was permanently avatar-less in a feed
+     * where my other posts had my face on them.
      */
     fun repost(postId: String) {
         val uid = authRepository.currentUid ?: return
-        val original = loadedState().firstOrNull { it.id == postId } ?: return
+        val current = loadedState().firstOrNull { it.id == postId } ?: return
+        if (current.repostedByMe) return
+        optimistic.value = optimistic.value + (
+            postId to current.copy(
+                repostedByMe = true,
+                repostCount = current.repostCount + 1,
+            )
+            )
         viewModelScope.launch {
             try {
-                feedRepository.createPost(
+                feedRepository.repost(
                     uid = uid,
-                    author = PostAuthor(
-                        name = authorName.ifBlank { "You" },
-                        photoUrl = null,
-                        verified = false,
-                        profession = null,
-                    ),
-                    body = "🔁 ${original.authorName}:\n${original.body}",
-                    imageUrl = original.imageUrl,
+                    postId = postId,
+                    author = author.copy(name = author.name.ifBlank { "You" }),
                 )
             } catch (cause: Exception) {
                 Log.w("Omni", "Reposting $postId failed", cause)
+                optimistic.value = optimistic.value - postId
             }
         }
     }
@@ -351,6 +685,7 @@ class FeedViewModel(
 
     private fun Comment.toRow() = CommentRow(
         id = id,
+        authorId = authorId,
         authorName = authorName.ifBlank { "Someone" },
         body = body,
         timeText = relativeTimeOf(createdAt),
@@ -362,5 +697,20 @@ class FeedViewModel(
 
         /** BACKEND_PLAN's own page size for the feed's `limit(…)`. */
         const val PageSize = 20
+
+        /**
+         * The Following tab's page size — bigger than Discover's because Following's filter is the
+         * author set, not the whole app, and a follower of three quiet people should see *all three*
+         * before any of them scroll past the fold.
+         */
+        const val FollowingPageSize = 50
+
+        /**
+         * How long the field must be still before the query goes out.
+         *
+         * Long enough that typing a name is one search rather than eight, short enough that the pause
+         * is not felt as lag. 300ms is the interval the platform's own search fields settle on.
+         */
+        const val SearchDebounceMillis = 300L
     }
 }

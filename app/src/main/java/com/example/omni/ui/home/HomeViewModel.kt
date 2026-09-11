@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.DailyMetrics
 import com.example.omni.data.model.todayKey
 import com.example.omni.data.model.todayKeyFlow
@@ -69,9 +68,7 @@ class HomeViewModel(
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key both reads restart on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     /**
      * Whether `ACTIVITY_RECOGNITION` has been granted, and `null` until `MainActivity` has said.

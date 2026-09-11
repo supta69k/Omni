@@ -3,7 +3,6 @@ package com.example.omni.ui.nutrition
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.DailyMetrics
 import com.example.omni.data.model.DayNutrition
 import com.example.omni.data.model.Meal
@@ -83,9 +82,7 @@ class NutritionViewModel(
     private val mealRepository: MealRepository,
 ) : ViewModel() {
 
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     /**
      * The seven days ending today, rebuilt whenever today changes.

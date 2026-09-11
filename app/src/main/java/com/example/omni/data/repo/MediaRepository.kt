@@ -21,8 +21,15 @@ import kotlin.math.roundToInt
 /**
  * User-picked images on their way to the cloud.
  *
- * One method today, because one screen uploads: the post composer. Stories and profile photos will
- * land here beside it rather than growing a second uploader.
+ * Three entry points, one pipeline: a post's photo, a story's photo and a profile photo differ only
+ * in the folder they land in.
+ *
+ * **The folder is the only thing that differs, and it decides nothing.** Which entity a photo
+ * becomes — post, story or avatar — is the *caller's* decision, made before it gets here; this
+ * uploader returns a URL and has no opinion about what is written with it. That separation is why
+ * [uploadStoryImage] exists rather than stories borrowing [uploadPostImage]: they were borrowing it,
+ * and while it happened to work, it left the two flows sharing the one place a reader would look to
+ * tell them apart.
  */
 interface MediaRepository {
 
@@ -38,6 +45,15 @@ interface MediaRepository {
      * losing the user's photo silently is worse than saying so.
      */
     suspend fun uploadPostImage(uid: String, image: Uri): String
+
+    /**
+     * Compresses [image] and uploads it as a story's photo.
+     *
+     * Its own folder, for the reason [uploadAvatar] has one: a story is gone in 24 hours and a post
+     * is not, so mixing them in the media library makes the ephemeral half impossible to find or
+     * sweep. Same compression, same unsigned preset, same failure contract.
+     */
+    suspend fun uploadStoryImage(uid: String, image: Uri): String
 
     /**
      * Compresses [image] and uploads it as [uid]'s profile photo, returning the delivery URL for
@@ -93,6 +109,9 @@ class CloudinaryMediaRepository(
 
     override suspend fun uploadPostImage(uid: String, image: Uri): String =
         upload(uid, image, PostsFolder)
+
+    override suspend fun uploadStoryImage(uid: String, image: Uri): String =
+        upload(uid, image, StoriesFolder)
 
     override suspend fun uploadAvatar(uid: String, image: Uri): String =
         upload(uid, image, AvatarsFolder)
@@ -230,6 +249,12 @@ class CloudinaryMediaRepository(
 
     companion object {
         private const val PostsFolder = "posts"
+
+        /** Stories land apart from posts: they expire, and posts do not — see [uploadStoryImage]. */
+        private const val StoriesFolder = "stories"
+
+        /** Avatars land beside the posts, not among them — see [uploadAvatar]. */
+        private const val AvatarsFolder = "avatars"
 
         /** BACKEND_PLAN §11's own figure: the long edge a post image is stored at. */
         private const val MaxEdge = 1080

@@ -3,7 +3,6 @@ package com.example.omni.ui.settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.EmergencyContact
 import com.example.omni.data.model.MaxContactNameLength
 import com.example.omni.data.model.MaxContactPhoneLength
@@ -18,10 +17,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -74,9 +71,7 @@ class EmergencyContactsViewModel(
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key the read restarts on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     private val draft = MutableStateFlow(ContactDraft())
     private val formOpen = MutableStateFlow(false)

@@ -3,7 +3,6 @@ package com.example.omni.ui.messages
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.Conversation
 import com.example.omni.data.model.MaxMessageLength
 import com.example.omni.data.model.Message
@@ -96,9 +95,7 @@ class MessagesViewModel(
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key every read below restarts on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { state -> if (state == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     private val openThread = MutableStateFlow<OpenThread?>(null)
     private val draft = MutableStateFlow("")
@@ -239,9 +236,18 @@ class MessagesViewModel(
      * The chat opens only once the document is known to exist. Opening it optimistically would put the
      * user in front of an input box whose first message could fail the rules, and this is the one write in
      * the app where "it looked like it worked" is worst.
+     *
+     * Refuses a thread with myself. The picker already filters me out of its own list, but this is also
+     * the profile page's message button, and a profile can be mine — the router holds it back, and this
+     * holds it back again at the layer that actually writes, because a thread whose two participants are
+     * one person is a document no screen can render and no rule should accept.
      */
     fun startWith(professional: ProfessionalRowState, selfName: String, selfPhotoUrl: String?) {
         val uid = authRepository.currentUid ?: return
+        if (uid == professional.uid) {
+            Log.w("Omni", "Refusing a conversation with myself ($uid)")
+            return
+        }
         viewModelScope.launch {
             try {
                 val conversationId = messageRepository.openConversation(

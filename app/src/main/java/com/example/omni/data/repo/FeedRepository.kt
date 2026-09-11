@@ -49,6 +49,34 @@ interface FeedRepository {
     fun observeByAuthor(authorId: String, limit: Int): Flow<List<Post>>
 
     /**
+     * The posts of *several* authors, newest first, live — the Following tab.
+     *
+     * A real query rather than a filter over the Discover page. Filtering in memory answers "which of
+     * the twenty newest posts on the app are by someone I follow", which is a different question from
+     * "what have the people I follow posted": follow one quiet person among a hundred noisy strangers
+     * and the honest answer is their posts, while the filtered page is empty. So the authors go into
+     * the query and the limit applies to *their* posts.
+     *
+     * [authorIds] is expected to include the viewer's own uid when their posts belong in the result —
+     * this method has no opinion about that; it returns the authors it is given. An empty set returns
+     * an empty list rather than everybody.
+     *
+     * Joined with my like/repost state exactly as [observeFirstPage] is, so a row in this tab behaves
+     * identically to the same row in Discover.
+     */
+    fun observeByAuthors(uid: String, authorIds: Set<String>, limit: Int): Flow<List<Post>>
+
+    /**
+     * How many posts [authorId] has written, server-side.
+     *
+     * Separate from [observeByAuthor] because that query is capped: a profile with 40 posts would
+     * otherwise say "20 posts", and a count that disagrees with the number of rows below it is the
+     * kind of wrong that makes a user distrust everything else on the page. One aggregation, billed
+     * as a single read.
+     */
+    suspend fun countByAuthor(authorId: String): Int
+
+    /**
      * One further page, oldest-of-the-loaded as the cursor — a one-shot `get()`, not a listener, so
      * a growing feed does not re-read everything it has already shown.
      */
@@ -85,6 +113,22 @@ interface FeedRepository {
      * caller's own uid.
      */
     suspend fun createPost(uid: String, author: PostAuthor, body: String, imageUrl: String?)
+
+    /**
+     * Reposts [postId] once, as a quoting post of my own plus a marker at
+     * `posts/{postId}/reposts/{uid}`.
+     *
+     * Returns `false` when the marker already exists — one repost per user per post, which is what
+     * makes the pill a toggleable *state* rather than a button that writes a new post every time it
+     * is pressed. The marker and the quoting post are committed in one [com.google.firebase.firestore.WriteBatch],
+     * so the two can never disagree: there is no path that leaves a repost counted but not written,
+     * or written but not counted.
+     *
+     * Not undoable, deliberately. Deleting the marker would leave the quoting post behind — it is a
+     * post like any other, in other people's feeds — and a count that says 0 beside a repost someone
+     * is currently reading is worse than a pill that does not un-press.
+     */
+    suspend fun repost(uid: String, postId: String, author: PostAuthor): Boolean
 }
 
 /** The identity stamped onto a post at create time — the profile, flattened to what the feed shows. */

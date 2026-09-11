@@ -18,7 +18,10 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
@@ -49,6 +52,15 @@ class FirestoreUserRepository(
         awaitClose { registration.remove() }
     }
 
+    override suspend fun getUser(uid: String): User? = try {
+        firestore.collection(Users).document(uid).get().await().toUser(uid)
+    } catch (cause: Exception) {
+        // An author whose document cannot be read is not a reason for the feed to fail; the caller
+        // keeps whatever identity the post itself was written with.
+        android.util.Log.w("Omni", "The profile $uid could not be read", cause)
+        null
+    }
+
     override fun observeProfessionals(): Flow<List<User>> = callbackFlow {
         val registration = firestore.collection(Users)
             .whereEqualTo("verified", true)
@@ -72,6 +84,60 @@ class FirestoreUserRepository(
             }
         awaitClose { registration.remove() }
     }
+
+    /**
+     * The prefix range on `name`, run once per casing of [query] and merged.
+     *
+     * `orderBy("name").startAt(term).endAt(term + '')` is Firestore's whole vocabulary for
+     * "begins with": `` is the last character in the Basic Multilingual Plane, so the range
+     * covers every string that starts with `term`. It needs no composite index — a single-field index
+     * on `name` is one Firestore maintains automatically — and it is capped, so the collection is
+     * never pulled down to be filtered here.
+     *
+     * The range is byte-ordered, which is the same as saying it is case-sensitive: typing "ben" would
+     * not reach "Ben Carter". So the same range is run for the casings a person actually types —
+     * verbatim, all-lower, and Title Case per word — as a [Set], so "Ben" costs two queries and "ben"
+     * costs two, never more than three. Each is a capped range query, and they run concurrently.
+     *
+     * Merged by uid (the casings overlap by design), sorted the way [observeProfessionals] sorts, and
+     * cut to [limit] — so the caller gets [limit] *people*, not [limit] per variant.
+     */
+    override suspend fun searchByName(query: String, limit: Int): List<User> {
+        val term = query.trim()
+        if (term.isBlank()) return emptyList()
+
+        val variants = setOf(term, term.lowercase(), term.titleCased())
+        val found = coroutineScope {
+            variants
+                .map { variant -> async { prefixMatch(variant, limit) } }
+                .awaitAll()
+                .flatten()
+        }
+        return found
+            .associateBy { it.uid }
+            .values
+            .sortedBy { it.name.lowercase() }
+            .take(limit)
+    }
+
+    /**
+     * One casing's range query.
+     *
+     * Failures are **not** swallowed here, unlike everywhere else in this file: every variant runs
+     * against the same collection under the same rule, so one failing means all of them would, and
+     * an empty list would be indistinguishable from "nobody by that name". The search field has a
+     * sentence to show instead, and it can only show it if the throw reaches it.
+     */
+    private suspend fun prefixMatch(term: String, limit: Int): List<User> =
+        firestore.collection(Users)
+            .orderBy("name")
+            .startAt(term)
+            .endAt(term + PrefixCeiling)
+            .limit(limit.toLong())
+            .get()
+            .await()
+            .documents
+            .mapNotNull { document -> document.toUser(document.id) }
 
     override suspend fun updateProfile(uid: String, fields: Map<String, Any?>) {
         firestore.collection(Users).document(uid)
@@ -106,6 +172,17 @@ class FirestoreUserRepository(
     private companion object {
         const val Users = "users"
 
+        /**
+         * The upper bound of a "begins with" range — the last code point in the Basic Multilingual
+         * Plane, so `startAt(t) … endAt(t + this)` covers every string that starts with `t`.
+         */
+        const val PrefixCeiling = ''
+
+        /** "ben carter" → "Ben Carter": the casing a display name is actually stored in. */
+        fun String.titleCased(): String = split(' ').joinToString(" ") { word ->
+            word.replaceFirstChar { it.uppercaseChar() }
+        }
+
         fun DocumentSnapshot.toUser(uid: String): User? {
             if (!exists()) return null
             return User(
@@ -115,7 +192,11 @@ class FirestoreUserRepository(
                 role = enumOrNull<UserRole>(getString("role")) ?: UserRole.USER,
                 profession = enumOrNull<Profession>(getString("profession")),
                 verified = getBoolean("verified") ?: false,
-                photoUrl = getString("photoUrl"),
+                // Blank is absent. A profile that once had a photo and had it cleared holds `""`,
+                // and `""` is a perfectly good non-null String: every `photoUrl ?: initial` fallback
+                // downstream would take the photo branch and hand Coil an empty model, which loads
+                // nothing and draws nothing. That is the missing avatar in the feed.
+                photoUrl = getString("photoUrl")?.takeIf { it.isNotBlank() },
                 unreadMessages = unreadCount("messages"),
                 unreadNotifications = unreadCount("notifications"),
                 // The ceilings are the goals page's own, in `User.kt`, rather than three private

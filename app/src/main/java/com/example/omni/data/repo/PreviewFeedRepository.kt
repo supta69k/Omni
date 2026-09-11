@@ -44,13 +44,30 @@ class PreviewFeedRepository : FeedRepository {
 
     private val likes = MutableStateFlow<Set<String>>(emptySet())
 
+    /** Post ids I have reposted — the in-memory twin of the `reposts` marker documents. */
+    private val reposts = MutableStateFlow<Set<String>>(emptySet())
+
     private val comments = MutableStateFlow<Map<String, List<Comment>>>(emptyMap())
 
     override fun observeFirstPage(uid: String, pageSize: Int): Flow<List<Post>> =
-        posts.map { page -> page.take(pageSize).map { it.copy(likedByMe = it.id in likes.value) } }
+        posts.map { page ->
+            page.take(pageSize).map {
+                it.copy(likedByMe = it.id in likes.value, repostedByMe = it.id in reposts.value)
+            }
+        }
 
     override fun observeByAuthor(authorId: String, limit: Int): Flow<List<Post>> =
         posts.map { all -> all.filter { it.authorId == authorId }.take(limit) }
+
+    /** The same rule as Firestore's, over the list this fake holds — no chunking needed in memory. */
+    override fun observeByAuthors(uid: String, authorIds: Set<String>, limit: Int): Flow<List<Post>> =
+        posts.map { all ->
+            if (authorIds.isEmpty()) emptyList()
+            else all.filter { it.authorId in authorIds }.sortedByDescending { it.createdAt }.take(limit)
+        }
+
+    override suspend fun countByAuthor(authorId: String): Int =
+        posts.value.count { it.authorId == authorId }
 
     override suspend fun loadPage(uid: String, beforeCreatedAt: Long, pageSize: Int): List<Post> =
         emptyList()
@@ -80,6 +97,23 @@ class PreviewFeedRepository : FeedRepository {
             createdAt = System.currentTimeMillis(),
         )
         posts.value = listOf(post) + posts.value
+    }
+
+    /** Refuses the second attempt, exactly as the Firestore marker does. */
+    override suspend fun repost(uid: String, postId: String, author: PostAuthor): Boolean {
+        if (postId in reposts.value) return false
+        val original = posts.value.firstOrNull { it.id == postId } ?: return false
+        reposts.value += postId
+        posts.value = posts.value.map {
+            if (it.id == postId) it.copy(repostCount = it.repostCount + 1) else it
+        }
+        createPost(
+            uid = uid,
+            author = author,
+            body = "🔁 ${original.authorName}:\n${original.body}",
+            imageUrl = original.imageUrl,
+        )
+        return true
     }
 
     private var nextId = 3

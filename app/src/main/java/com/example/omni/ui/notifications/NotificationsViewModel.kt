@@ -4,15 +4,12 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.AppNotification
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.NotificationRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -48,9 +45,7 @@ class NotificationsViewModel(
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key the read restarts on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<NotificationsUiState> = uid

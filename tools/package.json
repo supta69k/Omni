@@ -4,9 +4,13 @@
   "description": "One-shot seeding scripts for the Omni Firestore project. Not part of the Android build.",
   "type": "module",
   "scripts": {
-    "hospitals": "node seed-hospitals.mjs"
+    "hospitals": "node seed-hospitals.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-omni \"node --test rules.test.mjs\""
   },
   "dependencies": {
     "firebase-admin": "^12.7.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2"
   }
 }

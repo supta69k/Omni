@@ -42,6 +42,12 @@ interface MessageRepository {
      * Idempotent: the id is derived from the two uids ([conversationIdOf]), and an existing document is
      * left exactly as it is rather than being merged over — a merge would blank the last message every
      * time somebody opened a chat.
+     *
+     * **Throws when the two uids are the same.** `conversationIdOf(uid, uid)` is `"uid_uid"` and its
+     * `participants` array holds one entry twice, which no rule and no reader expects: the thread list
+     * would show a row whose "other" participant is me, and [com.example.omni.data.model.toConversation]
+     * cannot name an other side that is not there. It is a caller's bug, not a user's, so it fails loudly
+     * here — one guard at the boundary every path crosses, rather than a test at each of them.
      */
     suspend fun openConversation(
         selfUid: String,
@@ -126,6 +132,7 @@ class FirestoreMessageRepository(
         otherName: String,
         otherPhotoUrl: String?,
     ): String {
+        require(selfUid != otherUid) { "A conversation needs two different people" }
         val id = conversationIdOf(selfUid, otherUid)
         val document = conversation(id)
 
@@ -235,7 +242,10 @@ class PreviewMessageRepository : MessageRepository {
         otherUid: String,
         otherName: String,
         otherPhotoUrl: String?,
-    ): String = conversationIdOf(selfUid, otherUid)
+    ): String {
+        require(selfUid != otherUid) { "A conversation needs two different people" }
+        return conversationIdOf(selfUid, otherUid)
+    }
 
     override suspend fun send(
         conversationId: String,

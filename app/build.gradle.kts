@@ -79,6 +79,16 @@ android {
         // committed constant. Nothing else in the app used BuildConfig before this.
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            // The JVM test runtime ships android.jar with every method stubbed to *throw*, so a
+            // `catch { Log.w(...); showTheUserWhyItFailed() }` blows up on the log line and the
+            // recovery never runs — the ViewModel looks like it swallowed the failure when in fact
+            // the test environment did. Defaults make android.util.Log a no-op, which is what a
+            // unit test wants from it: the failure paths are testable and nothing in the app changes.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -119,6 +129,11 @@ dependencies {
     // declaring it directly so the routing repository does not depend on a transitive version.
     implementation(libs.okhttp)
     testImplementation(libs.junit)
+    // `runTest` and the virtual clock, for the ViewModel tests: the profile's state machine is a
+    // combine over five flows, and the bug it is guarding against is a timing one — what the page
+    // shows while some of those reads have answered and others have not. Test-only; nothing here
+    // ships in the APK.
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

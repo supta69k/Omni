@@ -67,6 +67,13 @@ fun StoryViewer(
     onRewind: () -> Unit,
     onClose: () -> Unit,
     onDelete: () -> Unit = {},
+    /**
+     * Opens the story's author's public page (§8) — carried with **their** uid, taken from the story
+     * on screen rather than from the session, so it is the person whose photograph is being looked at.
+     * Drawn on their own story too: the settings link is elsewhere, and a name that is tappable for
+     * everyone else and dead for me reads as a bug.
+     */
+    onOpenProfile: (String) -> Unit = {},
 ) {
     val story = stories.getOrNull(storyIndex)
 
@@ -119,35 +126,54 @@ fun StoryViewer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(StoryUnwatched),
-                    contentAlignment = Alignment.Center,
+                // Avatar and name in one tap target rather than two — the whole identity block opens
+                // the person, which is the affordance every story UI teaches. Nested inside the
+                // chrome row, so the 8dp gaps and the trailing weight are exactly what they were.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.noRipple(
+                        onClick = {
+                            val authorId = story?.authorId
+                            if (!authorId.isNullOrBlank()) {
+                                // The viewer is full-screen and outside the router's stack; leaving
+                                // it open under the profile would strand the story on top.
+                                onClose()
+                                onOpenProfile(authorId)
+                            }
+                        },
+                    ),
                 ) {
-                    if (story?.authorPhotoUrl != null) {
-                        AsyncImage(
-                            model = story.authorPhotoUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Text(
-                            text = authorName.take(1).uppercase(),
-                            style = FeedType.AuthorName,
-                            color = OmniOnInk,
-                            maxLines = 1,
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(StoryUnwatched),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (story?.authorPhotoUrl != null) {
+                            AsyncImage(
+                                model = story.authorPhotoUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            Text(
+                                text = authorName.take(1).uppercase(),
+                                style = FeedType.AuthorName,
+                                color = OmniOnInk,
+                                maxLines = 1,
+                            )
+                        }
                     }
+                    Text(
+                        text = authorName,
+                        style = FeedType.AuthorName,
+                        color = OmniOnInk,
+                        maxLines = 1,
+                    )
                 }
-                Text(
-                    text = authorName,
-                    style = FeedType.AuthorName,
-                    color = OmniOnInk,
-                    maxLines = 1,
-                )
                 Spacer(Modifier.weight(1f))
                 if (isMine) {
                     // The author's own trash — drawn only on their own story, the only one the
@@ -186,7 +212,9 @@ fun StoryViewer(
             // The caption, over the image's foot with the app's own surface tint for legibility.
             if (!story?.caption.isNullOrBlank()) {
                 Text(
-                    text = story?.caption.orEmpty(),
+                    // Smart-cast: a caption that is neither null nor blank cannot have come from a
+                    // null story, so the safe call the compiler flagged here was already redundant.
+                    text = story.caption,
                     style = FeedType.PostBody,
                     color = OmniOnInk,
                     textAlign = TextAlign.Center,

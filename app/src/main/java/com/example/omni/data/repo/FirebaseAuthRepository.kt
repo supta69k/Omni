@@ -34,6 +34,9 @@ class FirebaseAuthRepository(
     private val _authState = MutableStateFlow(AuthState.LOADING)
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
+    private val _sessionUid = MutableStateFlow(auth.currentUser?.uid)
+    override val sessionUid: StateFlow<String?> = _sessionUid.asStateFlow()
+
     override val currentUid: String?
         get() = auth.currentUser?.uid
 
@@ -46,6 +49,9 @@ class FirebaseAuthRepository(
                 auth.addAuthStateListener(listener)
                 awaitClose { auth.removeAuthStateListener(listener) }
             }.collect { user ->
+                // The uid first: a collector woken by the state change must not be able to read a
+                // session that has already been replaced. See AuthRepository.sessionUid.
+                _sessionUid.value = user?.uid
                 _authState.value = if (user != null) AuthState.AUTHENTICATED else AuthState.UNAUTHENTICATED
             }
         }

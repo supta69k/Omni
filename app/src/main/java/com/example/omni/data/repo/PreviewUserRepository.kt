@@ -24,7 +24,25 @@ class PreviewUserRepository(
 
     override fun observeUser(uid: String): Flow<User?> = user.asStateFlow()
 
+    /** The one profile this fake holds, plus the two professionals, matched by uid. */
+    override suspend fun getUser(uid: String): User? =
+        (listOf(user.value) + PreviewProfessionals).firstOrNull { it.uid == uid }
+
     override fun observeProfessionals(): Flow<List<User>> = MutableStateFlow(PreviewProfessionals)
+
+    /**
+     * The same prefix rule as Firestore's, applied to the three people this fake holds — case-folded
+     * here because in memory there is no byte ordering to work around, and a preview that could only
+     * find "Dr." by typing the capital would be testing the wrong thing.
+     */
+    override suspend fun searchByName(query: String, limit: Int): List<User> {
+        val term = query.trim()
+        if (term.isBlank()) return emptyList()
+        return (listOf(user.value) + PreviewProfessionals)
+            .filter { it.name.startsWith(term, ignoreCase = true) }
+            .sortedBy { it.name.lowercase() }
+            .take(limit)
+    }
 
     override suspend fun updateProfile(uid: String, fields: Map<String, Any?>) {
         user.update { current ->

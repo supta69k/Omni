@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,13 +40,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Image
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
+import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFeedHint
 import com.example.omni.ui.theme.OmniFeedTimestamp
@@ -72,10 +80,28 @@ internal fun CommentsSheet(
     visible: Boolean,
     comments: List<CommentRow>,
     onDismiss: () -> Unit,
-    onSend: (String) -> Unit,
+    /**
+     * Sends the draft. Called back with `null` on success — which is what clears the field — and a
+     * sentence to show otherwise, the same shape the composer and the story sheet already use: the
+     * draft survives a refused write, because retyping a comment the app silently dropped is worse
+     * than any error line.
+     */
+    onSend: (String, (String?) -> Unit) -> Unit,
+    /** Opens a commenter's public page — the same tap the feed's post avatar carries. */
+    onOpenProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
+        // Closing the sheet takes the keyboard with it. Without this the IME stays up over a feed
+        // with no field on it, and the only way back is the system back button.
+        val focus = LocalFocusManager.current
+        val keyboard = LocalSoftwareKeyboardController.current
+        val dismiss: () -> Unit = {
+            focus.clearFocus()
+            keyboard?.hide()
+            onDismiss()
+        }
+
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(tween(SheetMillis)),
@@ -85,7 +111,7 @@ internal fun CommentsSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(OmniScrim)
-                    .noRipple(onClick = onDismiss),
+                    .noRipple(onClick = dismiss),
             )
         }
 
@@ -95,7 +121,12 @@ internal fun CommentsSheet(
             exit = slideOutVertically(tween(SheetMillis)) { it } + fadeOut(tween(SheetMillis)),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            CommentsPanel(comments = comments, onDismiss = onDismiss, onSend = onSend)
+            CommentsPanel(
+                comments = comments,
+                onDismiss = dismiss,
+                onSend = onSend,
+                onOpenProfile = onOpenProfile,
+            )
         }
     }
 }
@@ -104,9 +135,17 @@ internal fun CommentsSheet(
 private fun CommentsPanel(
     comments: List<CommentRow>,
     onDismiss: () -> Unit,
-    onSend: (String) -> Unit,
+    onSend: (String, (String?) -> Unit) -> Unit,
+    onOpenProfile: (String) -> Unit,
 ) {
     var draft by remember { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    var sendError by remember { mutableStateOf<String?>(null) }
+
+    // Dismissing the keyboard is the sheet's job, not the system's: the IME is raised by the field
+    // and nothing lowers it when the sheet slides away, so it would be left covering the feed.
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     Column(
         modifier = Modifier
@@ -161,7 +200,10 @@ private fun CommentsPanel(
                 // rebuilding them — and so only what fits inside [ListMaxHeight] is ever composed
                 // instead of all fifty the query now carries.
                 items(items = comments, key = { it.id }) { comment ->
-                    CommentRowCard(comment = comment)
+                    CommentRowCard(
+                        comment = comment,
+                        onOpenProfile = { onOpenProfile(comment.authorId) },
+                    )
                 }
             }
         }
@@ -169,52 +211,104 @@ private fun CommentsPanel(
         Spacer(Modifier.height(ComposerTop))
 
         // The composer: the feed's grey surface with the auth pages' ink button beside it.
+        //
+        // Bottom-aligned rather than centred because the field *grows*: a reply long enough to wrap
+        // pushes its own top up while the Send button stays on the baseline it started on, which is
+        // how every messaging composer on the platform behaves.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(ComposerGap),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Bottom,
         ) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(ComposerHeight)
+                    .heightIn(min = ComposerHeight)
                     .clip(RoundedCornerShape(ComposerCorner))
                     .background(ComposerSurface),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 BasicTextField(
                     value = draft,
-                    onValueChange = { draft = it.take(MaxCommentLength) },
-                    singleLine = true,
+                    onValueChange = {
+                        draft = it.take(MaxCommentLength)
+                        sendError = null
+                    },
+                    enabled = !sending,
+                    // Multiline, capped at [ComposerMaxLines]. Past that the field scrolls inside
+                    // itself rather than eating the comment list above it — 280 characters at this
+                    // width is about six lines, and a composer taller than the conversation it is
+                    // part of is the wrong trade.
+                    singleLine = false,
+                    maxLines = ComposerMaxLines,
+                    // Sentence capitalisation and a newline key: Enter adds a line rather than
+                    // sending, because the field is multiline and a send key on a wrapping field
+                    // truncates replies people meant to finish. Send is the button.
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Default,
+                    ),
                     textStyle = FeedType.Hint16.copy(color = OmniInk),
                     cursorBrush = SolidColor(OmniInk),
+                    // Placeholder and field in *one* box, the project's own `decorationBox` shape.
+                    // They used to be siblings with the field boxed at `width(0.dp)`: the hint drew,
+                    // so the composer looked present, while the thing you type into had no width and
+                    // therefore no caret and no hit area. That is why there was "no way to comment".
                     decorationBox = { inner ->
-                        if (draft.isEmpty()) {
-                            Text("Add a comment…", style = FeedType.Hint16, color = OmniFeedHint)
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            if (draft.isEmpty()) {
+                                Text(
+                                    text = "Add a comment…",
+                                    style = FeedType.Hint16,
+                                    color = OmniFeedHint,
+                                    maxLines = 1,
+                                )
+                            }
+                            inner()
                         }
-                        Box(Modifier.width(0.dp)) { inner() }
                     },
+                    // 20 (Hint16's line) + 13 + 13 = 46, so an empty composer is exactly the height
+                    // it was before it could wrap.
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 16.dp, vertical = 13.dp),
                 )
             }
 
+            val canSend = draft.isNotBlank() && !sending
             Box(
                 modifier = Modifier
                     .size(SendSize)
                     .clip(CircleShape)
-                    .background(
-                        if (draft.isBlank()) OmniFeedHint else OmniInk,
-                    )
-                    .clickable(enabled = draft.isNotBlank()) {
-                        onSend(draft)
-                        draft = ""
+                    .background(if (canSend) OmniInk else OmniFeedHint)
+                    .clickable(enabled = canSend) {
+                        val body = draft.trim()
+                        // Whitespace-only is caught by `canSend`, but a draft that is text *plus*
+                        // trailing newlines is not — it is sent trimmed, so the comment that lands
+                        // is the comment that was written.
+                        if (body.isEmpty()) return@clickable
+                        sending = true
+                        sendError = null
+                        onSend(body) { failure ->
+                            sending = false
+                            sendError = failure
+                            // Only a send that landed empties the field — and takes the keyboard
+                            // with it, so the comment that was just written is the first thing
+                            // visible rather than hidden behind the IME.
+                            if (failure == null) {
+                                draft = ""
+                                focus.clearFocus()
+                                keyboard?.hide()
+                            }
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Send",
+                    text = if (sending) "…" else "Send",
                     style = FeedType.Meta12,
                     color = OmniOnInk,
                     maxLines = 1,
@@ -222,24 +316,39 @@ private fun CommentsPanel(
             }
         }
 
+        // Why the comment is still sitting in the field. Drawn only when there is something to say,
+        // so an ordinary sheet keeps its spacing exactly.
+        if (sendError != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = sendError.orEmpty(),
+                style = FeedType.Meta12,
+                color = OmniAuthError,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         Spacer(Modifier.height(SheetBottom))
     }
 }
 
 @Composable
-private fun CommentRowCard(comment: CommentRow) {
+private fun CommentRowCard(comment: CommentRow, onOpenProfile: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // The commenter's initial on the feed's grey — no photo is denormalised onto comments, and
-        // an initial cannot fail to load.
+        // The commenter's own photo, resolved live from their `authorId` by the ViewModel, with
+        // their initial underneath it — an initial cannot fail to load, and a comment written before
+        // they had a photo still shows the photo they have now. It is the tap that opens their page,
+        // the convention the feed's post avatar already teaches: an avatar is a person.
         Box(
             modifier = Modifier
                 .size(CommentAvatarSize)
                 .clip(CircleShape)
-                .background(ComposerSurface),
+                .background(ComposerSurface)
+                .clickable(onClick = onOpenProfile),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -248,6 +357,14 @@ private fun CommentRowCard(comment: CommentRow) {
                 color = OmniFeedTimestamp,
                 maxLines = 1,
             )
+            if (comment.authorPhotoUrl != null) {
+                AsyncImage(
+                    model = comment.authorPhotoUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         Column(
@@ -305,10 +422,19 @@ private val ListMaxHeight = 320.dp
 
 private val CommentGap = 14.dp
 private val CommentAvatarSize = 34.dp
+/** The composer's *resting* height — `Hint16`'s 20sp line plus 13 above and 13 below. */
 private val ComposerHeight = 46.dp
 private val ComposerCorner = 23.dp
 private val ComposerGap = 10.dp
 private val SendSize = 46.dp
+
+/**
+ * How far the field is allowed to grow before it scrolls inside itself.
+ *
+ * Four lines is about 46 + 3 × 20 = 106dp of composer. Past that it would start eating the comment
+ * list above it, which is the conversation the reply is part of.
+ */
+private const val ComposerMaxLines = 4
 
 /** #F5F5F5 — the field surface the auth pages and the search pill already use. */
 private val ComposerSurface = com.example.omni.ui.theme.OmniFieldSurface

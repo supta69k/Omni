@@ -6,17 +6,17 @@
 
 ## Scale
 
-1 API routes · 149 UI components · 1 environment variables
+1 API routes · 172 UI components · 1 environment variables
 
 ## Subsystems
 
 - **[AndroidManifest.xml](./androidmanifest.xml.md)** — 1 routes
 
-**UI:** 149 components (jetpack-compose) — see [ui.md](./ui.md)
+**UI:** 172 components (jetpack-compose) — see [ui.md](./ui.md)
 
 ## Required Environment Variables
 
 - `GOOGLE_APPLICATION_CREDENTIALS` — `tools\seed-hospitals.mjs`
 
 ---
-_Back to [index.md](./index.md) · Generated 2026-09-10_
+_Back to [index.md](./index.md) · Generated 2026-09-11_

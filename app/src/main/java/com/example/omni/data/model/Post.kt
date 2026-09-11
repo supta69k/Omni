@@ -33,6 +33,10 @@ data class Post(
     val likeCount: Int = 0,
     /** Joined in by the repository when the comments sheet is opened; 0 means "not loaded yet". */
     val commentCount: Int = 0,
+    /** Joined in by the repository from `posts/{id}/reposts`, the same shape as the likes. */
+    val repostCount: Int = 0,
+    /** Joined in by the repository: whether `posts/{id}/reposts/{myUid}` exists. */
+    val repostedByMe: Boolean = false,
 )
 
 /** The map written to `posts/{postId}` on create. Counters start at 0 — the rules require it. */
@@ -56,7 +60,10 @@ fun DocumentSnapshot.toPost(): Post? {
         id = id,
         authorId = getString("authorId").orEmpty(),
         authorName = getString("authorName").orEmpty(),
-        authorPhotoUrl = getString("authorPhotoUrl"),
+        // Blank is absent — `""` is non-null and would take every `?:` fallback's photo branch, so
+        // an author who cleared their picture made the feed draw an empty image instead of the
+        // initial that stands in for one.
+        authorPhotoUrl = getString("authorPhotoUrl")?.takeIf { it.isNotBlank() },
         authorVerified = getBoolean("authorVerified") ?: false,
         authorProfession = getString("authorProfession")
             ?.let { name -> Profession.entries.firstOrNull { it.name == name } },

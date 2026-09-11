@@ -14,6 +14,28 @@ interface AuthRepository {
     /** Hot, starts collecting immediately; Firebase's own session persistence backs it. */
     val authState: StateFlow<AuthState>
 
+    /**
+     * *Who* is signed in, as a flow — `null` while nobody is, or before Firebase has answered.
+     *
+     * This exists because [authState] cannot answer the question and every screen was asking it of
+     * it anyway. The pattern was `authState.map { if (it == AUTHENTICATED) currentUid else null }`,
+     * and it has two holes that only appear when one account replaces another:
+     *
+     *  - [authState] is an *enum*. Signing out of A and into B reads `AUTHENTICATED` at both ends,
+     *    so a `distinctUntilChanged` downstream can erase the entire transition and the `map` never
+     *    re-runs. Every read stays keyed to A's uid while B is looking at the screen.
+     *  - [currentUid] inside that `map` is an imperative read, not a dependency. Even when the state
+     *    does change, what the lambda samples is whatever Firebase holds at that instant — which
+     *    during a sign-out/sign-in pair is a coin toss.
+     *
+     * Keyed on the uid itself, both disappear: a new account is a new value, so every flow built on
+     * it restarts, and there is no instant at which one session's answer can land in another's UI.
+     *
+     * Still distinct from [currentUid], which stays the right thing for an *action* — a tap reads
+     * the session as it is when the finger lands.
+     */
+    val sessionUid: StateFlow<String?>
+
     /** The signed-in user's uid, or null. Drives the `users/{uid}` paths everywhere else. */
     val currentUid: String?
 

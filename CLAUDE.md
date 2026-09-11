@@ -26,6 +26,29 @@ Before coding:
 4. `npx codesight --wiki` regenerates `index.md` and drops hand-added lines — re-add the
    `architecture.md` link after a regen. Regenerate after significant code changes.
 
+What codesight does and does not detect here (verified against v1.19.0; Kotlin has **no** AST
+plugin — `--native-ast=kotlin --native-ast-strict` reports `kotlin/routes: plugin unavailable`,
+so Kotlin detection is heuristic, not AST):
+
+- **Trust:** the composable inventory in `.codesight/components.md` (172 found, each with its
+  file path and first few parameter names) and the env-var *names* in `.codesight/config.md`.
+  This is the fastest way to answer "does a component for this already exist?".
+- **Ignore the zeros.** `Models: 0`, `Libraries: 0`, `Import links: 0`, `Hot files: 0` and
+  `Routes: /MainActivity` mean "not parsed", not "not present" — Kotlin data classes, Gradle
+  dependencies and the import graph are simply not detected. `.codesight/wiki/architecture.md`
+  is the hand-written stand-in for the models/repository/navigation picture.
+- **Do not use blast radius on Kotlin.** `--blast` and `codesight_get_blast_radius` answer
+  "No downstream dependencies. Minimal blast radius." for every `.kt` file — including
+  `FeedScreen.kt`, which `MainActivity` calls. Before changing a shared composable, ViewModel
+  or repository, Grep for the symbol; that is the only reliable dependent list in this project.
+
+MCP: `.mcp.json` registers codesight as a project-scoped stdio server (`npx codesight --mcp`,
+14 tools). The ones worth calling here are `codesight_get_wiki_index`,
+`codesight_get_wiki_article`, and `codesight_scan` (the only tool that returns the composable
+inventory — there is no `codesight_get_components`). Claude Code asks for approval the first
+time a project `.mcp.json` is used, and the server is not live in a session that started before
+it existed. Reading `.codesight/` straight off disk needs no MCP at all and costs less.
+
 Figma work (Omni's UI is a 1:1 build of the Figma design on a 415dp artboard):
 
 1. Inspect only the requested Figma frame.

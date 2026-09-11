@@ -3,7 +3,6 @@ package com.example.omni.ui.firstaid
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.Guide
 import com.example.omni.data.model.GuideSeverity
 import com.example.omni.data.repo.AuthRepository
@@ -94,9 +93,7 @@ class GuidesViewModel(
     private val guides: List<Guide> = guideRepository.list()
 
     /** `null` whenever nobody is signed in — the key every read restarts on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     private val query = MutableStateFlow("")
 

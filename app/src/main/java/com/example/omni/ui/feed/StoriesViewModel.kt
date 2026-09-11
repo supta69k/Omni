@@ -6,11 +6,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.Story
 import com.example.omni.data.repo.AuthRepository
+import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.PostAuthor
 import com.example.omni.data.repo.StoryRepository
 import com.example.omni.data.repo.storyExpiryFromNow
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -69,10 +70,12 @@ data class StoriesUiState(
  * story ids that grows without bound and buys nothing for a term project: a reinstall showing
  * yesterday's stories as unseen is the honest reading anyway.
  */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class StoriesViewModel(
     private val authRepository: AuthRepository,
     private val storyRepository: StoryRepository,
     private val mediaRepository: MediaRepository,
+    private val followRepository: FollowRepository,
 ) : ViewModel() {
 
     /** The author ids whose stories this viewer has already opened this session. */
@@ -81,12 +84,67 @@ class StoriesViewModel(
     private val viewerIndex = MutableStateFlow<Int?>(null)
     private val viewerStoryIndex = MutableStateFlow(0)
 
-    /** All live stories, grouped into one tile per author, the viewer's own tile first. */
-    @OptIn(ExperimentalCoroutinesApi::class)
+    /**
+     * Who is signed in, as a flow rather than a getter.
+     *
+     * Both places below ask "is this tile mine", and both used to answer it by reading
+     * `authRepository.currentUid` from inside a `combine` lambda. A lambda's imperative read is not
+     * a dependency: the combine re-runs when the stories or the seen set change, and *not* when the
+     * session does, so after a sign-out the strip kept calling the previous account's tile "Your
+     * story" — with its delete affordance — until something else happened to re-trigger it. As a
+     * flow it is an input, and changing it rebuilds the strip.
+     */
+    private val uid: StateFlow<String?> = authRepository.sessionUid
+
+    /**
+     * Whose stories this viewer is allowed to see on the rail: the people I follow, plus me.
+     *
+     * The chain the brief draws — *current user → following relationships → followed user ids →
+     * their active stories → the rail* — is this flow followed by the filter in [grouped]. It is the
+     * **same** `users/{me}/following` listener the feed's Follow pill and the Following tab read, so
+     * following someone from a post row puts their story on the rail in the same frame the pill
+     * turns; three screens cannot disagree about one relationship when they are reading one listener.
+     *
+     * Keyed on [uid] through [flatMapLatest] rather than combined with it: a sign-out must *cancel*
+     * the previous account's following listener, not leave its last value retained beside a new uid —
+     * which is exactly how the previous account's stories would survive a switch.
+     *
+     * My own uid is in the set deliberately. My story belongs on the rail (the strip draws it as the
+     * share tile and skips it in the tile loop, so it appears once, not twice), and a story of mine
+     * is not something I follow myself into.
+     */
+    private val visibleAuthors: Flow<Set<String>> = uid.flatMapLatest { me ->
+        if (me == null) flowOf(emptySet())
+        else followRepository.observeFollowing(me)
+            .map { following -> following + me }
+            // A following listener that a rules change or a dropped connection killed must not take
+            // the whole rail down with it; an empty set is "nobody's stories yet", which is the
+            // honest reading and what a brand-new account sees anyway.
+            .catch { cause ->
+                Log.w("Omni", "The following set could not be read", cause)
+                emit(setOf(me))
+            }
+    }
+
+    /**
+     * The stories this viewer may see, grouped into one tile per author, newest author first.
+     *
+     * The filter is the whole of §4: `observeStories()` returns everyone's live stories, and the rail
+     * shows only the authors in [visibleAuthors]. It is done here rather than in a Firestore query
+     * because `whereIn` caps at 30 values — a viewer following more than thirty people would need the
+     * query chunked into a listener per chunk, which is more listeners and more reads than filtering
+     * one capped stream. The stream is already bounded by the repository's own limit and by the
+     * 24-hour expiry, so this is a filter over a short list, not a download of the collection.
+     */
     private val grouped: Flow<List<Pair<List<Story>, Boolean>>> =
-        combine(storyRepository.observeStories(), seen) { stories, seen ->
-            val mine = authRepository.currentUid
+        combine(
+            storyRepository.observeStories(),
+            seen,
+            uid,
+            visibleAuthors,
+        ) { stories, seen, mine, visible ->
             stories
+                .filter { it.authorId in visible }
                 .groupBy { it.authorId }
                 .map { (authorId, authorStories) ->
                     // Playback order inside a tile is oldest → newest; the strip itself is newest
@@ -97,8 +155,7 @@ class StoriesViewModel(
         }
 
     val uiState: StateFlow<StoriesUiState> =
-        combine(grouped, viewerIndex, viewerStoryIndex) { groups, openIndex, storyIndex ->
-            val uid = authRepository.currentUid
+        combine(grouped, viewerIndex, viewerStoryIndex, uid) { groups, openIndex, storyIndex, uid ->
             val tiles = groups.map { (authorStories, unseen) ->
                 val head = authorStories.last()
                 StoryTileState(
@@ -188,7 +245,9 @@ class StoriesViewModel(
         val uid = authRepository.currentUid ?: return onResult("You are signed out.")
         viewModelScope.launch {
             val imageUrl = try {
-                mediaRepository.uploadPostImage(uid, image)
+                // The story's own folder — not the post uploader. Nothing about the upload decides
+                // what this becomes; the write below does, and it writes a story.
+                mediaRepository.uploadStoryImage(uid, image)
             } catch (cause: Exception) {
                 Log.w("Omni", "Uploading the story image failed", cause)
                 return@launch onResult("The photo could not be uploaded. Check your connection.")

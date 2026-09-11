@@ -76,6 +76,8 @@ import com.example.omni.ui.settings.GoalsScreen
 import com.example.omni.ui.settings.GoalsViewModel
 import com.example.omni.ui.settings.SavedEmergenciesScreen
 import com.example.omni.ui.settings.SettingScreen
+import com.example.omni.ui.settings.VerificationScreen
+import com.example.omni.ui.settings.VerificationViewModel
 import com.example.omni.ui.sos.SosScreen
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.ui.theme.OmniTheme
@@ -125,6 +127,12 @@ private fun OmniApp() {
     // than opening one each.
     val session: SessionViewModel = viewModel(factory = AppContainer.factory())
     val user by session.user.collectAsStateWithLifecycle()
+
+    // Ownership — "is this my story", "is this my post" — as *state*, so it changes when the session
+    // does. Read straight off `authRepository.currentUid` it was a value sampled during composition
+    // that nothing invalidated, which is how account A's ownership could survive into account B's
+    // first frames. See [SessionViewModel.signedInUid].
+    val myUid by session.signedInUid.collectAsStateWithLifecycle()
 
     // Counted from the inbox rather than read off `users/{uid}.unread` — see [SessionViewModel
     // .unreadNotifications] for why the denormalised field cannot carry this yet. The message badge is
@@ -386,10 +394,17 @@ private fun OmniApp() {
             AppScreen.Feed -> {
                 val feed: FeedViewModel = viewModel(factory = AppContainer.factory())
                 val feedState by feed.uiState.collectAsStateWithLifecycle()
+                // Collected separately from `feedState` on purpose: a keystroke must recompose the
+                // search pill and its panel, not the twenty post cards under them.
+                val searchState by feed.searchState.collectAsStateWithLifecycle()
                 val stories: StoriesViewModel = viewModel(factory = AppContainer.factory())
                 val storyState by stories.uiState.collectAsStateWithLifecycle()
-                LaunchedEffect(user?.name) {
-                    feed.onAuthorName(user?.name.orEmpty())
+                LaunchedEffect(user?.name, user?.photoUrl, user?.verified) {
+                    feed.onAuthorIdentity(
+                        name = user?.name.orEmpty(),
+                        photoUrl = user?.photoUrl,
+                        verified = user?.verified == true,
+                    )
                 }
 
                 // The story surface's own state, held beside the feed's because the sheet and the
@@ -417,11 +432,16 @@ private fun OmniApp() {
                         authorName = tile?.authorName.orEmpty(),
                         stories = storyState.viewerStories,
                         storyIndex = storyState.viewerStoryIndex,
-                        isMine = tile?.authorId == container.authRepository.currentUid,
+                        isMine = tile?.authorId != null && tile.authorId == myUid,
                         onAdvance = stories::advance,
                         onRewind = stories::rewind,
                         onClose = stories::closeViewer,
                         onDelete = stories::deleteMyStory,
+                        // Same destination the strip's long press carries, from the story itself.
+                        onOpenProfile = { authorId ->
+                            profileUid = authorId
+                            screen = AppScreen.Profile
+                        },
                     )
                 } else {
                     // The sheet draws its own full-size overlay Box (the same construction the
@@ -430,7 +450,7 @@ private fun OmniApp() {
                             header = header,
                             state = feedState,
                             stories = storyState,
-                            myUid = container.authRepository.currentUid,
+                            myUid = myUid,
                             myPhotoUrl = user?.photoUrl,
                             onSegmentChange = feed::onSegmentChange,
                             onLike = feed::toggleLike,
@@ -441,10 +461,28 @@ private fun OmniApp() {
                             onLoadMore = feed::loadMore,
                             onRepost = feed::repost,
                             onOpenStory = stories::openViewer,
+                            // The story rail's own entry point. Not `onCompose`: that opens the post
+                            // composer, which is exactly why "add to your story" used to publish a
+                            // feed post.
+                            onAddStory = {
+                                storyError = null
+                                pickStoryImage.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                    ),
+                                )
+                            },
                             onOpenProfile = { authorId ->
                                 profileUid = authorId
                                 screen = AppScreen.Profile
                             },
+                            // The row's own follow, targeted at the post's author. The ViewModel
+                            // refuses my own uid, so this cannot become a follow of myself however
+                            // the row was drawn.
+                            onFollowToggle = { authorId -> feed.toggleFollow(authorId) },
+                            search = searchState,
+                            onSearchQueryChange = feed::onSearchQueryChange,
+                            onSearchDismiss = feed::clearSearch,
                             onNavigate = navigate,
                         )
 
@@ -708,66 +746,90 @@ private fun OmniApp() {
 
             // Signing out only clears the session; the gate above is what moves the user off this
             // screen, so there is one rule for where a signed-out app goes, not two.
-            AppScreen.Setting -> SettingScreen(
-                // Settings shows the full name, not the header's clamped one, and the only email in
-                // the app. Both are empty rather than mock-filled until the document arrives.
-                userName = user?.name.orEmpty(),
-                userEmail = user?.email.orEmpty(),
-                photoUrl = user?.photoUrl,
-                // Both default to on while the profile is in flight, which is what the switches have
-                // always drawn — see `User.pushNotifications`.
-                pushNotifications = user?.pushNotifications ?: true,
-                offlineCache = user?.offlineCache ?: true,
-                onNavigate = navigate,
-                onBack = { screen = lastTab },
-                onSavedEmergencies = { screen = AppScreen.SavedEmergencies },
-                onDailyGoals = { screen = AppScreen.Goals },
-                onPushNotificationsChange = { enabled ->
-                    val uid = container.authRepository.currentUid ?: return@SettingScreen
-                    scope.launch {
-                        try {
-                            container.notificationRepository.setPushEnabled(uid, enabled)
-                            // The pref is honoured by taking this device out of the send list rather
-                            // than by filtering on arrival: a token the server does not have is a push
-                            // that is never sent, which no client-side check can match for reliability.
-                            val token = FirebaseMessaging.getInstance().token.await()
-                            if (enabled) {
-                                container.notificationRepository.registerToken(uid, token)
-                            } else {
-                                container.notificationRepository.unregisterToken(uid, token)
-                            }
-                        } catch (cause: Exception) {
-                            Log.w("Omni", "The push preference could not be saved", cause)
-                        }
-                    }
-                },
-                onOfflineCacheChange = { enabled ->
-                    val uid = container.authRepository.currentUid ?: return@SettingScreen
-                    scope.launch {
-                        try {
-                            container.notificationRepository.setOfflineCacheEnabled(uid, enabled)
-                        } catch (cause: Exception) {
-                            Log.w("Omni", "The offline-cache preference could not be saved", cause)
-                        }
-                    }
-                },
-                onLogOut = {
-                    // The token goes with the session. Left behind, the next push for this account
-                    // would land on a phone somebody else is now signed into.
-                    val uid = container.authRepository.currentUid
-                    scope.launch {
-                        if (uid != null) {
+            AppScreen.Setting -> {
+                val photoUpload by session.photoUpload.collectAsStateWithLifecycle()
+
+                // The avatar picker lives here for `ComposePost`'s reason and one more: the launcher
+                // needs an Activity, which this is the only holder of (§6 rule 10). The pick is copied
+                // to the cache before it is handed on, so the upload does not depend on a read grant
+                // that dies with the process.
+                val pickAvatar = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickVisualMedia(),
+                ) { uri ->
+                    val local = uri?.let { context.copyToCache(it) }
+                    if (local != null) session.setPhoto(local)
+                }
+
+                SettingScreen(
+                    // Settings shows the full name, not the header's clamped one, and the only email in
+                    // the app. Both are empty rather than mock-filled until the document arrives.
+                    userName = user?.name.orEmpty(),
+                    userEmail = user?.email.orEmpty(),
+                    photoUrl = user?.photoUrl,
+                    photoUploading = photoUpload.inFlight,
+                    photoError = photoUpload.error,
+                    // Both default to on while the profile is in flight, which is what the switches have
+                    // always drawn — see `User.pushNotifications`.
+                    pushNotifications = user?.pushNotifications ?: true,
+                    offlineCache = user?.offlineCache ?: true,
+                    onNavigate = navigate,
+                    onBack = { screen = lastTab },
+                    onChangePhoto = {
+                        session.clearPhotoError()
+                        pickAvatar.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                    onSavedEmergencies = { screen = AppScreen.SavedEmergencies },
+                    onDailyGoals = { screen = AppScreen.Goals },
+                    onApplyForVerification = { screen = AppScreen.Verification },
+                    onPushNotificationsChange = { enabled ->
+                        val uid = container.authRepository.currentUid ?: return@SettingScreen
+                        scope.launch {
                             try {
+                                container.notificationRepository.setPushEnabled(uid, enabled)
+                                // The pref is honoured by taking this device out of the send list rather
+                                // than by filtering on arrival: a token the server does not have is a push
+                                // that is never sent, which no client-side check can match for reliability.
                                 val token = FirebaseMessaging.getInstance().token.await()
-                                container.notificationRepository.unregisterToken(uid, token)
+                                if (enabled) {
+                                    container.notificationRepository.registerToken(uid, token)
+                                } else {
+                                    container.notificationRepository.unregisterToken(uid, token)
+                                }
                             } catch (cause: Exception) {
-                                Log.w("Omni", "The FCM token could not be released on sign-out", cause)
+                                Log.w("Omni", "The push preference could not be saved", cause)
                             }
                         }
-                        container.authRepository.signOut()
-                    }
-                },
-            )
+                    },
+                    onOfflineCacheChange = { enabled ->
+                        val uid = container.authRepository.currentUid ?: return@SettingScreen
+                        scope.launch {
+                            try {
+                                container.notificationRepository.setOfflineCacheEnabled(uid, enabled)
+                            } catch (cause: Exception) {
+                                Log.w("Omni", "The offline-cache preference could not be saved", cause)
+                            }
+                        }
+                    },
+                    onLogOut = {
+                        // The token goes with the session. Left behind, the next push for this account
+                        // would land on a phone somebody else is now signed into.
+                        val uid = container.authRepository.currentUid
+                        scope.launch {
+                            if (uid != null) {
+                                try {
+                                    val token = FirebaseMessaging.getInstance().token.await()
+                                    container.notificationRepository.unregisterToken(uid, token)
+                                } catch (cause: Exception) {
+                                    Log.w("Omni", "The FCM token could not be released on sign-out", cause)
+                                }
+                            }
+                            container.authRepository.signOut()
+                        }
+                    },
+                )
+            }
 
             // The page behind Settings' "Saved Emergencies" row, and where the SOS sheet's alert pill
             // sends anyone who has not saved anybody yet. Back from either lands on Settings, which is
@@ -811,19 +873,40 @@ private fun OmniApp() {
                 )
             }
 
+            // The page behind Settings' "Apply for Verification" button — the third and last of the
+            // inner pages Settings opens, and back lands on Settings like the other two. Nothing is
+            // hoisted: the badge it applies for arrives through `user.verified` on the profile stream,
+            // which every screen that draws a badge already reads.
+            AppScreen.Verification -> {
+                val verification: VerificationViewModel = viewModel(factory = AppContainer.factory())
+                val state by verification.uiState.collectAsStateWithLifecycle()
+
+                VerificationScreen(
+                    state = state,
+                    onBack = { screen = AppScreen.Setting },
+                    onProfessionChange = verification::onProfessionChange,
+                    onLicenseNumberChange = verification::onLicenseNumberChange,
+                    onSubmit = verification::submit,
+                )
+            }
+
             // A public profile — reached from a post's or comment's avatar, and from the story
             // strip's authors. The uid travels in [profileUid]; the ViewModel is told on entry so
             // its listeners re-key, the same open-a-page pattern the guides and messages use.
             AppScreen.Profile -> {
                 val profile: ProfileViewModel = viewModel(factory = AppContainer.factory())
                 val profileState by profile.uiState.collectAsStateWithLifecycle()
-                val profileUser = profileState.user
                 val selfName = user?.name.orEmpty()
                 val selfPhoto = user?.photoUrl
 
                 // Built here in the composable scope, because the message button's lambda is not
                 // one — the same reason the messages destination builds its own above.
                 val messages: MessagesViewModel = viewModel(factory = AppContainer.factory())
+
+                // The feed's own ViewModel, not a second one: these are Activity-scoped, so this is
+                // the instance the Feed tab is already using. Opening a post's comments from here is
+                // therefore the same sheet, on the same page, rather than a copy of it.
+                val feed: FeedViewModel = viewModel(factory = AppContainer.factory())
 
                 LaunchedEffect(profileUid) {
                     profile.setProfileUid(profileUid)
@@ -833,10 +916,24 @@ private fun OmniApp() {
                     state = profileState,
                     onBack = { screen = AppScreen.Feed },
                     onFollowToggle = profile::toggleFollow,
+                    // A post on a profile opens where its actions live — the feed, with the comments
+                    // sheet already up. The sheet keys off the open id alone, so the post does not
+                    // have to be on the loaded page for this to land.
+                    onOpenPost = { post ->
+                        feed.openComments(post.id)
+                        screen = AppScreen.Feed
+                    },
                     onMessage = {
                         // The chat the messages screen already knows how to open, seeded with this
                         // user's identity — `startWith` builds the conversation idempotently.
-                        val target = profileUser ?: return@ProfileScreen
+                        //
+                        // Keyed on the *state's* uid rather than on `profileUid`, so a tap during a
+                        // page change cannot open the previous person's thread under the new
+                        // person's header. `isMe` is the second guard: the button is not drawn on my
+                        // own page, but a thread with myself is the one conversation that must never
+                        // be written, so the path that writes it checks too.
+                        val target = profileState.user ?: return@ProfileScreen
+                        if (profileState.isMe || target.uid.isBlank()) return@ProfileScreen
                         messages.startWith(
                             professional = ProfessionalRowState(
                                 uid = target.uid,
@@ -1213,7 +1310,7 @@ private const val PageFadeMillis = 200
 private enum class AppScreen {
     Splash, Onboarding, SignUp, SignIn,
     Home, Feed, Sos, Nutrition,
-    Setting, Messages, Notifications, FirstAid, ComposePost, SavedEmergencies, Goals,
+    Setting, Messages, Notifications, FirstAid, ComposePost, SavedEmergencies, Goals, Verification,
     /** A public profile — the uid it shows travels beside [MainActivity]'s `profileUid`. */
     Profile,
 }

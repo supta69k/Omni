@@ -4,7 +4,6 @@ import android.location.Location
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.EmergencyContact
 import com.example.omni.data.model.Hospital
 import com.example.omni.data.model.LatLng
@@ -222,9 +221,7 @@ class SosViewModel(
     private var routeDestinationId: String? = null
 
     /** `null` whenever nobody is signed in — the key the contact read restarts on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { if (it == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    private val uid: StateFlow<String?> = authRepository.sessionUid
 
     /**
      * The location stream — one fused listener, however many parts of the graph read it.

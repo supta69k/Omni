@@ -20,6 +20,7 @@ import com.example.omni.data.repo.FirestoreMetricsRepository
 import com.example.omni.data.repo.FirestoreNotificationRepository
 import com.example.omni.data.repo.FirestoreSosRepository
 import com.example.omni.data.repo.FirestoreUserRepository
+import com.example.omni.data.repo.FirestoreVerificationRepository
 import com.example.omni.data.repo.GuideProgressRepository
 import com.example.omni.data.repo.BundledGuideRepository
 import com.example.omni.data.repo.GuideRepository
@@ -42,6 +43,7 @@ import com.example.omni.data.repo.PreviewNotificationRepository
 import com.example.omni.data.repo.PreviewRoutingRepository
 import com.example.omni.data.repo.PreviewStepsRepository
 import com.example.omni.data.repo.PreviewUserRepository
+import com.example.omni.data.repo.PreviewVerificationRepository
 import com.example.omni.data.repo.OsrmRoutingRepository
 import com.example.omni.data.repo.RoutingRepository
 import com.example.omni.data.repo.StoryRepository
@@ -51,6 +53,7 @@ import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.SosRepository
 import com.example.omni.data.repo.StepsRepository
 import com.example.omni.data.repo.UserRepository
+import com.example.omni.data.repo.VerificationRepository
 import com.example.omni.ui.SessionViewModel
 import com.example.omni.ui.auth.SignInViewModel
 import com.example.omni.ui.auth.SignUpViewModel
@@ -64,6 +67,7 @@ import com.example.omni.ui.notifications.NotificationsViewModel
 import com.example.omni.ui.nutrition.NutritionViewModel
 import com.example.omni.ui.settings.EmergencyContactsViewModel
 import com.example.omni.ui.settings.GoalsViewModel
+import com.example.omni.ui.settings.VerificationViewModel
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
@@ -90,6 +94,7 @@ class AppContainer private constructor(
     val messageRepository: MessageRepository,
     val storyRepository: StoryRepository,
     val followRepository: FollowRepository,
+    val verificationRepository: VerificationRepository,
     private val hospitalRepositoryProvider: () -> HospitalRepository,
     private val sosRepositoryProvider: () -> SosRepository,
     private val locationRepositoryProvider: () -> LocationRepository,
@@ -158,6 +163,7 @@ class AppContainer private constructor(
                 messageRepository = FirestoreMessageRepository(firestore),
                 storyRepository = FirestoreStoryRepository(firestore),
                 followRepository = FirestoreFollowRepository(firestore),
+                verificationRepository = FirestoreVerificationRepository(firestore),
                 hospitalRepositoryProvider = { FirestoreHospitalRepository(firestore) },
                 sosRepositoryProvider = { FirestoreSosRepository(firestore) },
                 locationRepositoryProvider = { LocationRepository(appContext) },
@@ -198,6 +204,7 @@ class AppContainer private constructor(
                 messageRepository = PreviewMessageRepository(),
                 storyRepository = FirestoreStoryRepository(FirebaseFirestore.getInstance()),
                 followRepository = FirestoreFollowRepository(FirebaseFirestore.getInstance()),
+                verificationRepository = PreviewVerificationRepository(),
                 // The directory is Firestore-backed with no fake, deliberately: a preview showing the
                 // design's own two hospitals comes from SosScreen's defaults, not from here. Behind a
                 // provider so no preview ever reaches Firebase to find that out.
@@ -228,6 +235,7 @@ class AppContainer private constructor(
                         current.userRepository,
                         current.notificationRepository,
                         current.messageRepository,
+                        current.mediaRepository,
                     ) as T
                 HomeViewModel::class.java ->
                     HomeViewModel(
@@ -255,12 +263,15 @@ class AppContainer private constructor(
                         current.authRepository,
                         current.feedRepository,
                         current.mediaRepository,
+                        current.followRepository,
+                        current.userRepository,
                     ) as T
                 StoriesViewModel::class.java ->
                     StoriesViewModel(
                         current.authRepository,
                         current.storyRepository,
                         current.mediaRepository,
+                        current.followRepository,
                     ) as T
                 ProfileViewModel::class.java ->
                     ProfileViewModel(
@@ -288,6 +299,12 @@ class AppContainer private constructor(
                     GoalsViewModel(
                         current.authRepository,
                         current.userRepository,
+                    ) as T
+                VerificationViewModel::class.java ->
+                    VerificationViewModel(
+                        current.authRepository,
+                        current.userRepository,
+                        current.verificationRepository,
                     ) as T
                 NotificationsViewModel::class.java ->
                     NotificationsViewModel(

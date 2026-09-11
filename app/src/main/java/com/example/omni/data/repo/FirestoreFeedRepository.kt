@@ -7,6 +7,7 @@ import com.example.omni.data.model.toComment
 import com.example.omni.data.model.toFirestoreMap
 import com.example.omni.data.model.toPost
 import com.google.firebase.firestore.AggregateSource
+import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -47,6 +48,9 @@ class FirestoreFeedRepository(
     private val joinScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun observeFirstPage(uid: String, pageSize: Int): Flow<List<Post>> = callbackFlow {
+        // One cache per subscription: opening the feed re-reads every count, scrolling it does not.
+        // See [joinCounts] for why a snapshot after the first almost never needs the network.
+        val joined = mutableMapOf<String, Joined>()
         val registration: ListenerRegistration =
             postsQuery(pageSize).addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -55,7 +59,7 @@ class FirestoreFeedRepository(
                 }
                 if (snapshot == null) return@addSnapshotListener
                 // The join is async, so the listener hands the snapshot to a scope the flow owns.
-                launchJoin(snapshot, uid) { trySend(it) }
+                launchJoin(snapshot, uid, joined) { trySend(it) }
             }
         awaitClose { registration.remove() }
     }
@@ -75,14 +79,95 @@ class FirestoreFeedRepository(
         awaitClose { registration.remove() }
     }
 
+    /**
+     * The Following tab's query: `authorId in [chunk]`, ordered and capped, one listener per chunk.
+     *
+     * Chunked because `whereIn` accepts at most [WhereInLimit] values — following more people than
+     * that is one query too big for Firestore to run, not an error the UI should show. Each chunk is
+     * its own listener with its own limit, and the chunks are merged here: deduplicated by id (a post
+     * can only be in one chunk, but a re-delivery can), sorted by recency across all of them, and cut
+     * to [limit] — so the caller gets [limit] posts, not [limit] per chunk.
+     *
+     * The index this needs already exists: `in` uses the same composite index as `==`, and
+     * `posts(authorId ASC, createdAt DESC)` is in `firestore.indexes.json` for [observeByAuthor].
+     *
+     * Each chunk keeps its **own** join memo. Sharing one would have each chunk's `retainAll` evict
+     * the other chunks' entries on every snapshot, which would re-read every count every time.
+     *
+     * Emitted as soon as any chunk answers rather than waiting for all of them: the common case is
+     * one chunk, and in the rare multi-chunk case a list that fills in beats a blank tab.
+     */
+    override fun observeByAuthors(uid: String, authorIds: Set<String>, limit: Int): Flow<List<Post>> =
+        callbackFlow {
+            if (authorIds.isEmpty()) {
+                // Following nobody is an answer, not a query. Sent so the tab renders its empty state
+                // instead of sitting on whatever the last subscription left behind.
+                trySend(emptyList())
+                awaitClose { }
+                return@callbackFlow
+            }
+
+            val chunks = authorIds.toList().chunked(WhereInLimit)
+            // The latest page per chunk, and one memo per chunk. Both are touched from the join scope,
+            // so every read and write of them is inside `merge`'s lock.
+            val pages = MutableList<List<Post>>(chunks.size) { emptyList() }
+            val memos = List(chunks.size) { mutableMapOf<String, Joined>() }
+            val lock = Any()
+
+            val registrations = chunks.mapIndexed { index, chunk ->
+                firestore.collection(Posts)
+                    .whereIn("authorId", chunk)
+                    .orderBy("createdAt", Query.Direction.DESCENDING)
+                    .limit(limit.toLong())
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            close(error)
+                            return@addSnapshotListener
+                        }
+                        if (snapshot == null) return@addSnapshotListener
+                        joinScope.launch {
+                            val joinedPosts = try {
+                                joinCounts(snapshot, uid, memos[index])
+                            } catch (_: Exception) {
+                                snapshot.documents.mapNotNull { it.toPost() }
+                            }
+                            val merged = synchronized(lock) {
+                                pages[index] = joinedPosts
+                                pages.flatten()
+                                    .distinctBy { it.id }
+                                    .sortedByDescending { it.createdAt }
+                                    .take(limit)
+                            }
+                            trySend(merged)
+                        }
+                    }
+            }
+            awaitClose { registrations.forEach { it.remove() } }
+        }
+
+    override suspend fun countByAuthor(authorId: String): Int = try {
+        firestore.collection(Posts)
+            .whereEqualTo("authorId", authorId)
+            .count()
+            .get(AggregateSource.SERVER)
+            .await()
+            .count
+            .toInt()
+    } catch (_: Exception) {
+        // Offline there is no aggregation to run. -1 says "unknown", which the profile renders as
+        // the number of rows it actually has rather than as a confident 0.
+        -1
+    }
+
     private fun launchJoin(
         snapshot: QuerySnapshot,
         uid: String,
+        joined: MutableMap<String, Joined>,
         onReady: (List<Post>) -> Unit,
     ) {
         joinScope.launch {
             try {
-                onReady(joinLikeState(snapshot, uid))
+                onReady(joinCounts(snapshot, uid, joined))
             } catch (_: Exception) {
                 // A failed join still shows the posts; only the like state is missing.
                 onReady(snapshot.documents.mapNotNull { it.toPost() })
@@ -96,7 +181,7 @@ class FirestoreFeedRepository(
             .startAfter(cursor)
             .get()
             .await()
-        return joinLikeState(snapshot, uid)
+        return joinCounts(snapshot, uid, mutableMapOf())
     }
 
     /**
@@ -107,7 +192,7 @@ class FirestoreFeedRepository(
      * seeded from `post.get("likers")` — a field no post has ever had, because [createPost] does not
      * write one and DEVIATION 2 forbids the client touching a post's counters. So the array only
      * ever held the one uid that wrote it, unliking never removed that uid from anyone else's copy,
-     * and the count [joinLikeState] read back was "1 if I liked this, 0 otherwise" regardless of how
+     * and the count [joinCounts] read back was "1 if I liked this, 0 otherwise" regardless of how
      * many others had. One document per liker cannot drift: it is either there or it is not.
      */
     override suspend fun toggleLike(uid: String, postId: String) {
@@ -167,36 +252,126 @@ class FirestoreFeedRepository(
     }
 
     /**
-     * The per-post join: have *I* liked it, and how many have — run concurrently across the page.
+     * The per-post join: have *I* liked it, how many have, how many have commented, how many have
+     * reposted it — run concurrently across the page, and **only for posts not already joined**.
      *
-     * Two questions, two reads. Membership is my own like document; the count is a server-side
-     * `count()` aggregation over the subcollection, which bills as a single read no matter how many
-     * likers there are and, unlike the array it replaced, is the same number on every device.
+     * Five questions, five reads, each one a network round trip: membership is a document `get`, and
+     * a `count()` aggregation has no cached form at all. A twenty-post page is a hundred round trips,
+     * and this used to run them again on *every* snapshot — so scrolling, posting, or anyone else
+     * posting re-read the whole page. That is the cost that made the feed feel heavy.
      *
-     * Each read is guarded on its own so one failure costs one fact rather than the page: an
-     * aggregation needs the network (there is no cached `count()`), so offline the membership check
-     * still resolves from cache and the count falls back to the post's stored counter.
+     * [joined] is the subscription's memo: a post keeps the counts it was first joined with. That is
+     * sound because of what a `posts` snapshot can and cannot mean — likes, comments and reposts all
+     * live in *subcollections*, and writing one does not modify the post document, so a snapshot
+     * never fires because a count changed. Re-reading them on every snapshot could therefore only
+     * ever pick up another device's change by luck of timing. What it reliably did pick up was the
+     * bill. My own actions still move the numbers immediately: the ViewModel applies them optimistically.
+     *
+     * Each read is guarded on its own so one failure costs one fact rather than the page: offline the
+     * membership checks still resolve from cache and each count falls back to the post's stored
+     * counter (which DEVIATION 2 keeps at 0 — an honest "not counted" rather than a wrong number).
      */
-    private suspend fun joinLikeState(snapshot: QuerySnapshot, uid: String): List<Post> =
-        coroutineScope {
-            snapshot.documents.map { document ->
+    private suspend fun joinCounts(
+        snapshot: QuerySnapshot,
+        uid: String,
+        joined: MutableMap<String, Joined>,
+    ): List<Post> = coroutineScope {
+        val posts = snapshot.documents.mapNotNull { it.toPost() }
+
+        val fresh = posts
+            .filter { it.id !in joined }
+            .map { post ->
                 async {
-                    val post = document.toPost() ?: return@async null
-                    val likedByMe = try {
-                        likeDocument(post.id, uid).get().await().exists()
-                    } catch (_: Exception) {
-                        false
-                    }
-                    val likeCount = try {
-                        likesCollection(post.id).count().get(AggregateSource.SERVER).await()
-                            .count.toInt()
-                    } catch (_: Exception) {
-                        post.likeCount
-                    }
-                    post.copy(likedByMe = likedByMe, likeCount = likeCount)
+                    val likedByMe = exists(likeDocument(post.id, uid))
+                    val repostedByMe = exists(repostDocument(post.id, uid))
+                    post.id to Joined(
+                        likedByMe = likedByMe,
+                        likeCount = countOf(likesCollection(post.id), post.likeCount),
+                        commentCount = countOf(commentsCollection(post.id), post.commentCount),
+                        repostCount = countOf(repostsCollection(post.id), post.repostCount),
+                        repostedByMe = repostedByMe,
+                    )
                 }
-            }.awaitAll().filterNotNull()
+            }
+            .awaitAll()
+
+        joined += fresh
+        // The page shrinks as older posts scroll out of the listener's window; the memo shrinks with
+        // it, so a long session cannot accumulate entries for posts nothing will ask about again.
+        joined.keys.retainAll(posts.map { it.id }.toSet())
+
+        posts.map { post ->
+            val counts = joined[post.id] ?: return@map post
+            post.copy(
+                likedByMe = counts.likedByMe,
+                likeCount = counts.likeCount,
+                commentCount = counts.commentCount,
+                repostCount = counts.repostCount,
+                repostedByMe = counts.repostedByMe,
+            )
         }
+    }
+
+    /** What one post's subcollections said the first time this subscription asked. */
+    private data class Joined(
+        val likedByMe: Boolean,
+        val likeCount: Int,
+        val commentCount: Int,
+        val repostCount: Int,
+        val repostedByMe: Boolean,
+    )
+
+    private suspend fun exists(document: com.google.firebase.firestore.DocumentReference): Boolean =
+        try {
+            document.get().await().exists()
+        } catch (_: Exception) {
+            false
+        }
+
+    /** One server-side `count()`, falling back to [ifUnavailable] when it cannot be run. */
+    private suspend fun countOf(collection: CollectionReference, ifUnavailable: Int): Int = try {
+        collection.count().get(AggregateSource.SERVER).await().count.toInt()
+    } catch (_: Exception) {
+        ifUnavailable
+    }
+
+    /**
+     * The repost, as one batch: the quoting post and the marker that says I made it.
+     *
+     * Batched rather than written in sequence because the two facts are one fact. Written in
+     * sequence, a failure between them leaves either a repost nothing counts or a count with no
+     * repost behind it, and neither has a screen that could repair it. The marker's id is my uid, so
+     * a second tap writes the same document rather than a second one — but the read below rejects it
+     * first, so the quoting post is never duplicated either.
+     *
+     * Image reposts carry the image: the URL is already public (Cloudinary), so the new post points
+     * at the same one and the feed shows the photograph, not a description of it.
+     */
+    override suspend fun repost(uid: String, postId: String, author: PostAuthor): Boolean {
+        val marker = repostDocument(postId, uid)
+        if (marker.get().await().exists()) return false
+
+        val original = firestore.collection(Posts).document(postId).get().await().toPost()
+            ?: return false
+
+        val quote = Post(
+            id = "",
+            authorId = uid,
+            authorName = author.name,
+            authorPhotoUrl = author.photoUrl,
+            authorVerified = author.verified,
+            authorProfession = author.profession,
+            body = "🔁 ${original.authorName}:\n${original.body}",
+            imageUrl = original.imageUrl,
+        )
+
+        firestore.batch()
+            .set(firestore.collection(Posts).document(), quote.toFirestoreMap())
+            .set(marker, mapOf("createdAt" to FieldValue.serverTimestamp()))
+            .commit()
+            .await()
+        return true
+    }
 
     private fun postsQuery(pageSize: Int): Query =
         firestore.collection(Posts)
@@ -206,12 +381,25 @@ class FirestoreFeedRepository(
     private fun likesCollection(postId: String) =
         firestore.collection(Posts).document(postId).collection(Likes)
 
+    private fun commentsCollection(postId: String) =
+        firestore.collection(Posts).document(postId).collection(Comments)
+
+    private fun repostsCollection(postId: String) =
+        firestore.collection(Posts).document(postId).collection(Reposts)
+
     private fun likeDocument(postId: String, uid: String) =
         likesCollection(postId).document(uid)
+
+    private fun repostDocument(postId: String, uid: String) =
+        repostsCollection(postId).document(uid)
 
     private companion object {
         const val Posts = "posts"
         const val Likes = "likes"
         const val Comments = "comments"
+        const val Reposts = "reposts"
+
+        /** Firestore's own ceiling on the values an `in` filter accepts. Not a number we chose. */
+        const val WhereInLimit = 30
     }
 }

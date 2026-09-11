@@ -39,6 +39,7 @@ import com.example.omni.ui.components.OmniNavItem
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFeedHint
 import com.example.omni.ui.theme.OmniFeedPostBody
@@ -157,7 +158,17 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.Top,
                     ) {
                         Text(
-                            text = state.user?.name.orEmpty().ifBlank { "Someone" },
+                            // Three different facts, three different words. "Someone" for all of
+                            // them read as a real account called Someone — and, before the state
+                            // carried its own uid, it was often the *previous* profile's name that
+                            // stood here instead.
+                            text = state.user?.name.orEmpty().ifBlank {
+                                when {
+                                    state.isLoading -> "Loading…"
+                                    state.notFound -> "Account unavailable"
+                                    else -> "Someone"
+                                }
+                            },
                             style = SettingsType.ProfileName,
                             color = OmniCardInk,
                             maxLines = 1,
@@ -172,7 +183,13 @@ fun ProfileScreen(
                         }
                     }
                     Text(
-                        text = "${state.postsCount} posts · ${state.followers} followers",
+                        // Nothing rather than zeroes while the counts are in flight: "0 posts · 0
+                        // followers" is a statement, and it is usually the wrong one.
+                        text = if (state.isLoading) {
+                            "…"
+                        } else {
+                            "${state.postsCount} posts · ${state.followers} followers"
+                        },
                         style = SettingsType.ProfileEmail,
                         color = OmniFeedHint,
                         maxLines = 1,
@@ -182,8 +199,10 @@ fun ProfileScreen(
             }
 
             // The actions. Mine shows neither — my own page's settings live behind the header
-            // avatar, and following or messaging myself is not a thing the product does.
-            if (!state.isMe) {
+            // avatar, and following or messaging myself is not a thing the product does. Held back
+            // while the page loads too: `isMe` is known from the uids before the document arrives,
+            // but a deleted account has nobody to follow.
+            if (!state.isMe && !state.notFound) {
                 Spacer(Modifier.height(ActionsTop))
 
                 Row(
@@ -227,14 +246,34 @@ fun ProfileScreen(
                         )
                     }
                 }
+
+                // Why the last tap did not take. Only drawn when there is something to say, so the
+                // ordinary page keeps Figma's spacing exactly; a refused follow is worth the 20dp it
+                // borrows from the list below it, because the alternative is a button that appears
+                // to do nothing at all.
+                if (state.followError != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = state.followError,
+                        style = FeedType.Meta12,
+                        color = OmniAuthError,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                }
             }
 
             Spacer(Modifier.height(PostsTop))
 
             if (state.posts.isEmpty()) {
-                // The honest empty state, aligned to the page's own gutter.
+                // The honest empty state, aligned to the page's own gutter — and honest about
+                // *which* empty it is. One sentence for all three used to make a page still
+                // loading look exactly like a person who has never posted.
                 Text(
-                    text = "No posts yet.",
+                    text = when {
+                        state.isLoading -> "Loading posts…"
+                        state.notFound -> "This account is no longer available."
+                        else -> "No posts yet."
+                    },
                     style = FeedType.Hint16,
                     color = OmniFeedHint,
                     modifier = Modifier.padding(start = 2.dp),
@@ -315,6 +354,7 @@ private fun ProfileScreenPreview() {
     OmniTheme {
         ProfileScreen(
             state = ProfileUiState(
+                uid = "ben",
                 user = com.example.omni.data.model.User(
                     uid = "ben",
                     name = "Dr.Ben",
@@ -332,6 +372,31 @@ private fun ProfileScreenPreview() {
                 ),
                 postsCount = 1,
                 iFollowThem = true,
+                isLoading = false,
+            ),
+        )
+    }
+}
+
+/**
+ * The refused follow — the one state that cannot be reached in a preview by tapping, and the one
+ * worth looking at, since it is what every tap does until the follow rules are deployed.
+ */
+@DevicePreviews
+@Composable
+private fun ProfileScreenFollowRefusedPreview() {
+    OmniTheme {
+        ProfileScreen(
+            state = ProfileUiState(
+                uid = "ben",
+                user = com.example.omni.data.model.User(
+                    uid = "ben",
+                    name = "Dr.Ben",
+                    email = "ben@omni.health",
+                ),
+                isLoading = false,
+                followError = "That didn't go through — PERMISSION_DENIED: " +
+                    "Missing or insufficient permissions.",
             ),
         )
     }

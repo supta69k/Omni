@@ -47,6 +47,7 @@ import com.example.omni.ui.components.OmniBottomNav
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
+import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniSetApply
@@ -100,11 +101,15 @@ fun SettingScreen(
     userName: String = "Sayed Mahir",
     userEmail: String = "sayedmahir69@gmail.com",
     photoUrl: String? = null,
+    /** True while a picked photo is uploading — the row shows it on the avatar itself. */
+    photoUploading: Boolean = false,
+    /** The last upload's failure sentence, shown under the email until the next attempt. */
+    photoError: String? = null,
     pushNotifications: Boolean = true,
     offlineCache: Boolean = true,
     onNavigate: (OmniNavItem) -> Unit = {},
     onBack: () -> Unit = {},
-    onEditProfile: () -> Unit = {},
+    onChangePhoto: () -> Unit = {},
     onAccountAction: (String) -> Unit = {},
     onSavedEmergencies: () -> Unit = {},
     onDailyGoals: () -> Unit = {},
@@ -152,7 +157,9 @@ fun SettingScreen(
                     name = userName,
                     email = userEmail,
                     photoUrl = photoUrl,
-                    onEdit = onEditProfile,
+                    uploading = photoUploading,
+                    error = photoError,
+                    onChangePhoto = onChangePhoto,
                 )
 
                 Spacer(Modifier.height(AccountGroupGap))
@@ -271,13 +278,26 @@ fun SettingScreen(
  *
  * Both lines are ellipsised inside Figma's own 165 slot. A real address is routinely longer than the
  * mock's — `softWrap = false` alone would clip it mid-glyph with no sign anything was missing.
+ *
+ * **This row is where a profile photo is set** (§6 rule 10: the tap now does something). Figma draws
+ * the pencil as decoration with nowhere to go, and the app could read a `photoUrl` from fourteen
+ * places while writing it from none — so the avatar *and* the pencil open the photo picker, and the
+ * pencil's label says so. Editing a name or a date of birth stays on the "Personal Information" rows
+ * below, which already have their own taps.
+ *
+ * Two states the frame has no room for (§6 rule 8): [uploading] dims the avatar behind the
+ * background's own scrim rather than adding a spinner the design has no vocabulary for, and [error]
+ * adds a third line to the 165 slot. That line is the only thing on this page that can move the rows
+ * below it — by one text line, on a page that already scrolls, and only after a failure.
  */
 @Composable
 private fun ProfileRow(
     name: String,
     email: String,
     photoUrl: String?,
-    onEdit: () -> Unit,
+    uploading: Boolean,
+    error: String?,
+    onChangePhoto: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -290,17 +310,31 @@ private fun ProfileRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AsyncImage(
-                model = photoUrl,
-                contentDescription = null,
-                placeholder = painterResource(R.drawable.home_avatar),
-                error = painterResource(R.drawable.home_avatar),
-                fallback = painterResource(R.drawable.home_avatar),
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .size(55.dp)
-                    .clip(CircleShape),
-            )
+                    .clip(CircleShape)
+                    .clickable(enabled = !uploading, onClick = onChangePhoto),
+            ) {
+                AsyncImage(
+                    model = photoUrl,
+                    contentDescription = "Change your profile photo",
+                    placeholder = painterResource(R.drawable.home_avatar),
+                    error = painterResource(R.drawable.home_avatar),
+                    fallback = painterResource(R.drawable.home_avatar),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (uploading) {
+                    // The page's own background at half strength — the one scrim this app has, the
+                    // same trick `SleepEntrySheet` uses rather than naming a new colour.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(OmniBackground.copy(alpha = 0.6f)),
+                    )
+                }
+            }
             Column(modifier = Modifier.width(165.dp)) {
                 Text(
                     text = name,
@@ -311,22 +345,31 @@ private fun ProfileRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = email,
+                    text = if (uploading) "Uploading your photo…" else email,
                     style = SettingsType.ProfileEmail,
                     color = OmniSetEmail,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (error != null) {
+                    Text(
+                        text = error,
+                        style = SettingsType.ProfileEmail,
+                        color = OmniAuthError,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
 
         Image(
             painter = painterResource(R.drawable.ic_set_edit),
-            contentDescription = "Edit your profile",
+            contentDescription = "Change your profile photo",
             modifier = Modifier
                 .size(24.dp)
-                .clickable(onClick = onEdit),
+                .clickable(enabled = !uploading, onClick = onChangePhoto),
         )
     }
 }

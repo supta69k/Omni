@@ -1,25 +1,26 @@
 package com.example.omni.ui
 
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.User
 import com.example.omni.data.repo.AuthRepository
+import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.MessageRepository
 import com.example.omni.data.repo.NotificationRepository
 import com.example.omni.data.repo.UserRepository
 import com.example.omni.data.repo.unreadTotal
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 /**
  * Who is signed in, as one flow the whole app reads.
@@ -36,12 +37,27 @@ class SessionViewModel(
     private val userRepository: UserRepository,
     private val notificationRepository: NotificationRepository,
     private val messageRepository: MessageRepository,
+    private val mediaRepository: MediaRepository,
 ) : ViewModel() {
 
-    /** `null` whenever nobody is signed in — the key both reads below restart on. */
-    private val uid: Flow<String?> = authRepository.authState
-        .map { state -> if (state == AuthState.AUTHENTICATED) authRepository.currentUid else null }
-        .distinctUntilChanged()
+    /** `null` whenever nobody is signed in — the key every read below restarts on. */
+    private val uid: StateFlow<String?> = authRepository.sessionUid
+
+    /**
+     * The signed-in uid as state the router can hold.
+     *
+     * `AuthRepository.currentUid` is a plain getter, so reading it inside a composable samples
+     * whatever Firebase happens to hold at that instant and produces no recomposition when that
+     * changes. The router used it to decide "is this story mine" and "is this post mine", which
+     * made both answers a race: sign out on one frame and the next composition could still be
+     * drawing the old session's ownership until something unrelated invalidated it. Collected as
+     * state, ownership changes the moment the session does.
+     *
+     * Passed straight through rather than re-`stateIn`'d: the repository's own flow is already hot
+     * and always has a value, so a second stage would only add a subscription and a frame of delay
+     * behind an `initialValue` that could disagree with it.
+     */
+    val signedInUid: StateFlow<String?> = uid
 
     /**
      * `null` before the profile arrives and while signed out — which is why the screens keep their
@@ -125,7 +141,70 @@ class SessionViewModel(
             initialValue = 0,
         )
 
+    private val _photoUpload = MutableStateFlow(PhotoUploadState())
+
+    /** The settings screen's avatar state while a new profile photo is uploading. */
+    val photoUpload: StateFlow<PhotoUploadState> = _photoUpload.asStateFlow()
+
+    /**
+     * Uploads [image] and points `users/{uid}.photoUrl` at it.
+     *
+     * The app had fourteen places that *read* a profile photo and none that ever wrote one, so every
+     * avatar in it — the header, the feed composer, a post's author row — fell back to the mock
+     * `home_avatar` forever. This is the write.
+     *
+     * Nothing is echoed into local state on success: the `users/{uid}` listener above re-emits the
+     * document, [user] changes, and every screen drawing the header follows from the one source. A
+     * second copy here is how the header and the settings row start disagreeing.
+     *
+     * Posts already written keep the `authorPhotoUrl` they were denormalised with — a new photo does
+     * not rewrite history, which is why the feed prefers the live photo for the signed-in user's own
+     * posts (see `FeedScreen`'s `myPhotoUrl`).
+     */
+    fun setPhoto(image: Uri) {
+        val uid = authRepository.currentUid ?: return
+        // A second tap while the first upload is in flight would race two writes to the same field and
+        // leave whichever finished last, which from the outside looks like the picker ignoring a choice.
+        if (_photoUpload.value.inFlight) return
+
+        _photoUpload.value = PhotoUploadState(inFlight = true)
+        viewModelScope.launch {
+            try {
+                val url = mediaRepository.uploadAvatar(uid, image)
+                userRepository.updateProfile(uid, mapOf("photoUrl" to url))
+                _photoUpload.value = PhotoUploadState()
+            } catch (cause: Exception) {
+                Log.w("Omni", "The profile photo for $uid could not be saved", cause)
+                // The repository throws readable clauses ("the upload was rejected: …"), so the reason
+                // reaches the user instead of a generic failure. See `MediaRepository`.
+                _photoUpload.value = PhotoUploadState(
+                    error = cause.message?.takeIf { it.isNotBlank() }
+                        ?.let { "Your photo could not be saved — $it" }
+                        ?: "Your photo could not be saved — check your connection and try again.",
+                )
+            }
+        }
+    }
+
+    /** Dismisses the failure line, so the next attempt starts from a clean row. */
+    fun clearPhotoError() {
+        if (_photoUpload.value.error != null) _photoUpload.value = PhotoUploadState()
+    }
+
     private companion object {
         const val ListenerGraceMillis = 5_000L
     }
 }
+
+/**
+ * What the settings screen shows while a picked photo is on its way to `users/{uid}.photoUrl`.
+ *
+ * Two fields rather than a sealed hierarchy: an upload is either running or it is not, and the last
+ * one either failed or it did not. There is no third state — success is simply the avatar changing,
+ * because the profile listener re-emits and every screen drawing the header follows.
+ */
+data class PhotoUploadState(
+    val inFlight: Boolean = false,
+    /** `null` unless the last attempt failed; the sentence is already user-facing. */
+    val error: String? = null,
+)
