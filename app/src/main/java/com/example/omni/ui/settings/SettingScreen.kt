@@ -165,23 +165,35 @@ fun SettingScreen(
                 Spacer(Modifier.height(AccountGroupGap))
 
                 SettingsGroup(label = "Account Details", width = 363.dp) {
-                    // The source repeats "Personal Information" verbatim on both rows and changes only
-                    // the trailing link. Kept as drawn.
-                    AccountRows.forEach { action ->
-                        SettingsRow(
-                            title = "Personal Information",
-                            subtitle = "Name, DOB, Gender",
-                            textWidth = 164.dp,
-                            onClick = { onAccountAction(action) },
-                        ) {
-                            Text(
-                                text = action,
-                                style = SettingsType.RowAction,
-                                color = OmniSetRowAction,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                        }
+                    // First row: Personal Information (name, DOB, gender)
+                    SettingsRow(
+                        title = "Personal Information",
+                        subtitle = "Name, DOB, Gender",
+                        textWidth = 164.dp,
+                        onClick = { onAccountAction("Edit") },
+                    ) {
+                        Text(
+                            text = "Edit",
+                            style = SettingsType.RowAction,
+                            color = OmniSetRowAction,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                    // Second row: Security (email, password) — was duplicated "Personal Information"
+                    SettingsRow(
+                        title = "Security",
+                        subtitle = "Email, Password",
+                        textWidth = 164.dp,
+                        onClick = { onAccountAction("Change") },
+                    ) {
+                        Text(
+                            text = "Change",
+                            style = SettingsType.RowAction,
+                            color = OmniSetRowAction,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
                     }
                 }
 
@@ -579,7 +591,7 @@ private fun LogOutButton(onClick: () -> Unit) {
     }
 }
 
-/** The trailing link on each account row, which is the only thing separating the two. */
+/** The trailing link on each account row — kept for reference but no longer used in the loop. */
 private val AccountRows = listOf("Edit", "Change")
 
 // ---- Geometry ----------------------------------------------------------------------------------

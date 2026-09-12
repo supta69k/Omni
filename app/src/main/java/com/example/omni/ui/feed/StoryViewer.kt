@@ -1,6 +1,9 @@
 package com.example.omni.ui.feed
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -9,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +84,27 @@ fun StoryViewer(
 
     BackHandler(onBack = onClose)
 
+    // The auto-advance and the progress fill are the same coroutine, not two clocks running in
+    // parallel. The animation drives the advance: when the current segment finishes filling, the
+    // viewer moves on. Tapping left or right cancels the effect (its key, [storyIndex], has changed
+    // by the time the tap's own onAdvance has been applied), so the user never lands on the next
+    // story just as their tap arrives. When the viewer is closed the composable leaves composition
+    // and the effect is cancelled — there is no orphaned timer keeping the rail busy in the
+    // background. `Animatable` lives on the UI's own frame clock, which is the brief's "real time"
+    // requirement and not a wall-clock `delay()`.
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(storyIndex) {
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = StoryDurationMs.toInt(),
+                easing = LinearEasing,
+            ),
+        )
+        onAdvance()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -113,8 +139,26 @@ fun StoryViewer(
                             .weight(1f)
                             .height(3.dp)
                             .clip(RoundedCornerShape(percent = 50))
-                            .background(if (index <= storyIndex) OmniOnInk else StoryUnwatched),
-                    )
+                            .background(StoryUnwatched),
+                    ) {
+                        // The current segment fills 0 → 1 over the story's duration; everything
+                        // past it stays full. The fill width rides the same [Animatable] the
+                        // auto-advance is driven by, so the bar cannot finish ahead of the advance
+                        // nor the advance fire ahead of the bar.
+                        val fillFraction = when {
+                            index < storyIndex -> 1f
+                            index == storyIndex -> progress.value
+                            else -> 0f
+                        }
+                        if (fillFraction > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(fillFraction)
+                                    .background(OmniOnInk),
+                            )
+                        }
+                    }
                 }
             }
 
@@ -256,6 +300,16 @@ private fun Modifier.noRipple(onClick: () -> Unit): Modifier = clickable(
 
 /** 40% white — the unwatched segments and the placeholder avatar, over any photograph. */
 private val StoryUnwatched = Color(0x66FFFFFF)
+
+/**
+ * How long one story stays on screen before auto-advancing.
+ *
+ * 5 seconds is the Facebook / Instagram default for a single image with no caption; the photo is
+ * the content, not a slide, and a longer pause reads as "the app froze". This drives both the
+ * progress bar's fill and the auto-advance through one [Animatable], so the bar cannot finish
+ * ahead of the advance nor the advance fire ahead of the bar.
+ */
+private const val StoryDurationMs: Long = 5_000L
 
 @DevicePreviews
 @Composable

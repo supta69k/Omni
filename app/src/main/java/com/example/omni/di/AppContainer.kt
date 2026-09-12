@@ -316,6 +316,7 @@ class AppContainer private constructor(
                         current.authRepository,
                         current.userRepository,
                         current.messageRepository,
+                        current.followRepository,
                     ) as T
                 else -> throw IllegalArgumentException("No factory for ${modelClass.name} — add it here")
             }

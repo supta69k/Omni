@@ -7,7 +7,7 @@ import com.example.omni.data.model.MaxMessageLength
 import com.example.omni.data.model.Message
 import com.example.omni.data.model.MessagePageSize
 import com.example.omni.data.model.conversationIdOf
-import com.example.omni.data.model.newConversationMap
+import com.example.omni.data.model.conversationIdentityMap
 import com.example.omni.data.model.newMessageMap
 import com.example.omni.data.model.toConversation
 import com.example.omni.data.model.toMessage
@@ -39,9 +39,14 @@ interface MessageRepository {
     /**
      * Ensures the thread between these two people exists and returns its id.
      *
-     * Idempotent: the id is derived from the two uids ([conversationIdOf]), and an existing document is
-     * left exactly as it is rather than being merged over — a merge would blank the last message every
-     * time somebody opened a chat.
+     * Idempotent: the id is derived from the two uids ([conversationIdOf]), and the write is a *merge*
+     * of [com.example.omni.data.model.conversationIdentityMap] — participants and their denormalised
+     * names and photos only. A thread that already has messages in it keeps its summary and both
+     * unread counts untouched, and the two names are refreshed to whatever they are called today.
+     *
+     * It never reads the document first. See the implementation's comment: a `get` on a conversation
+     * that does not exist yet is denied by the read rule, not answered with "no such document", and
+     * that denial is what made the Message button on a public profile do nothing.
      *
      * **Throws when the two uids are the same.** `conversationIdOf(uid, uid)` is `"uid_uid"` and its
      * `participants` array holds one entry twice, which no rule and no reader expects: the thread list
@@ -58,8 +63,18 @@ interface MessageRepository {
         otherPhotoUrl: String?,
     ): String
 
-    /** Writes one message and moves the thread's summary and the recipient's unread count with it. */
-    suspend fun send(conversationId: String, senderId: String, recipientId: String, text: String)
+    /**
+     * Writes one message (text, image, or both) and moves the thread's summary and the recipient's unread count.
+     *
+     * At least one of [text] or [imageUrl] must be non-blank/non-null, otherwise the call is a no-op.
+     */
+    suspend fun send(
+        conversationId: String,
+        senderId: String,
+        recipientId: String,
+        text: String = "",
+        imageUrl: String? = null,
+    )
 
     /** Zeroes this user's half of the thread's unread counter. Their half only — never the other's. */
     suspend fun markRead(conversationId: String, uid: String)
@@ -134,14 +149,22 @@ class FirestoreMessageRepository(
     ): String {
         require(selfUid != otherUid) { "A conversation needs two different people" }
         val id = conversationIdOf(selfUid, otherUid)
-        val document = conversation(id)
 
-        // Read-then-create rather than a merged set: `newConversationMap` carries an empty
-        // `lastMessage`, so merging it over a live thread would wipe the summary the list draws.
-        val existing = document.get().await()
-        if (!existing.exists()) {
-            document.set(
-                newConversationMap(
+        // One merged write, and **no read first**.
+        //
+        // This used to `get()` the document before creating it, and that is what broke the Message
+        // button on a public profile. The read rule is
+        // `allow read: if signedIn() && request.auth.uid in resource.data.participants`, and on a
+        // document that does not exist `resource` is null — so the expression errors and the rule
+        // *denies*. The client does not get "not found", it gets PERMISSION_DENIED, and the first
+        // message between two people could therefore never be sent. Nothing was wrong with the rules;
+        // the repository was asking a question it had no right to ask.
+        //
+        // [conversationIdentityMap] is merge-safe by construction: it carries the participants and
+        // their denormalised names and photos, and none of the summary fields a merge would blank.
+        conversation(id)
+            .set(
+                conversationIdentityMap(
                     selfUid = selfUid,
                     selfName = selfName,
                     selfPhotoUrl = selfPhotoUrl,
@@ -149,8 +172,9 @@ class FirestoreMessageRepository(
                     otherName = otherName,
                     otherPhotoUrl = otherPhotoUrl,
                 ),
-            ).await()
-        }
+                SetOptions.merge(),
+            )
+            .await()
         return id
     }
 
@@ -159,16 +183,17 @@ class FirestoreMessageRepository(
         senderId: String,
         recipientId: String,
         text: String,
+        imageUrl: String?,
     ) {
         val body = text.trim().take(MaxMessageLength)
-        if (body.isEmpty()) return
+        if (body.isEmpty() && imageUrl == null) return
 
         val batch = firestore.batch()
-        batch.set(messages(conversationId).document(), newMessageMap(senderId, body))
+        batch.set(messages(conversationId).document(), newMessageMap(senderId, body, imageUrl))
         batch.set(
             conversation(conversationId),
             mapOf(
-                "lastMessage" to body,
+                "lastMessage" to if (body.isNotEmpty()) body else "📷 Photo",
                 "lastMessageAt" to FieldValue.serverTimestamp(),
                 "lastSenderId" to senderId,
                 // A nested map, not the dotted path `update()` would take: in a `set` a dot is part of
@@ -252,11 +277,14 @@ class PreviewMessageRepository : MessageRepository {
         senderId: String,
         recipientId: String,
         text: String,
+        imageUrl: String?,
     ) {
+        if (text.isBlank() && imageUrl == null) return
         messages.value = messages.value + Message(
             id = "m${messages.value.size}",
             senderId = senderId,
             text = text.trim(),
+            imageUrl = imageUrl,
             createdAt = System.currentTimeMillis(),
         )
     }

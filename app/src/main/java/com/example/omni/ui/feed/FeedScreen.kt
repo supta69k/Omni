@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -38,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -200,9 +202,17 @@ fun FeedScreen(
                 if (state.posts.isEmpty()) {
                     // The honest empty state: a feed with nothing in it yet, rather than the design's
                     // two mock posts pretending to be data.
+                    //
+                    // Two sentences, because the two tabs are empty for different reasons and the
+                    // fix is different too. Following no longer carries my own posts, so "share the
+                    // first one" would be advice that does not change what this tab shows.
                     item(key = EmptyKey, contentType = EmptyKey) {
                         Text(
-                            text = "No posts yet. Share the first one!",
+                            text = when (state.segment) {
+                                FeedSegment.Discover -> "No posts yet. Share the first one!"
+                                FeedSegment.Following ->
+                                    "Nothing here yet. Follow someone and their posts land here."
+                            },
                             style = FeedType.Hint16,
                             color = OmniFeedHint,
                             textAlign = TextAlign.Center,
@@ -329,16 +339,6 @@ fun FeedScreen(
                 },
             )
 
-            // The comments sheet, hosted in the page's own root Box so it stays inside DesignFrame's
-            // density — the same rule the sleep and meal sheets follow.
-            CommentsSheet(
-                visible = state.commentsOpenId != null,
-                comments = state.comments,
-                onDismiss = onCloseComments,
-                onSend = onSendComment,
-                onOpenProfile = onOpenProfile,
-            )
-
             OmniBottomNav(
                 selected = OmniNavItem.Feed,
                 modifier = Modifier
@@ -346,6 +346,25 @@ fun FeedScreen(
                     .navigationBarsPadding()
                     .padding(bottom = OmniNavBottomGap),
                 onSelect = onNavigate,
+            )
+
+            // The comments sheet, hosted in the page's own root Box so it stays inside DesignFrame's
+            // density — the same rule the sleep and meal sheets follow.
+            //
+            // **Drawn after the nav bar, and that ordering is the fix, not a detail.** A `Box` paints
+            // its children in declaration order, so while this sat above `OmniBottomNav` the floating
+            // nav pill — 67dp plus the system inset plus a 16dp gap, pinned to `BottomCenter` — painted
+            // straight over the sheet's composer. The field and the Send button were composed, laid out
+            // and clickable the whole time; they were simply underneath the navigation. What reached the
+            // screen was a sheet that stopped at "No comments yet", which is why there appeared to be no
+            // way to write one. `SleepEntrySheet` and `MealEntrySheet` are both declared after their
+            // screen's nav for this reason; the feed was the one page with the order inverted.
+            CommentsSheet(
+                visible = state.commentsOpenId != null,
+                comments = state.comments,
+                onDismiss = onCloseComments,
+                onSend = onSendComment,
+                onOpenProfile = onOpenProfile,
             )
         }
     }
@@ -658,14 +677,13 @@ private fun StoryStrip(
         horizontalArrangement = Arrangement.spacedBy(11.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // My tile: the design's own share tile, its caption switched by whether a story of mine
-        // exists — "Share Your healthy meal" was always the mock's stand-in for "your story".
+        // My tile: the design's own share tile, now with two separate actions (§6). The avatar
+        // opens the viewer when there is a story; the bottom "+ Add to your story" strip always
+        // opens the upload flow.
         ShareMealTile(
             hasStory = myTile != null,
             photoUrl = myPhotoUrl,
-            onClick = {
-                if (myTile != null) onOpenViewer(myTileIndex) else onAddStory()
-            },
+            onOpenViewer = { onOpenViewer(myTileIndex) },
             onAddStory = onAddStory,
         )
         tiles.forEachIndexed { index, tile ->
@@ -699,9 +717,14 @@ private fun StoryTile(
             .height(105.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(OmniFeedSurface)
+            // The active-story ring (§8). A *gradient* sweep rather than a flat stroke: the palette's
+            // lavender into the auth pages' carb violet, top-left to bottom-right, which is the
+            // "polished, not a plain border" the brief asked for and reads as a ring even at 93dp.
+            // A watched tile drops to a 1dp flat hint grey — the ring is the signal, so it has to be
+            // visibly *different* rather than the same shape in another colour.
             .border(
                 width = if (tile.unseen) UnseenRing else SeenRing,
-                color = if (tile.unseen) OmniAuthHeading else OmniFeedHint,
+                brush = if (tile.unseen) StoryRingBrush else SolidColor(OmniFeedHint),
                 shape = RoundedCornerShape(10.dp),
             )
             .combinedClickable(onClick = onClick, onLongClick = onLongPress),
@@ -750,102 +773,126 @@ private fun StoryTile(
 }
 
 /**
- * The first tile — a 46 avatar with a plus button and caption stacked under it.
+ * The first tile — the viewer's own story area.
  *
- * With a story of mine already live the tile's own tap opens it, so the plus moves onto the avatar
- * as a badge and keeps [onAddStory] reachable: one story a day is not what "add to your story"
- * means, and the design has no second slot to put a second entry point in.
+ * Two distinct actions, two distinct tap targets (§6):
+ *
+ * 1. **Avatar / story preview** (top half): opens the viewer on my tile. With no story, this slot
+ *    is the placeholder asset and is **not** a tap target — there is nothing to view yet.
+ * 2. **"+ Add to your story"** (bottom strip): **always** opens the upload flow. The plus glyph
+ *    and the caption live together as one button, so the affordance is unmistakable whether or
+ *    not a story of mine is already live.
+ *
+ * The previous design bound the whole tile to one action and replaced it with the other when a
+ * story appeared: tapping the avatar then opened my existing story instead of letting me add a
+ * new one. The corner plus badge was a workaround, not a fix — it was easy to miss and the rest
+ * of the tile still opened the viewer. Two surfaces, two actions, no ambiguity.
  */
 @Composable
 private fun ShareMealTile(
     hasStory: Boolean,
     photoUrl: String?,
-    onClick: () -> Unit,
-    onAddStory: () -> Unit = onClick,
+    onOpenViewer: () -> Unit,
+    onAddStory: () -> Unit,
 ) {
     Box(
         modifier = Modifier
-            .width(93.dp)
-            .height(105.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(OmniFeedSurface)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .width(ShareTileWidth)
+            .height(ShareTileHeight)
+            .clip(RoundedCornerShape(ShareTileCorner))
+            .background(OmniFeedSurface),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        // `Meal Image and Text` is 81 x 92 inside the 93 x 105 tile: 6 a side, 6.5 at the top.
-        Box(
-            modifier = Modifier
-                .width(81.dp)
-                .height(92.dp),
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // The tile's avatar: the real photo when the profile has one, the design's own asset
-            // otherwise — the placeholder that cannot fail to load.
-            if (photoUrl != null) {
-                coil3.compose.AsyncImage(
-                    model = photoUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(x = 0.5.dp)
-                        .size(46.dp)
-                        .clip(CircleShape),
-                )
-            } else {
-                Image(
-                    painter = painterResource(R.drawable.feed_story_share_avatar),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .offset(x = 0.5.dp)
-                        .size(46.dp)
-                        .clip(CircleShape),
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(y = 38.dp)
-                    .width(81.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (!hasStory) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_feed_share_plus),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                Text(
-                    text = if (hasStory) "Your story" else "Add to your story",
-                    style = FeedType.StoryCaption,
-                    color = OmniFeedVerified,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        // The second entry point, drawn only when the tile's own tap is spoken for. It lives in the
-        // tile's top-right corner, clear of both the 46 avatar and the caption, so the design's
-        // arithmetic below is untouched.
-        if (hasStory) {
+            // The avatar strip. When there is a story, tapping it opens the viewer; when there is
+            // not, the placeholder asset is decorative only — the bottom strip is the only action.
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(28.dp)
-                    .clip(CircleShape)
+                    .fillMaxWidth()
+                    .height(ShareAvatarStrip)
+                    .let { base ->
+                        if (hasStory) base.clickable(onClick = onOpenViewer) else base
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                // The same gradient ring the other tiles wear (§8), drawn round *my* avatar only
+                // while I have a live story. My own tile has no seen/unseen state — [StoriesViewModel]
+                // deliberately does not mark my tile watched — so here the ring means exactly one
+                // thing: "your story is up". It disappears on its own when the story expires,
+                // because `hasStory` is the presence of a tile on the rail and the rail only
+                // carries stories whose `expiresAt` is still ahead of now.
+                Box(
+                    modifier = Modifier
+                        .size(ShareRingSize)
+                        .let { base ->
+                            if (hasStory) {
+                                base.border(
+                                    width = UnseenRing,
+                                    brush = StoryRingBrush,
+                                    shape = CircleShape,
+                                )
+                            } else {
+                                base
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (photoUrl != null) {
+                        coil3.compose.AsyncImage(
+                            model = photoUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(ShareAvatarSize)
+                                .clip(CircleShape),
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(R.drawable.feed_story_share_avatar),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(ShareAvatarSize)
+                                .clip(CircleShape),
+                        )
+                    }
+                }
+            }
+
+            // The "Add to your story" button. **Always** clickable, **always** carrying the plus
+            // glyph — adding a new story is what the user means when they tap here, regardless of
+            // what is already on the rail.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
                     .clickable(onClick = onAddStory),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_feed_share_plus),
-                    contentDescription = "Add to your story",
-                    modifier = Modifier.size(16.dp),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(
+                        ShareAddGap,
+                        Alignment.CenterHorizontally,
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_feed_share_plus),
+                        contentDescription = null,
+                        modifier = Modifier.size(ShareAddIconSize),
+                    )
+                    Text(
+                        text = "Add to your story",
+                        style = FeedType.StoryCaption,
+                        color = OmniFeedVerified,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
         }
     }
@@ -1066,41 +1113,43 @@ private fun FeedPost(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(40.dp),
+                horizontalArrangement = Arrangement.spacedBy(ActionGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(30.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ActionPill(
-                        text = compactCount(post.likeCount),
-                        icon = R.drawable.ic_feed_heart_add,
-                        contentDescription = if (post.likedByMe) "Unlike" else "Like",
-                        emphasized = post.likedByMe,
-                        onClick = onLike,
-                    )
-                    ActionPill(
-                        text = compactCount(post.commentCount),
-                        icon = R.drawable.ic_feed_comment,
-                        contentDescription = "Comment",
-                        emphasized = false,
-                        onClick = onComment,
-                    )
-                    ActionPill(
-                        text = compactCount(post.repostCount),
-                        icon = R.drawable.ic_feed_repost,
-                        contentDescription = if (post.repostedByMe) "Reposted" else "Repost",
-                        emphasized = post.repostedByMe,
-                        onClick = onRepost,
-                    )
-                }
-                Image(
-                    painter = painterResource(R.drawable.ic_feed_share),
+                ActionPill(
+                    text = compactCount(post.likeCount),
+                    icon = R.drawable.ic_feed_heart_add,
+                    contentDescription = if (post.likedByMe) "Unlike" else "Like",
+                    emphasized = post.likedByMe,
+                    onClick = onLike,
+                )
+                ActionPill(
+                    text = compactCount(post.commentCount),
+                    icon = R.drawable.ic_feed_comment,
+                    contentDescription = "Comment",
+                    emphasized = false,
+                    onClick = onComment,
+                )
+                ActionPill(
+                    text = compactCount(post.repostCount),
+                    icon = R.drawable.ic_feed_repost,
+                    contentDescription = if (post.repostedByMe) "Reposted" else "Repost",
+                    emphasized = post.repostedByMe,
+                    onClick = onRepost,
+                )
+
+                // Share is pushed to the trailing edge and given the same pill as the other three, so
+                // the row reads `Like | Comment | Repost | Share` rather than trailing off into a bare
+                // icon the eye has to find. Weight rather than a fixed gap: it absorbs whatever width
+                // the device has, which is what keeps the four pills from colliding on a narrow one.
+                Spacer(Modifier.weight(1f))
+
+                ActionPill(
+                    text = null,
+                    icon = R.drawable.ic_feed_share,
                     contentDescription = "Share",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable(onClick = onShare),
+                    emphasized = false,
+                    onClick = onShare,
                 )
             }
         }
@@ -1148,24 +1197,44 @@ private fun FollowPill(following: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * An 86 x 39 grey pill holding a count and its 20dp icon, 4 apart — now a button.
+ * One button in a post's action row: a grey pill holding a 20dp icon and, unless it is Share, a count
+ * beside it.
  *
- * [emphasized] is the liked state: the pill stays the design's grey (the design never drew a liked
- * variant) but the count and icon tint to the SOS red, the palette's one emphasis colour, so the
- * state is visible without inventing a new surface.
+ * **This is a deliberate divergence from Figma, and it is a fix rather than a restyle.**
+ * `UI_ARCHITECTURE.md` §6 rule 9 — divergence is allowed, silent divergence is not.
+ *
+ * The design draws a fixed 86 x 39 pill. Painted literally, three of them plus a bare 20dp Share icon
+ * measured 378dp inside a 383dp content width (86 x 3 = 258, + 30 x 2 = 60, + 40 + 20 = 378) — 5dp of
+ * slack, and a pill carrying "0" put ~36dp of content into its 86. On the device this reads as
+ * oversized, over-spaced pills that wrap off the right edge: "Like/Comment/Repost buttons visually
+ * oversized or incorrectly proportioned, count not aligned with icon". The fixed width could not be
+ * right for both "0" and "1.2k" anyway, which is why it is now a minimum instead of a width.
+ *
+ * So: [ActionHeight] stays 39 and the radius stays `ActionHeight / 2` — the design's own height, so the
+ * row still measures what it always did vertically. The width becomes [ActionMinWidth] as a floor and
+ * wraps above it, the two have [ActionIconGap] between them rather than 4, and the count now sits
+ * **after** its icon reading left-to-right. The 0.5dp `offset` that nudged the pair off the pill's
+ * centre is gone with it: §9 forbids padding out a misalignment with an offset, and once the Row is
+ * genuinely centred it has nothing left to hide.
+ *
+ * [text] is `null` for Share, which has no count. It keeps the same pill — an equal-height button in
+ * the row rather than a bare glyph — and [ActionMinWidth] keeps it from collapsing to icon-plus-padding
+ * beside three wider siblings.
+ *
+ * [emphasized] is the liked/reposted state: the pill stays the design's grey (the design never drew an
+ * active variant) but the count and icon tint to the palette's emphasis, and the fill inverts to ink —
+ * the same inversion the bottom bar's selected pill makes, which the app has already taught the user to
+ * read as "this one is on". That was added after users reported likes "not working" while the writes
+ * were landing fine: a tint alone on a grey pill is invisible at arm's length.
  */
 @Composable
 private fun ActionPill(
-    text: String,
+    text: String?,
     icon: Int,
     contentDescription: String,
     emphasized: Boolean,
     onClick: () -> Unit,
 ) {
-    // The liked state was once a red tint alone, and on an 86×39 pill that was invisible at arm's
-    // length — likes were landing fine while users reported them "not working". The emphasis now
-    // fills the pill as well: grey → ink, the same inversion the bottom bar's selected pill makes,
-    // which the app has already taught the user to read as "this one is on".
     val fill by animateColorAsState(
         targetValue = if (emphasized) OmniInk else OmniFeedSurface,
         label = "pillFill",
@@ -1177,34 +1246,74 @@ private fun ActionPill(
 
     Box(
         modifier = Modifier
-            .width(86.dp)
-            .height(39.dp)
-            .clip(RoundedCornerShape(19.dp))
+            .widthIn(min = ActionMinWidth)
+            .height(ActionHeight)
+            .clip(RoundedCornerShape(ActionHeight / 2))
             .background(fill)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(horizontal = ActionPaddingH),
+        // The whole pill is the touch target: `clickable` sits above the padding, so the 39dp height
+        // and the full width are tappable rather than just the glyph.
         contentAlignment = Alignment.Center,
     ) {
         Row(
-            modifier = Modifier.offset(x = 0.5.dp, y = 0.5.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(ActionIconGap, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = text,
-                style = FeedType.ActionValue,
-                color = label,
-                maxLines = 1,
-                softWrap = false,
-            )
             Image(
                 painter = painterResource(icon),
                 contentDescription = contentDescription,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(ActionIconSize),
                 colorFilter = ColorFilter.tint(label),
             )
+            if (text != null) {
+                Text(
+                    text = text,
+                    style = FeedType.ActionValue,
+                    color = label,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
         }
     }
 }
+
+// ---- The post action row's own geometry ----------------------------------------------------------
+//
+// Figma draws four 86 x 39 pills 30 apart (`Post Card`'s action row). Painted literally that is
+// 86 x 3 + 30 x 2 + 40 + 20 = 378dp inside the 383dp a post card actually has to spend — 5dp of slack
+// for four buttons, which is the "oversized / incorrectly proportioned / clipped" the device showed.
+// The height is the design's and is kept; the width is the part that could never be right for both
+// "0" and "1.2k", so it becomes a floor the pill grows past instead. `UI_ARCHITECTURE.md` §6 rule 9:
+// the divergence is recorded here and in [ActionPill]'s KDoc rather than made quietly.
+
+/** Figma's pill height, unchanged — the row still measures what it always did vertically. */
+private val ActionHeight = 39.dp
+
+/**
+ * The floor, not the width. 56 is the widest a pill gets from its own content at the low end —
+ * 20 (icon) + 6 (gap) + ~14 ("99" at 16sp) + 8 x 2 (padding) = 56 — so the three counted pills sit
+ * flush with their content and only stretch for a count wide enough to need it, and Share (which has
+ * no count, so 36 of content) is held to the same button size rather than shrinking to a bare glyph.
+ */
+private val ActionMinWidth = 56.dp
+
+/** Inside each pill. 8 rather than 12: the minimum width already supplies most of the breathing room. */
+private val ActionPaddingH = 8.dp
+
+/** Between an icon and the count beside it — 6, where the fixed-width pill used 4. */
+private val ActionIconGap = 6.dp
+
+/** Figma's icon size, unchanged. */
+private val ActionIconSize = 20.dp
+
+/**
+ * Between the three counted pills. 8 where Figma has 30: the design's gap was sized for a row that
+ * overflowed, and at 8 the four buttons plus the `weight(1f)` before Share fit any width from a 320dp
+ * phone up with the leftover falling into the spacer rather than off the right edge.
+ */
+private val ActionGap = 8.dp
 
 // ---- The story strip's own geometry ----------------------------------------------------------------
 //
@@ -1232,6 +1341,58 @@ private val UnseenRing = 2.dp
 
 /** The seen ring — 1dp of the feed's own hint grey. */
 private val SeenRing = 1.dp
+
+/**
+ * The active-story ring (§8) — a diagonal sweep of the palette's own two accents.
+ *
+ * `OmniAuthHeading` (#8D84F9, the auth pages' lavender) into `OmniNutriChipCarbs` (#B184E1, the
+ * nutrition chips' violet) and back, top-left to bottom-right. Both are already in the palette, so
+ * this invents no colour; the gradient is what makes it read as a *ring* rather than as a coloured
+ * stroke, which is the "polished, not like a plain border" the brief asked for. The third stop
+ * returns to the lavender so the sweep closes rather than ending abruptly at the bottom corner.
+ *
+ * A watched tile drops to a flat 1dp hint grey ([SeenRing]) — the ring's presence is the signal, so
+ * the seen state has to be a visibly different shape rather than the same one in another colour.
+ */
+private val StoryRingBrush = Brush.linearGradient(
+    listOf(OmniAuthHeading, OmniNutriChipCarbs, OmniAuthHeading),
+)
+
+// ---- The "Add to your story" tile's own geometry --------------------------------------------------
+//
+// Same 93 x 105 outline the design draws for the share tile, but the interior is now two strips:
+// an avatar strip on top (52dp tall, fitting the existing 46dp avatar + 6dp breathing room) and
+// the always-clickable "Add to your story" strip below it. The old geometry put a 46 avatar on top
+// and a centred caption-and-plus on top of it; the new one separates them so the two actions
+// (viewer vs. add) cannot be confused for one (§6).
+
+/** Tile outer size — same as [StoryTile]'s, so the rail's spacing reads uniform. */
+private val ShareTileWidth = 93.dp
+private val ShareTileHeight = 105.dp
+
+/** 10dp radius — same as the other tiles. */
+private val ShareTileCorner = 10.dp
+
+/**
+ * 58 = the 56dp ring plus a dp either side.
+ *
+ * It was 52 (46 avatar + 6) before the ring existed; the ring needs its own room or it would sit
+ * flush against the tile's top edge. The 6dp comes out of the bottom strip's `weight(1f)`, which
+ * still has 47dp for a 14dp glyph and a 12.5dp caption line.
+ */
+private val ShareAvatarStrip = 58.dp
+
+/** The avatar's own size — unchanged. */
+private val ShareAvatarSize = 46.dp
+
+/** 56 = 46 avatar + 2 × 2dp stroke + 2 × 3dp gap, so the ring reads as a ring and not as a rim. */
+private val ShareRingSize = 56.dp
+
+/** Between the plus glyph and the caption text in the bottom strip. */
+private val ShareAddGap = 4.dp
+
+/** The plus glyph's own size in the bottom strip. */
+private val ShareAddIconSize = 14.dp
 
 /** 45% black — the name plate's scrim over any photograph. */
 private val NamePlateScrim = androidx.compose.ui.graphics.Color(0x73000000)

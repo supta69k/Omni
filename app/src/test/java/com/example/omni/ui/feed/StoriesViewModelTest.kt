@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -186,19 +187,138 @@ class StoriesViewModelTest {
         assertFalse(model.uiState.value.mine)
     }
 
-    /** A tile's stories play oldest first, and the strip itself is newest author first. */
+    /**
+     * Opening the viewer on a tile with multiple stories shows them in oldest-first order.
+     *
+     * The strip's order is *newest author first* (one tile per author); the viewer's playback order
+     * inside one tile is oldest first — the chronological order a human reads a series in.
+     */
     @Test
-    fun `the rail is ordered newest author first`() = runTest(dispatcher) {
+    fun `opening the viewer plays one author's stories oldest first`() = runTest(dispatcher) {
         stories.server.value = listOf(
-            story("s-ben", Ben, createdAt = 10L),
-            story("s-carla", Carla, createdAt = 50L),
+            story("s-ben-2", Ben, createdAt = 20L),
+            story("s-ben-1", Ben, createdAt = 10L),
         )
-        follows.set(Me, setOf(Ben, Carla))
+        follows.set(Me, setOf(Ben))
         val model = viewModel()
         open(model)
         advanceUntilIdle()
 
-        assertEquals(listOf(Carla, Ben), model.uiState.value.tiles.map { it.authorId })
+        val benIndex = model.uiState.value.tiles.indexOfFirst { it.authorId == Ben }
+        model.openViewer(benIndex)
+        advanceUntilIdle()
+
+        val state = model.uiState.value
+        assertEquals(0, state.viewerStoryIndex)
+        assertEquals(listOf("s-ben-1", "s-ben-2"), state.viewerStories.map { it.id })
+    }
+
+    /**
+     * The viewer auto-advances through a tile's stories, then closes (§11).
+     *
+     * The unit test exercises the ViewModel's own `advance` contract: each call moves the viewer
+     * one story forward inside the same tile, the next call moves it onto the next tile, and the
+     * call after the last tile closes the viewer. The time-based auto-progression in
+     * [StoryViewer] uses the same `advance` to drive its progress bar, so this is the behaviour the
+     * timer triggers; whether it fires every five seconds or on a tap, the result is the same.
+     */
+    @Test
+    fun `advance walks the stories inside one tile then moves to the next tile`() =
+        runTest(dispatcher) {
+            // Ben is the newest author, so Ben is tile 0 and Carla is tile 1 — the rail is
+            // newest-author-first and `advance` walks it in that order, which is what puts Carla
+            // *after* Ben here.
+            stories.server.value = listOf(
+                story("s-ben-1", Ben, createdAt = 30L),
+                story("s-ben-2", Ben, createdAt = 40L),
+                story("s-carla-1", Carla, createdAt = 10L),
+            )
+            follows.set(Me, setOf(Ben, Carla))
+            val model = viewModel()
+            open(model)
+            advanceUntilIdle()
+
+            val benIndex = model.uiState.value.tiles.indexOfFirst { it.authorId == Ben }
+            assertEquals("Ben is the newest author, so Ben is the rail's first tile", 0, benIndex)
+            model.openViewer(benIndex)
+            advanceUntilIdle()
+            assertEquals(0, model.uiState.value.viewerStoryIndex)
+
+            // Advance inside Ben's tile: 1 → 2.
+            model.advance()
+            advanceUntilIdle()
+            assertEquals(1, model.uiState.value.viewerStoryIndex)
+
+            // Advance past Ben's tile: lands on Carla's first (and only) story.
+            model.advance()
+            advanceUntilIdle()
+            assertEquals(Carla, model.uiState.value.tiles[model.uiState.value.viewerIndex ?: -1].authorId)
+            assertEquals(0, model.uiState.value.viewerStoryIndex)
+
+            // Advance past Carla's tile closes the viewer.
+            model.advance()
+            advanceUntilIdle()
+            assertNull(model.uiState.value.viewerIndex)
+        }
+
+    /**
+     * The auto-advance closes the viewer when the strip is exhausted.
+     *
+     * This is the "end of the last story" path: a viewer on the last tile, on the last story, that
+     * runs out the timer is the same shape as the user tapping forward one too many times — both
+     * land on `viewerIndex == null`. The brief calls it out by name.
+     */
+    @Test
+    fun `advance closes the viewer on the strip's last story`() = runTest(dispatcher) {
+        stories.server.value = listOf(story("s-ben", Ben))
+        follows.set(Me, setOf(Ben))
+        val model = viewModel()
+        open(model)
+        advanceUntilIdle()
+
+        model.openViewer(0)
+        advanceUntilIdle()
+
+        model.advance()
+        advanceUntilIdle()
+
+        assertNull("Past the last story, the viewer closes", model.uiState.value.viewerIndex)
+    }
+
+    /**
+     * Opening a tile marks it seen; the ring has gone from accent to grey by the next emission.
+     *
+     * The brief asks for the ring to disappear the moment the tile is entered (the FB convention).
+     * Marking happens inside [openViewer], not on close, which is what makes the gesture honest.
+     */
+    @Test
+    fun `opening a tile marks it seen in the same beat`() = runTest(dispatcher) {
+        stories.server.value = listOf(story("s-ben", Ben))
+        follows.set(Me, setOf(Ben))
+        val model = viewModel()
+        open(model)
+        advanceUntilIdle()
+        assertTrue(model.uiState.value.tiles.single().unseen)
+
+        model.openViewer(0)
+        advanceUntilIdle()
+
+        assertFalse(model.uiState.value.tiles.single().unseen)
+    }
+
+    /** My own tile is never marked seen — I authored it, I have not "watched" it. */
+    @Test
+    fun `opening my own tile does not change its seen flag`() = runTest(dispatcher) {
+        stories.server.value = listOf(story("s-mine", Me))
+        val model = viewModel()
+        open(model)
+        advanceUntilIdle()
+        assertFalse(model.uiState.value.tiles.single().unseen)
+
+        model.openViewer(0)
+        advanceUntilIdle()
+
+        assertFalse(model.uiState.value.tiles.single().unseen)
     }
 
     private companion object {

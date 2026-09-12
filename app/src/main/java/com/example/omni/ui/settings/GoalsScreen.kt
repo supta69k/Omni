@@ -220,7 +220,11 @@ private fun GoalCard(
                 onClick = { onStep(row.kind, false) },
             )
 
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.weight(1f),
+            ) {
                 Text(
                     text = row.value,
                     style = HomeType.StepsValue,

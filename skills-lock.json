@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "skills": {
+    "android-development": {
+      "source": "rinkuniks/android-claude-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "6b3726dc1cc6749cf0ee1ee33e2c2f5a67e7a70b0c9ddcba101aad9f06264e40"
+    },
+    "modern-jetpack-compose": {
+      "source": "anhvt52/jetpack-compose-skills",
+      "sourceType": "github",
+      "skillPath": "modern-jetpack-compose/SKILL.md",
+      "computedHash": "daad25734a30a73df7fccfd26b8f80ee9c3db0d4b21fd457af270cc499a7bf71"
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "computedHash": "004f340ae65811095d6a9bb0a759c87d0a8085c5e705dbb019b011626293d2e9"
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "computedHash": "a2750dfbaed1690da73b120254892c4f926b4576cb82eb16fc877783941fe39b"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/verification-before-completion/SKILL.md",
+      "computedHash": "b529822bdac4b197b180fe12225cff86b930b65910435103c10622df7f041651"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "computedHash": "27c75044e444a4fc68798c3f799dc23eaff3a6bfabff32e6ad75bb20f881c094"
+    }
+  }
+}

@@ -432,6 +432,83 @@ describe('conversations and their messages', () => {
     await assertSucceeds(setDoc(doc(alice, `conversations/${ALICE}_${BOB}`), thread()))
   })
 
+  /**
+   * `conversationIdentityMap` — exactly what `FirestoreMessageRepository.openConversation` writes.
+   *
+   * It carries the pair and their denormalised names and photos, and **none** of the summary fields
+   * (`lastMessage`, `lastMessageAt`, `unread`), which is what makes it safe to merge onto a thread
+   * that already has traffic in it.
+   */
+  const identity = (self, other) => ({
+    participants: [self, other].sort(),
+    participantNames: { [self]: 'Self', [other]: 'Other' },
+    participantPhotos: { [self]: null, [other]: null },
+  })
+
+  /**
+   * The Message button on a public profile, first tap — the thread document does not exist yet.
+   *
+   * This is the regression that broke user-to-user messaging on a real device. The repository used
+   * to `get()` the document before writing it, and `allow read: if … request.auth.uid in
+   * resource.data.participants` **denies** on a document that does not exist, because `resource` is
+   * null and the expression errors. The client saw PERMISSION_DENIED rather than "not found", so the
+   * first message between any two people could never be sent. The rules were right; the read was the
+   * bug. This asserts the merged write alone — no read — satisfies `allow create`.
+   */
+  it('lets the Message button open a brand-new thread with one merged write', async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(alice, `conversations/${ALICE}_${BOB}`),
+        identity(ALICE, BOB),
+        { merge: true },
+      ),
+    )
+  })
+
+  /**
+   * The same tap on a thread that already exists — re-entering a conversation you have history in.
+   *
+   * The merge must land on `allow update`, whose second clause requires `participants` to come back
+   * byte-identical. `conversationIdentityMap` sorts the pair, so both sides of a conversation
+   * produce the same array regardless of who is calling — this is what proves that, from Bob's side
+   * rather than Alice's.
+   */
+  it('lets the other participant re-open an existing thread without changing the pair', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), `conversations/${ALICE}_${BOB}`),
+        thread({ lastMessage: 'already talking', unread: { [ALICE]: 0, [BOB]: 3 } }),
+      )
+    })
+
+    await assertSucceeds(
+      setDoc(
+        doc(bob, `conversations/${ALICE}_${BOB}`),
+        identity(BOB, ALICE),
+        { merge: true },
+      ),
+    )
+  })
+
+  /**
+   * And the abuse of the same write. A merge that reorders or rewrites `participants` is still an
+   * update, and the rule compares the arrays rather than their contents — so Carol cannot merge
+   * herself into a thread she is not in, and neither participant can drop the other out of one.
+   */
+  it('refuses a merged write that rewrites the participants of an existing thread', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `conversations/${ALICE}_${BOB}`), thread())
+    })
+
+    await assertFails(
+      setDoc(
+        doc(alice, `conversations/${ALICE}_${BOB}`),
+        { participants: [ALICE, CAROL] },
+        { merge: true },
+      ),
+    )
+  })
+
   it('refuses opening a thread the caller is not in', async () => {
     await assertFails(
       setDoc(doc(carol, `conversations/${ALICE}_${BOB}`), thread()),

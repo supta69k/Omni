@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.Image
@@ -135,6 +136,14 @@ private fun StoryPanel(
             .noRipple(onClick = {})
             .navigationBarsPadding()
             .imePadding()
+            // The sheet scrolls (§12). Its resting height is about 460dp — grab, heading, a 255dp
+            // preview, the caption field and the publish button — and `imePadding` lifts the whole
+            // thing by the keyboard's ~300dp the moment the caption is focused. On a 415 x 900
+            // artboard that pushed the heading off the top and the publish button behind the IME,
+            // which is the "visually broken" layout the brief describes. Scrolling is the fix that
+            // does not shrink the preview: the column measures its children unbounded and clamps
+            // itself to whatever height is left, so on a tall screen nothing moves at all.
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = SheetPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -154,6 +163,9 @@ private fun StoryPanel(
             style = HomeType.SectionTitle,
             color = OmniSectionTitle,
             maxLines = 1,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
         )
 
         Spacer(Modifier.height(PhotoTop))
@@ -172,12 +184,29 @@ private fun StoryPanel(
                     .clickable(onClick = onPickImage),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "Tap to choose a photo",
-                    style = FeedType.Hint16,
-                    color = OmniFeedHint,
-                    maxLines = 1,
-                )
+                // Glyph over label, both centred on the tile's own axis (§12). The plus used to be
+                // absent entirely and the label sat alone as a single non-wrapping line, so a wider
+                // font scale clipped it at both gutters. Now it wraps to two centred lines instead,
+                // and the whole 255dp tile is the touch target rather than the text's own bounds.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(PickerGlyphGap),
+                    modifier = Modifier.padding(horizontal = PickerLabelInset),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_feed_share_plus),
+                        contentDescription = null,
+                        modifier = Modifier.size(PickerGlyphSize),
+                    )
+                    Text(
+                        text = "Tap to choose a photo",
+                        style = FeedType.Hint16,
+                        color = OmniFeedHint,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         } else {
             Box {
@@ -229,11 +258,26 @@ private fun StoryPanel(
                 singleLine = true,
                 textStyle = FeedType.Hint16.copy(color = OmniInk),
                 cursorBrush = SolidColor(OmniInk),
+                // Placeholder and field in *one* box (§12), the fix [CommentsSheet] already carries.
+                // They were siblings here too, with the field boxed at `width(0.dp)`: the hint drew,
+                // so the caption row looked present, while the thing you type into had no width and
+                // therefore no caret and no hit area.
                 decorationBox = { inner ->
-                    if (caption.isEmpty()) {
-                        Text("Add a caption… (optional)", style = FeedType.Hint16, color = OmniFeedHint)
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (caption.isEmpty()) {
+                            Text(
+                                text = "Add a caption… (optional)",
+                                style = FeedType.Hint16,
+                                color = OmniFeedHint,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        inner()
                     }
-                    Box(Modifier.width(0.dp)) { inner() }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -295,6 +339,11 @@ private val PhotoHeight = 255.dp
 private val CaptionTop = 14.dp
 private val PublishTop = 18.dp
 private val SheetBottom = 20.dp
+
+/** The empty picker tile's glyph, the gap under it, and the inset its label wraps inside (§12). */
+private val PickerGlyphSize = 20.dp
+private val PickerGlyphGap = 10.dp
+private val PickerLabelInset = 24.dp
 
 /** A caption is a line, not a paragraph — the viewer draws it in one line over the photo. */
 private const val MaxCaptionLength = 80

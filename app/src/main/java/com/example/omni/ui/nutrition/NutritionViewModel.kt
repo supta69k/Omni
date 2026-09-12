@@ -58,6 +58,8 @@ data class DayChipState(
 data class NutritionUiState(
     val week: List<DayChipState> = emptyList(),
     val selectedIndex: Int = 0,
+    /** The month whose days the week strip shows. Displayed as a tappable label above the strip. */
+    val selectedMonth: java.time.YearMonth = java.time.YearMonth.now(),
     val meals: List<Meal> = emptyList(),
     val nutrition: DayNutrition = DayNutrition(),
     val steps: Int = 0,

@@ -92,6 +92,8 @@ import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniStepsCream
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.OmniWaterTeal
+import java.time.YearMonth
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -130,6 +132,9 @@ fun NutritionScreen(
     header: OmniHeaderState = OmniHeaderState(),
     week: List<DayChipState> = emptyList(),
     selectedIndex: Int = 0,
+    /** The month label shown above the week strip; tapping opens the month picker. */
+    selectedMonth: YearMonth = YearMonth.now(),
+    onSelectMonth: (YearMonth) -> Unit = {},
     meals: List<Meal> = emptyList(),
     nutrition: DayNutrition = DayNutrition(),
     steps: Int = 0,
@@ -187,6 +192,26 @@ fun NutritionScreen(
 
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Spacer(Modifier.height(HeaderHeight + DayRowGap))
+
+                        // Month label — tappable to open the month picker modal. The design has no
+                        // explicit frame for this, so we borrow the settings row title style and centre it.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = ScreenPadding)
+                                .clickable { onSelectMonth(selectedMonth) },
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = selectedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
+                                    " ${selectedMonth.year}",
+                                style = NutritionType.FoodName,
+                                color = OmniInk,
+                                maxLines = 1,
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
 
                         DayRow(week = week, selected = selectedIndex, onSelect = onSelectDay)
 

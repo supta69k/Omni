@@ -47,41 +47,48 @@ class PreferencesStore(private val context: Context) {
     }
 
     /**
-     * The step counter's bookkeeping — see [StepState] for why any of it has to be remembered.
+     * The step counter's bookkeeping for [uid] — see [StepState] for why any of it has to be remembered.
      *
      * This is the *session truth* for steps: Firestore holds a cross-device record that lags behind by
      * design (BACKEND_PLAN §11 Phase 4), while this is written on every reading, so a process death
      * loses nothing. Deliberately not in Firestore: it is device-specific — another phone's anchor and
      * boot id mean nothing here — and it changes far too often to pay for a document write each time.
+     *
+     * **Scoped by uid.** Every account gets its own set of keys, so logout→different-account→login does
+     * not carry the first account's step state into the second one. An empty [uid] returns the zero
+     * state rather than throwing, so the sensor can keep observing while signed out (it just has nowhere
+     * to sync to).
      */
-    val stepState: Flow<StepState> = preferences.map { prefs ->
+    fun stepState(uid: String): Flow<StepState> = preferences.map { prefs ->
+        if (uid.isEmpty()) return@map StepState()
         StepState(
-            bootId = prefs[StepBootId] ?: 0L,
-            anchorRaw = prefs[StepAnchorRaw] ?: 0,
-            total = prefs[StepTotal] ?: 0,
-            syncedTotal = prefs[StepSyncedTotal] ?: 0,
-            date = prefs[StepDate] ?: "",
+            bootId = prefs[stepBootId(uid)] ?: 0L,
+            anchorRaw = prefs[stepAnchorRaw(uid)] ?: 0,
+            total = prefs[stepTotal(uid)] ?: 0,
+            syncedTotal = prefs[stepSyncedTotal(uid)] ?: 0,
+            date = prefs[stepDate(uid)] ?: "",
         )
     }
 
-    suspend fun setStepState(state: StepState) {
+    suspend fun setStepState(uid: String, state: StepState) {
+        if (uid.isEmpty()) return
         context.dataStore.edit { prefs ->
-            prefs[StepBootId] = state.bootId
-            prefs[StepAnchorRaw] = state.anchorRaw
-            prefs[StepTotal] = state.total
-            prefs[StepSyncedTotal] = state.syncedTotal
-            prefs[StepDate] = state.date
+            prefs[stepBootId(uid)] = state.bootId
+            prefs[stepAnchorRaw(uid)] = state.anchorRaw
+            prefs[stepTotal(uid)] = state.total
+            prefs[stepSyncedTotal(uid)] = state.syncedTotal
+            prefs[stepDate(uid)] = state.date
         }
     }
 
     private companion object {
         val OnboardingSeen = booleanPreferencesKey("onboarding_seen")
 
-        val StepBootId = longPreferencesKey("step_boot_id")
-        val StepAnchorRaw = intPreferencesKey("step_anchor_raw")
-        val StepTotal = intPreferencesKey("step_total")
-        val StepSyncedTotal = intPreferencesKey("step_synced_total")
-        val StepDate = stringPreferencesKey("step_date")
+        fun stepBootId(uid: String) = longPreferencesKey("step_boot_id_$uid")
+        fun stepAnchorRaw(uid: String) = intPreferencesKey("step_anchor_raw_$uid")
+        fun stepTotal(uid: String) = intPreferencesKey("step_total_$uid")
+        fun stepSyncedTotal(uid: String) = intPreferencesKey("step_synced_total_$uid")
+        fun stepDate(uid: String) = stringPreferencesKey("step_date_$uid")
     }
 }
 

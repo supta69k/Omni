@@ -33,14 +33,16 @@ import kotlinx.coroutines.launch
  * The feed's segment — Discover shows every post, Following keeps the authors I follow.
  *
  * Following is its **own query**, not a filter over the Discover page: the listener runs
- * `authorId in (following ∪ me)` ordered by recency, so following one quiet person among a hundred
- * noisy strangers shows that person's posts rather than an empty tab. (BACKEND_PLAN §7's original
- * "filter the loaded page client-side" note is what that replaced — it answered "which of the newest
- * twenty posts on the app are by someone I follow", which is a different question.)
+ * `authorId in following` ordered by recency, so following one quiet person among a hundred noisy
+ * strangers shows that person's posts rather than an empty tab. (BACKEND_PLAN §7's original "filter
+ * the loaded page client-side" note is what that replaced — it answered "which of the newest twenty
+ * posts on the app are by someone I follow", which is a different question.)
  *
- * My own posts are in, which is what every social feed does: a tab that hides what I just wrote reads
- * as a lost post. Following nobody therefore shows my own posts and nothing else, which is the honest
- * state of a new account rather than a lie that aliases Discover.
+ * **My own posts are not in it.** An earlier build queried `following ∪ me`, arguing that a tab which
+ * hides what you just wrote reads as a lost post. On a real account that turned out to be the wrong
+ * trade: the tab fills with your own posts and stops meaning what its name says. Following is other
+ * people; Discover and my own profile are where my posts live. Following nobody is therefore an empty
+ * tab, which is the honest state of a new account rather than a second Discover.
  */
 enum class FeedSegment { Discover, Following }
 
@@ -210,17 +212,29 @@ class FeedViewModel(
             }
 
     /**
-     * The live Following page, scoped to the people I follow plus me.
+     * The live Following page, scoped to **the people I follow and nobody else**.
+     *
+     * My own uid is deliberately not in the query. It used to be (`.map { it + me }`), on the
+     * reasoning that a tab which hides what you just wrote reads as a lost post — but on a device that
+     * is not what it looks like: Following fills up with your own posts and stops being the thing it
+     * is named after. Discover already carries my posts, and so does my profile. Following is other
+     * people.
+     *
+     * The exclusion is by *omission*, not by filtering a downloaded page: the uid never enters
+     * `authorIds`, so Firestore never sends those documents at all (§17).
      *
      * The flow is keyed on the following set — adding or removing a person re-subscribes, so the
-     * query the listener runs is always the current one. [authorIds] is computed once per emission
-     * from the latest follow set, and the repository then handles the chunking for `whereIn`.
+     * query the listener runs is always the current one, with no restart needed. [authorIds] is
+     * computed once per emission from the latest follow set, and the repository then handles the
+     * chunking for `whereIn`.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeFollowing(me: String?): Flow<List<Post>> =
         if (me == null) flowOf(emptyList())
         else followRepository.observeFollowing(me)
-            .map { it + me }
+            // A stray `users/{me}/following/{me}` document would otherwise put my own posts back in
+            // through the side door. Cheaper to hold the invariant here than to trust the data.
+            .map { it - me }
             .distinctUntilChanged()
             .flatMapLatest { authorIds ->
                 if (authorIds.isEmpty()) flowOf(emptyList()) else feedRepository.observeByAuthors(

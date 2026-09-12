@@ -25,11 +25,12 @@ data class Conversation(
     val unread: Int = 0,
 )
 
-/** One message — `conversations/{conversationId}/messages/{messageId}`. Text only, per §11 Phase 11. */
+/** One message — `conversations/{conversationId}/messages/{messageId}`. Text or an image (or both). */
 data class Message(
     val id: String,
     val senderId: String,
-    val text: String,
+    val text: String = "",
+    val imageUrl: String? = null,
     val createdAt: Long = 0L,
 )
 
@@ -44,12 +45,29 @@ fun conversationIdOf(a: String, b: String): String =
     if (a < b) "${a}_$b" else "${b}_$a"
 
 /**
- * The document written when a thread is first opened.
+ * The *identity* of a thread — who is in it, and what they are called.
  *
- * `unread` starts at zero for both: opening a chat is not a message, and the recipient must not see a
- * badge for a thread nobody has said anything in yet.
+ * This is the whole document [com.example.omni.data.repo.MessageRepository.openConversation] writes,
+ * and it is written with `SetOptions.merge()`. The four summary fields (`lastMessage`,
+ * `lastMessageAt`, `lastSenderId`, `unread`) are **deliberately absent**: they are created by the first
+ * [newMessageMap] that lands, and merging blanks over a thread that already has messages in it would
+ * wipe the inbox preview, reset the other person's unread badge, and bump an untouched thread to the
+ * top of their list every time somebody opened the chat.
+ *
+ * Merging identity, on the other hand, is wanted: a participant who has since changed their display
+ * name or avatar is re-denormalised onto the thread by the next person who opens it.
+ *
+ * A thread with no messages therefore has no `lastMessageAt`, so `orderBy("lastMessageAt")` leaves it
+ * out of both inboxes until somebody says something. That is the behaviour every messenger has — an
+ * empty thread you opened and abandoned is not a conversation.
+ *
+ * It satisfies both halves of the deployed rule on `conversations/{cid}`. On a document that does not
+ * exist yet the write is a `create`, and `participants` is present, two long and distinct. On one that
+ * does it is an `update`, and the merged `participants` is byte-identical to the stored array because
+ * both ends sort it — which is exactly what `request.resource.data.participants ==
+ * resource.data.participants` asks.
  */
-fun newConversationMap(
+fun conversationIdentityMap(
     selfUid: String,
     selfName: String,
     selfPhotoUrl: String?,
@@ -63,19 +81,21 @@ fun newConversationMap(
         otherUid to otherName.take(MaxParticipantNameLength),
     ),
     "participantPhotos" to mapOf(selfUid to selfPhotoUrl, otherUid to otherPhotoUrl),
-    "lastMessage" to "",
-    "lastMessageAt" to FieldValue.serverTimestamp(),
-    "lastSenderId" to "",
-    "unread" to mapOf(selfUid to 0, otherUid to 0),
 )
 
-/** The message document. Server-stamped for the same reason every other write in this app is. */
-fun newMessageMap(senderId: String, text: String): Map<String, Any?> = mapOf(
-    "senderId" to senderId,
-    "text" to text.take(MaxMessageLength),
-    "createdAt" to FieldValue.serverTimestamp(),
-    "readBy" to listOf(senderId),
-)
+/**
+ * The message document. Server-stamped for the same reason every other write in this app is.
+ *
+ * Either [text] or [imageUrl] (or both) must be present; a message with neither is rejected at the
+ * repository boundary.
+ */
+fun newMessageMap(senderId: String, text: String, imageUrl: String? = null): Map<String, Any?> = buildMap {
+    put("senderId", senderId)
+    if (text.isNotBlank()) put("text", text.take(MaxMessageLength))
+    if (imageUrl != null) put("imageUrl", imageUrl)
+    put("createdAt", FieldValue.serverTimestamp())
+    put("readBy", listOf(senderId))
+}
 
 /**
  * @param selfUid whose side of the thread this is — it decides which participant is "the other one"
@@ -115,6 +135,7 @@ fun DocumentSnapshot.toMessage(): Message? {
         id = id,
         senderId = senderId,
         text = getString("text").orEmpty().take(MaxMessageLength),
+        imageUrl = getString("imageUrl"),
         createdAt = millisOf("createdAt"),
     )
 }

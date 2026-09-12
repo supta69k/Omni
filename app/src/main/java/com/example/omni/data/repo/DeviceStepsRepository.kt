@@ -43,8 +43,31 @@ class DeviceStepsRepository(
     override val isAvailable: Boolean get() = source.isAvailable
 
     override fun observeTodaySteps(uid: String?): Flow<Int> = flow {
-        var state = preferences.stepState.first()
+        if (uid == null) {
+            emit(0)
+            return@flow
+        }
+
+        var state = preferences.stepState(uid).first()
         val startedOn = todayKey()
+
+        // Seed from Firestore if this is the first reading for [uid] on this device, or if the stored day
+        // has ended. A fresh install or account switch starts with the server's number rather than zero.
+        if (state.date.isEmpty() || state.date != startedOn) {
+            val serverSteps = try {
+                metrics.observeDay(uid, startedOn).first()?.steps ?: 0
+            } catch (cause: Exception) {
+                Log.w("Omni", "Could not seed steps for $uid on $startedOn", cause)
+                0
+            }
+            // Keep the anchor and boot id if the day is still current; reset them if the day changed.
+            state = if (state.date == startedOn) {
+                state.copy(total = serverSteps.coerceAtLeast(state.total), syncedTotal = serverSteps)
+            } else {
+                StepState(date = startedOn, total = serverSteps, syncedTotal = serverSteps)
+            }
+            preferences.setStepState(uid, state)
+        }
 
         // Whatever the last session left unwritten goes out now. When the stored day has since ended this
         // is the date-rollover write, and it is the reason the app can be closed at 23:59 and still have
@@ -63,7 +86,7 @@ class DeviceStepsRepository(
             if (next == state) return@collect
 
             state = next
-            preferences.setStepState(state)
+            preferences.setStepState(uid, state)
             if (state.pendingSync() >= SyncThresholdSteps) state = flush(uid, state)
             emit(state.total)
         }
@@ -76,11 +99,11 @@ class DeviceStepsRepository(
      * again, which is exactly the behaviour wanted for a metric nobody is waiting on. An *offline* write
      * does not fail at all — Firestore queues it — so reaching the catch means the rules said no.
      */
-    private suspend fun flush(uid: String?, state: StepState): StepState {
-        if (uid == null || state.date.isEmpty() || state.pendingSync() == 0) return state
+    private suspend fun flush(uid: String, state: StepState): StepState {
+        if (state.date.isEmpty() || state.pendingSync() == 0) return state
         return try {
             metrics.setSteps(uid, state.date, state.total)
-            state.copy(syncedTotal = state.total).also { preferences.setStepState(it) }
+            state.copy(syncedTotal = state.total).also { preferences.setStepState(uid, it) }
         } catch (cause: Exception) {
             Log.w("Omni", "Syncing ${state.total} steps for ${state.date} failed", cause)
             state

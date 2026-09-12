@@ -68,9 +68,10 @@ import com.example.omni.ui.theme.SettingsType
  *
  * It keeps the bottom bar, because it *is* a tab.
  *
- * Who you may write to is a product decision, not a UI one: the picker lists verified professionals and
- * nothing else, which is BACKEND_PLAN §12's own answer. There is no search field and no way to type a
- * uid, so this screen cannot start a thread with an ordinary account.
+ * Who you may write to is a product decision, not a UI one: the picker lists the people this user
+ * follows *and* the verified directory, which is BACKEND_PLAN §12's answer plus the social half the
+ * feed needs. There is still no search field and no way to type a uid — a stranger is reached by
+ * opening their profile from search and tapping Message there, which is the same write one screen over.
  */
 @Composable
 fun MessagesScreen(
@@ -143,7 +144,8 @@ fun MessagesScreen(
 
                 if (state.pickerOpen) {
                     Spacer(Modifier.height(PickerTop))
-                    ProfessionalPicker(
+                    NewMessagePicker(
+                        people = state.people,
                         professionals = state.professionals,
                         onStartWith = onStartWith,
                     )
@@ -159,8 +161,9 @@ fun MessagesScreen(
                     )
 
                     state.conversations.isEmpty() -> Text(
-                        text = "No conversations yet. Tap “New message” to ask a verified doctor or " +
-                            "nutritionist something — they can see your question, not your health data.",
+                        text = "No conversations yet. Tap “New message” to write to someone you follow, " +
+                            "or to ask a verified doctor or nutritionist something — they can see your " +
+                            "question, not your health data.",
                         style = HomeType.CardFootnoteWrapped,
                         color = OmniSetRowSubtitle,
                     )
@@ -277,62 +280,97 @@ private fun ConversationRow(
 }
 
 /**
- * The "new message" list — every verified professional, minus this user.
+ * The "new message" list — two groups, one screen.
+ *
+ * **People you follow** is the social half: anyone this user follows can be written to, which is what
+ * makes the Messages tab reachable from the feed rather than a healthcare-only cul-de-sac. **Verified
+ * professionals** is the healthcare half, unchanged — BACKEND_PLAN §12's own answer, and the reason the
+ * group label below is word-for-word what it always was.
+ *
+ * Each group carries its own empty line, and neither of them is a dead end: they say what to do next.
  *
  * A whole row is tappable because the tap does one unambiguous thing (§6 rule 10): it opens the thread
  * with that person, which is idempotent, so a mis-tap costs a back gesture rather than a message.
  */
 @Composable
-private fun ProfessionalPicker(
+private fun NewMessagePicker(
+    people: List<ProfessionalRowState>,
     professionals: List<ProfessionalRowState>,
     onStartWith: (ProfessionalRowState) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(PickerGap)) {
+        PickerGroup(
+            label = "People you follow",
+            rows = people,
+            empty = "You're not following anyone yet. Follow someone from the feed or from search and " +
+                "they'll appear here.",
+            onStartWith = onStartWith,
+        )
+
+        Spacer(Modifier.height(PickerGroupGap))
+
+        PickerGroup(
+            label = "Verified professionals",
+            rows = professionals,
+            empty = "No verified doctors or nutritionists have been reviewed yet. They'll appear here " +
+                "when they are.",
+            onStartWith = onStartWith,
+        )
+    }
+}
+
+@Composable
+private fun PickerGroup(
+    label: String,
+    rows: List<ProfessionalRowState>,
+    empty: String,
+    onStartWith: (ProfessionalRowState) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(PickerGap)) {
         Text(
-            text = "Verified professionals",
+            text = label,
             style = SettingsType.GroupLabel,
             color = OmniSetGroupLabel,
             maxLines = 1,
             softWrap = false,
         )
 
-        if (professionals.isEmpty()) {
+        if (rows.isEmpty()) {
             Text(
-                text = "No verified professionals are available yet. Accounts appear here once Omni " +
-                    "has reviewed them.",
+                text = empty,
                 style = HomeType.CardFootnoteWrapped,
                 color = OmniSetRowSubtitle,
             )
             return@Column
         }
 
-        professionals.forEach { professional ->
+        rows.forEach { row ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(RowCorner))
                     .background(OmniSetCardSurface)
-                    .clickable { onStartWith(professional) }
+                    .clickable { onStartWith(row) }
                     .padding(horizontal = RowPaddingH, vertical = RowPaddingV),
                 horizontalArrangement = Arrangement.spacedBy(AvatarGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Avatar(
-                    name = professional.name,
-                    photoUrl = professional.photoUrl,
+                    name = row.name,
+                    photoUrl = row.photoUrl,
                     size = PickerAvatarSize,
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = professional.name,
+                        text = row.name,
                         style = SettingsType.RowTitle,
                         color = OmniSetRowTitle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = professional.discipline,
+                        text = row.discipline,
                         style = SettingsType.RowSubtitle,
                         color = OmniSetRowSubtitle,
                         maxLines = 1,
@@ -411,6 +449,8 @@ private val BackButtonSize = 40.dp
 private val BackRowGap = 10.dp
 private val PickerTop = 20.dp
 private val PickerGap = 10.dp
+/** Enough that the two group labels read as two groups rather than one long list. */
+private val PickerGroupGap = 10.dp
 private val ListTop = 20.dp
 private val RowGap = 10.dp
 private val RowCorner = 8.dp
@@ -463,6 +503,12 @@ private val PreviewProfessionalRows = listOf(
     ProfessionalRowState("nut-karim", "Tanvir Karim", "Nutritionist"),
 )
 
+/** Two ordinary accounts, so the preview shows the social group beside the healthcare one. */
+private val PreviewFollowedRows = listOf(
+    ProfessionalRowState("uid-ben", "Ben Ahmed", "You follow them"),
+    ProfessionalRowState("uid-carla", "Carla Nunes", "You follow them"),
+)
+
 @DevicePreviews
 @Composable
 private fun MessagesScreenPreview() {
@@ -476,9 +522,19 @@ private fun MessagesScreenPickerPreview() {
         MessagesScreen(
             state = PreviewMessages.copy(
                 pickerOpen = true,
+                people = PreviewFollowedRows,
                 professionals = PreviewProfessionalRows,
             ),
         )
+    }
+}
+
+/** Both groups empty — the state that used to be a dead end, and the one worth looking at. */
+@DevicePreviews
+@Composable
+private fun MessagesScreenPickerEmptyPreview() {
+    OmniTheme {
+        MessagesScreen(state = MessagesUiState(loading = false, pickerOpen = true))
     }
 }
 

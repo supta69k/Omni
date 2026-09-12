@@ -9,6 +9,7 @@ import com.example.omni.data.model.Message
 import com.example.omni.data.model.Profession
 import com.example.omni.data.model.User
 import com.example.omni.data.repo.AuthRepository
+import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.MessageRepository
 import com.example.omni.data.repo.UserRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,10 +27,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * One row of the "new message" picker — a verified professional, flattened to what the row draws.
+ * One row of the "new message" picker — somebody this user can start a thread with.
  *
  * Flattened rather than passing [User] itself, for [com.example.omni.ui.firstaid.GuideCardState]'s
  * reason: a picker row that could reach `user.email` is a row that will eventually render it.
+ *
+ * @property discipline the line under the name. For a verified professional it is their discipline; for
+ *   somebody this user follows it is how they are connected. It is *not* a username — `users/{uid}`
+ *   has no handle field, so there is nothing to draw there and inventing one would be a lie.
  */
 data class ProfessionalRowState(
     val uid: String,
@@ -65,10 +70,14 @@ data class OpenChatState(
  * Messages", this owns "and is talking to Dr. Rahman". Keeping it here is what survives a rotation, and it
  * is the key the message listener is built on.
  *
- * @property professionals only ever populated while [pickerOpen] is true — see [MessagesViewModel].
+ * @property people the accounts this user follows — the social half of the picker.
+ * @property professionals the verified directory — the healthcare half, unchanged.
+ *
+ * Both are only ever populated while [pickerOpen] is true — see [MessagesViewModel].
  */
 data class MessagesUiState(
     val conversations: List<Conversation> = emptyList(),
+    val people: List<ProfessionalRowState> = emptyList(),
     val professionals: List<ProfessionalRowState> = emptyList(),
     val pickerOpen: Boolean = false,
     val loading: Boolean = true,
@@ -76,22 +85,27 @@ data class MessagesUiState(
 )
 
 /**
- * Messaging (BACKEND_PLAN §11 Phase 11) — the thread list, the professional picker and one open chat.
+ * Messaging (BACKEND_PLAN §11 Phase 11) — the thread list, the picker and one open chat.
  *
  * One ViewModel for both pages, for the reason [com.example.omni.ui.firstaid.GuidesViewModel] gives: the
  * back gesture inside a chat has to land on the list rather than leaving Messages, and that is a decision
  * about *state*, not about routing.
  *
- * Who a user may write to is §12's product answer — "users → verified professionals only" — which is why
- * the only way into a new thread is [startWith] over [UserRepository.observeProfessionals]. There is no
- * free-text uid entry and no user search, so a thread with an ordinary account cannot be created from this
- * app at all. The rules do not enforce that (any two signed-in accounts may still create a thread), and
- * that gap is recorded in BACKEND_PLAN §0.1 rather than hidden here.
+ * **The picker has two halves, and that is the whole of who you may write to.** The verified directory
+ * ([UserRepository.observeProfessionals]) is BACKEND_PLAN §12's healthcare answer and is untouched. Beside
+ * it is the social one: the accounts this user follows ([FollowRepository.observeFollowing]), because a
+ * social app whose only correspondents are doctors is a dead end — the Messages tab used to open on
+ * "No verified professionals are available yet" and offer nothing else. There is still no free-text uid
+ * entry: a thread can only be started with somebody you follow or somebody Omni has verified.
+ *
+ * The other door into a thread is the public profile's Message button, which calls [startWith] directly
+ * (see `MainActivity`) and does not need the picker at all.
  */
 class MessagesViewModel(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
     private val messageRepository: MessageRepository,
+    private val followRepository: FollowRepository,
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key every read below restarts on. */
@@ -142,6 +156,46 @@ class MessagesViewModel(
             }
 
     /**
+     * The social half of the picker — the accounts this user follows, resolved to rows.
+     *
+     * Open-gated for the same reason the directory is, and **read once per change of the follow set**
+     * rather than listened to per person: `users/{uid}` is the one document in this app that barely
+     * changes, and N live registrations for a list somebody is scrolling past is exactly the "download
+     * the whole collection" trade §17 rules out. The set itself *is* live, so following somebody from
+     * the feed puts them in this list without a restart.
+     *
+     * Capped at [PeopleLimit]. Past that the picker stops being a list and starts being a directory,
+     * and the way to reach somebody further down is the feed's search, which already opens their
+     * profile and its Message button.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val people: Flow<List<ProfessionalRowState>> =
+        combine(uid, picker) { uid, open -> uid to open }
+            .distinctUntilChanged()
+            .flatMapLatest { (uid, open) ->
+                if (!open || uid == null) {
+                    flowOf(emptyList())
+                } else {
+                    followRepository.observeFollowing(uid)
+                        .map { ids ->
+                            ids.asSequence()
+                                // I follow myself in nobody's data model, but a stray write would put
+                                // a row here that `conversationIdOf(uid, uid)` cannot open.
+                                .filter { it != uid }
+                                .sorted()
+                                .take(PeopleLimit)
+                                .toList()
+                                .mapNotNull { userRepository.getUser(it)?.toFollowedRow() }
+                                .sortedBy { it.name.lowercase() }
+                        }
+                        .catch { cause ->
+                            Log.w("Omni", "The people $uid follows could not be read", cause)
+                            emit(emptyList())
+                        }
+                }
+            }
+
+    /**
      * The open thread's messages.
      *
      * Keyed on the thread id alone, so re-opening the same chat does not tear the listener down and put an
@@ -179,9 +233,11 @@ class MessagesViewModel(
         }
 
     val uiState: StateFlow<MessagesUiState> =
-        combine(conversations, professionals, picker, chat) { conversations, professionals, picker, chat ->
+        combine(conversations, people, professionals, picker, chat) {
+                conversations, people, professionals, picker, chat ->
             MessagesUiState(
                 conversations = conversations,
+                people = people,
                 professionals = professionals,
                 pickerOpen = picker,
                 loading = false,
@@ -227,17 +283,18 @@ class MessagesViewModel(
     }
 
     /**
-     * Starts (or re-enters) the thread with one professional.
+     * Starts (or re-enters) the thread with one person — a picker row, or a public profile's Message
+     * button, which hands in the profile it is standing on.
      *
      * [selfName] and [selfPhotoUrl] come from the session the router already holds rather than from a
      * second `users/{uid}` listener here — they are denormalised onto the thread so the *other* side can
-     * draw this user's name without a read (see [com.example.omni.data.model.newConversationMap]).
+     * draw this user's name without a read (see [com.example.omni.data.model.conversationIdentityMap]).
      *
      * The chat opens only once the document is known to exist. Opening it optimistically would put the
      * user in front of an input box whose first message could fail the rules, and this is the one write in
      * the app where "it looked like it worked" is worst.
      *
-     * Refuses a thread with myself. The picker already filters me out of its own list, but this is also
+     * Refuses a thread with myself. The picker already filters me out of both its lists, but this is also
      * the profile page's message button, and a profile can be mine — the router holds it back, and this
      * holds it back again at the layer that actually writes, because a thread whose two participants are
      * one person is a document no screen can render and no rule should accept.
@@ -267,9 +324,9 @@ class MessagesViewModel(
                     otherPhotoUrl = professional.photoUrl,
                 )
             } catch (cause: Exception) {
-                // Reachable offline, unlike every other write in this app: `openConversation` has to
-                // *read* before it creates, and a read of a document the cache has never seen cannot be
-                // served locally. The picker stays open, which is the honest outcome — nothing happened.
+                // Now a plain write, so this is the same offline story as every other write in the app:
+                // Firestore takes it locally and the `await` completes. What reaches here is a rules
+                // rejection. The picker stays open, which is the honest outcome — nothing happened.
                 Log.w("Omni", "A thread with ${professional.uid} could not be opened", cause)
             }
         }
@@ -331,6 +388,15 @@ class MessagesViewModel(
         const val ListenerGraceMillis = 5_000L
 
         /**
+         * How many followed accounts the picker resolves.
+         *
+         * One `users/{uid}` read each, so this is the cap on what opening the picker costs. Somebody
+         * further down the list is reached through the feed's search, which opens their profile and
+         * its Message button — the same [startWith], one tap further away.
+         */
+        const val PeopleLimit = 40
+
+        /**
          * The discipline under a name in the picker.
          *
          * `profession` is nullable on [User] but never null here — [UserRepository.observeProfessionals]
@@ -344,6 +410,24 @@ class MessagesViewModel(
                 Profession.DOCTOR -> "Doctor"
                 Profession.NUTRITIONIST -> "Nutritionist"
                 null -> "Verified professional"
+            },
+            photoUrl = photoUrl,
+        )
+
+        /**
+         * The same row for somebody this user follows.
+         *
+         * The second line is their discipline when they have one and "You follow them" otherwise — the
+         * relationship, which is the reason they are in this list at all. `users/{uid}` carries no
+         * handle, so there is no `@username` to draw here.
+         */
+        fun User.toFollowedRow(): ProfessionalRowState = ProfessionalRowState(
+            uid = uid,
+            name = name.ifBlank { "Omni member" },
+            discipline = when (profession) {
+                Profession.DOCTOR -> "Doctor"
+                Profession.NUTRITIONIST -> "Nutritionist"
+                null -> "You follow them"
             },
             photoUrl = photoUrl,
         )

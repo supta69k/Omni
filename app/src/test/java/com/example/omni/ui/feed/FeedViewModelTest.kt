@@ -101,26 +101,49 @@ class FeedViewModelTest {
         }
 
     @Test
-    fun `the following query asks for the people I follow plus me`() = runTest(dispatcher) {
+    fun `the following query asks for the people I follow and not for me`() = runTest(dispatcher) {
         follows.set(Me, setOf(Ben, Carla))
         val model = viewModel()
         open(model)
         model.onSegmentChange(FeedSegment.Following)
         advanceUntilIdle()
 
-        assertEquals(setOf(Me, Ben, Carla), feed.lastAuthorIds)
+        // My uid never enters the query, so Firestore never sends my documents — the exclusion is
+        // an omission rather than a filter over a downloaded page.
+        assertEquals(setOf(Ben, Carla), feed.lastAuthorIds)
     }
 
-    /** Following nobody is my own posts and nothing else — never a second Discover. */
+    /**
+     * The device bug, as a test.
+     *
+     * An earlier build queried `following ∪ me`, so Following showed my own posts beside everyone
+     * else's — and with nobody followed it was a tab of nothing but mine. Following is other people.
+     */
     @Test
-    fun `following nobody shows only my own posts`() = runTest(dispatcher) {
+    fun `following never shows my own posts`() = runTest(dispatcher) {
+        follows.set(Me, setOf(Ben))
+        feed.server.value = listOf(
+            post("mine-1", Me, createdAt = 9L),
+            post("ben-1", Ben, createdAt = 5L),
+        )
+        val model = viewModel()
+        open(model)
+        model.onSegmentChange(FeedSegment.Following)
+        advanceUntilIdle()
+
+        assertEquals(listOf("ben-1"), model.uiState.value.posts.map { it.id })
+    }
+
+    /** Following nobody is an empty tab, not a second Discover and not a page of my own posts. */
+    @Test
+    fun `following nobody shows nothing`() = runTest(dispatcher) {
         feed.server.value = noisyStrangers(3) + post("mine-1", Me, createdAt = 5L)
         val model = viewModel()
         open(model)
         model.onSegmentChange(FeedSegment.Following)
         advanceUntilIdle()
 
-        assertEquals(listOf("mine-1"), model.uiState.value.posts.map { it.id })
+        assertTrue(model.uiState.value.posts.isEmpty())
     }
 
     /**
