@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -79,6 +80,7 @@ class SessionViewModel(
                 }
             }
         }
+        .onEach { profile -> reconcileEmail(profile) }
         .stateIn(
             scope = viewModelScope,
             // Outlives a rotation, so turning the phone does not re-run the query, but a backgrounded
@@ -140,6 +142,29 @@ class SessionViewModel(
             started = SharingStarted.WhileSubscribed(ListenerGraceMillis),
             initialValue = 0,
         )
+
+    /**
+     * Copies a confirmed email change from Firebase Auth onto `users/{uid}.email`.
+     *
+     * Auth owns the address you sign in with; the profile document holds a copy, and the settings row is
+     * what reads it. The security page can only *start* a change — Firebase sends a link and the address
+     * moves when that link is opened, in a browser, with nothing of this app running — so there is no
+     * moment at the write site where both can be set together. This is where they meet again: the first
+     * profile snapshot after the change finds the two disagreeing and writes the document across.
+     *
+     * Only on disagreement, so the ordinary case costs nothing. It can lag by up to an hour in the worst
+     * case, because `currentUser.email` is read from the cached token and the change is picked up on the
+     * next refresh — Auth is right either way, and the stale copy shows in one place.
+     */
+    private suspend fun reconcileEmail(profile: User?) {
+        val signedIn = authRepository.currentEmail?.takeIf { it.isNotBlank() } ?: return
+        if (profile == null || profile.email.equals(signedIn, ignoreCase = true)) return
+        try {
+            userRepository.updateProfile(profile.uid, mapOf("email" to signedIn))
+        } catch (cause: Exception) {
+            Log.w("Omni", "users/${profile.uid}.email could not be re-synced to the account", cause)
+        }
+    }
 
     private val _photoUpload = MutableStateFlow(PhotoUploadState())
 

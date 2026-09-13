@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -76,8 +77,8 @@ import com.example.omni.data.model.distanceLabel
 import com.example.omni.data.model.etaLabel
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
 import com.example.omni.ui.components.OmniHeader
+import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderHeight
 import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
@@ -189,7 +190,7 @@ fun SosScreen(
     onCallEmergency: () -> Unit = {},
     /**
      * Texts the saved contacts, or opens the page to save one when there are none — the caller decides
-     * which, because it is the same pill either way and only the router knows where that page is.
+     * which, because it is the same control either way and only the router knows where that page is.
      */
     onAlertContacts: () -> Unit = {},
     /** Re-shows the system location dialog. Offered only while the OS will still show it. */
@@ -238,11 +239,20 @@ fun SosScreen(
             (if (sheetOpen) SheetHeight else SwipeSlot).roundToPx()
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(OmniBackground),
         ) {
+            // The sheet is a fixed 480dp tall in the artboard, which is taller than a landscape
+            // viewport (~415 design-dp). Left at 480 it is bottom-anchored, so the overflow clips off
+            // the *top* — the grab handle and "Nearest Hospitals" title disappear exactly when the user
+            // needs them. Its real content ends around 260dp (title, subtitle, one 114dp card row), so
+            // capping the height to what the viewport can show trims only the empty tail and keeps the
+            // header uncovered. In portrait the cap never bites (480 < the tall viewport), so nothing
+            // there changes.
+            val sheetHeight = SheetHeight.coerceAtMost(maxHeight - OmniHeaderHeight)
+
             // The map starts where the header ends (Figma puts it at y=101, the header's own height)
             // and runs off the bottom of the artboard. Its own box is therefore what the insets above
             // are measured against, and the opaque header never covers a tile the camera paid for.
@@ -362,6 +372,7 @@ fun SosScreen(
                     query = query,
                     directorySize = directorySize,
                     contactCount = contactCount,
+                    sheetHeight = sheetHeight,
                     onDismiss = { sheetOpen = false },
                     onSelect = onSelectHospital,
                     onFindRoute = onFindRoute,
@@ -780,11 +791,11 @@ private fun SosSwipeTrack(modifier: Modifier = Modifier, onActivate: () -> Unit)
  *     selection, two views of it — the source's own 322 window, item-snapped so a card is never half on
  *     screen. Lazy because the directory runs to a hundred-odd entries and the design's card is not
  *     cheap.
- *  2. BACKEND_PLAN §11 Phase 9 asks activation to "notify saved emergency contacts", and the design has
- *     nowhere to say so. Rather than a Material component that would hoist itself out of `DesignFrame`,
- *     the alert pill is the sheet's *own* `Call Container` shape dropped into that empty tail:
- *     bottom-anchored at [AlertPillBottom], which is the floating bar's slot plus four, so it lands at
- *     y=343 — three clear of where the design's content ends and 34 clear of the bar.
+ *  2. BACKEND_PLAN §11 Phase 9 asks activation to "notify saved emergency contacts". The design says so
+ *     with the glyph in the header's right corner and nothing else — no label, so the count the control
+ *     used to spell out lives in its content description instead. It was a full-width pill in the
+ *     sheet's tail until node 134:12625 replaced it; the tail is empty again, and the floating bar sits
+ *     on it as the source draws it.
  *  3. An empty rail is two different facts, and each gets the pill that answers it: no directory at all
  *     offers 999, a search that matched nothing offers to clear itself.
  */
@@ -798,6 +809,8 @@ private fun HospitalSheet(
     query: String,
     directorySize: Int,
     contactCount: Int,
+    /** Height the sheet is allowed to occupy — [SheetHeight] in portrait, capped to the viewport in landscape. */
+    sheetHeight: Dp = SheetHeight,
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit = {},
     onSelect: (String) -> Unit = {},
@@ -810,7 +823,7 @@ private fun HospitalSheet(
     Box(
         modifier = modifier
             .width(SheetWidth)
-            .height(SheetHeight)
+            .height(sheetHeight)
             // Figma stacks three shadows on this node (0/30/80 plus two tight drop-shadows); one
             // elevation is all Compose offers, and 10dp reads closest to the lift they add up to.
             .shadow(10.dp, RoundedCornerShape(20.dp), ambientColor = OmniSheetShadow, spotColor = OmniSheetShadow)
@@ -829,7 +842,14 @@ private fun HospitalSheet(
                 .clickable(onClick = onDismiss),
         )
 
-        Column(modifier = Modifier.padding(start = SheetPadding, top = SheetHeaderTop)) {
+        // Bounded to the rail's own 322 rather than left to run to the sheet's edge: the subtitle is
+        // live text now, and its longest variant would otherwise wrap at 342 and pass under the alert
+        // glyph in the corner. 322 is where every other row on this sheet already ends.
+        Column(
+            modifier = Modifier
+                .padding(start = SheetPadding, top = SheetHeaderTop)
+                .width(HospitalCardWidth),
+        ) {
             Text(
                 text = "Nearest Hospitals",
                 style = MapType.SheetTitle,
@@ -919,26 +939,28 @@ private fun HospitalSheet(
             }
         }
 
-        // The alert pill, in the tail. Red like the swipe track it answers to when there is somebody
-        // to text; the hospital tray's grey when there is not, because "go and add one" is a settings
-        // errand and should not shout like an emergency.
+        // The alert control — the design's own glyph in the header's right corner, opposite the title.
+        //
+        // It replaces the full-width pill that used to sit in the sheet's tail: one icon, no label,
+        // doing exactly what the pill did. Because nothing is written beside it, the count it used to
+        // spell out moves into the content description, which is the only place a label is still owed.
         Box(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = SheetPadding, bottom = AlertPillBottom)
-                .width(HospitalCardWidth),
+                .align(Alignment.TopEnd)
+                .padding(top = AlertButtonTop, end = AlertButtonEnd)
+                .size(AlertButtonSize)
+                .clip(RoundedCornerShape(percent = 50))
+                .clickable(onClick = onAlertContacts),
+            contentAlignment = Alignment.Center,
         ) {
-            HospitalAction(
-                icon = R.drawable.ic_home_search_chat,
-                label = when (contactCount) {
-                    0 -> "Add Alert Contacts"
-                    1 -> "Alert 1 Contact"
-                    else -> "Alert $contactCount Contacts"
+            Image(
+                painter = painterResource(R.drawable.ic_home_search_chat),
+                contentDescription = when (contactCount) {
+                    0 -> "Add alert contacts"
+                    1 -> "Alert 1 saved contact"
+                    else -> "Alert $contactCount saved contacts"
                 },
-                fill = if (contactCount == 0) OmniHospitalCard else OmniSosTrack,
-                labelColor = if (contactCount == 0) OmniInk else OmniOnInk,
-                labelStart = AlertLabelStart,
-                onClick = onAlertContacts,
+                modifier = Modifier.size(AlertIconSize),
             )
         }
     }
@@ -1311,18 +1333,26 @@ private val HospitalRailGap = 19.dp
 
 private val HospitalCardWidth = 322.dp
 
-/**
- * The alert pill's bottom inset — [OmniNavHeight] + [OmniNavBottomGap] + 4, measured from the same
- * navigation-bar-padded bottom the floating bar is placed from. In a 480 sheet that puts the 50-high
- * pill at y=343: three below where the design's own content ends at 340, and four above the bar.
- */
-private val AlertPillBottom = OmniNavHeight + OmniNavBottomGap + 4.dp
+/** The alert glyph, at the icon size the rest of the sheet draws its icons at. */
+private val AlertIconSize = 24.dp
 
 /**
- * 78 is the call button's inset and the pill borrows it, which leaves 322 − 78 − 24 − 12 = 208 for the
- * label — enough for "Add Alert Contacts" at 18px, the longest of the three.
+ * 40 of target around a 24 glyph — the size this app gives every other bare icon, and eight of slack
+ * on each side so a finger that lands beside the strokes still counts.
  */
-private val AlertLabelStart = 78.dp
+private val AlertButtonSize = 40.dp
+
+/**
+ * Centred on the title's line rather than hung from the sheet's top: [SheetHeaderTop] + half of
+ * `SheetTitle`'s 28 line box − half the target, i.e. 27 + 14 − 20.
+ */
+private val AlertButtonTop = 21.dp
+
+/**
+ * [SheetPadding] − ([AlertButtonSize] − [AlertIconSize]) / 2. The *glyph* lands on the sheet's own 18
+ * gutter, in line with the title below it; the invisible target is what overhangs it.
+ */
+private val AlertButtonEnd = 10.dp
 
 /** The recenter control: the pages' own 21 gutter in from the edge, the pill's 12 up from what it clears. */
 private val RecenterSize = 44.dp
@@ -1379,3 +1409,4 @@ private fun SosScreenEmptyDirectoryPreview() {
 private fun SosScreenLocationBlockedPreview() {
     OmniTheme { SosScreen(locationStatus = LocationStatus.Blocked) }
 }
+

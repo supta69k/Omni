@@ -389,6 +389,11 @@ private class FakeAuthRepository(uid: String?) : AuthRepository {
     override suspend fun signUp(name: String, email: String, password: String) = signInAs("uid-$email")
     override suspend fun signIn(email: String, password: String) = signInAs("uid-$email")
     override suspend fun sendPasswordReset(email: String) = Unit
+
+    // Not exercised here — this test is about whose profile is read, not about credentials.
+    override val currentEmail: String? get() = session.value?.let { "$it@omni.test" }
+    override suspend fun changeEmail(currentPassword: String, newEmail: String) = Unit
+    override suspend fun changePassword(currentPassword: String, newPassword: String) = Unit
 }
 
 /**

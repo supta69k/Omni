@@ -197,6 +197,11 @@ class FirestoreUserRepository(
                 // downstream would take the photo branch and hand Coil an empty model, which loads
                 // nothing and draws nothing. That is the missing avatar in the feed.
                 photoUrl = getString("photoUrl")?.takeIf { it.isNotBlank() },
+                // Same rule, same reason: the account page clears a field by writing `""`, and a
+                // non-null blank would make "not answered" render as an empty value rather than as
+                // the placeholder that invites an answer.
+                dob = getString("dob")?.takeIf { it.isNotBlank() },
+                gender = getString("gender")?.takeIf { it.isNotBlank() },
                 unreadMessages = unreadCount("messages"),
                 unreadNotifications = unreadCount("notifications"),
                 // The ceilings are the goals page's own, in `User.kt`, rather than three private

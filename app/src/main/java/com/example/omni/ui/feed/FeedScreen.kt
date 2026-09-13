@@ -56,8 +56,8 @@ import com.example.omni.data.model.compactCount
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
 import com.example.omni.ui.components.OmniHeader
+import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
@@ -338,35 +338,16 @@ fun FeedScreen(
                     onOpenProfile(uid)
                 },
             )
-
-            OmniBottomNav(
-                selected = OmniNavItem.Feed,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
-            )
-
-            // The comments sheet, hosted in the page's own root Box so it stays inside DesignFrame's
-            // density — the same rule the sleep and meal sheets follow.
-            //
-            // **Drawn after the nav bar, and that ordering is the fix, not a detail.** A `Box` paints
-            // its children in declaration order, so while this sat above `OmniBottomNav` the floating
-            // nav pill — 67dp plus the system inset plus a 16dp gap, pinned to `BottomCenter` — painted
-            // straight over the sheet's composer. The field and the Send button were composed, laid out
-            // and clickable the whole time; they were simply underneath the navigation. What reached the
-            // screen was a sheet that stopped at "No comments yet", which is why there appeared to be no
-            // way to write one. `SleepEntrySheet` and `MealEntrySheet` are both declared after their
-            // screen's nav for this reason; the feed was the one page with the order inverted.
-            CommentsSheet(
-                visible = state.commentsOpenId != null,
-                comments = state.comments,
-                onDismiss = onCloseComments,
-                onSend = onSendComment,
-                onOpenProfile = onOpenProfile,
-            )
         }
+
+        // Sheet is sibling of scaffold so it overlays bar/rail (KDoc rule 11)
+        CommentsSheet(
+            visible = state.commentsOpenId != null,
+            comments = state.comments,
+            onDismiss = onCloseComments,
+            onSend = onSendComment,
+            onOpenProfile = onOpenProfile,
+        )
     }
 }
 
@@ -773,20 +754,26 @@ private fun StoryTile(
 }
 
 /**
- * The first tile — the viewer's own story area.
+ * The first tile — Figma `Meal Image and Text` (node 124:62), back to the design's own layout.
  *
- * Two distinct actions, two distinct tap targets (§6):
+ * The avatar sits at the top, the violet plus badge overlaps its foot, and **"Share Your healthy
+ * meal"** wraps onto two centred lines underneath. That is the frame the design draws, and it is
+ * what [FeedType.StoryCaption] was cut for — the style's own doc comment names this string.
  *
- * 1. **Avatar / story preview** (top half): opens the viewer on my tile. With no story, this slot
- *    is the placeholder asset and is **not** a tap target — there is nothing to view yet.
- * 2. **"+ Add to your story"** (bottom strip): **always** opens the upload flow. The plus glyph
- *    and the caption live together as one button, so the affordance is unmistakable whether or
- *    not a story of mine is already live.
+ * An earlier pass replaced all of it with a single-line "+ Add to your story" strip to give the
+ * tile two unambiguous tap targets. It bought the targets by throwing the frame away: a caption
+ * the design never wrote, a glyph moved out from under the avatar, and a 10sp line stretched flat
+ * across a 93dp tile. The split was worth keeping; paying for it in Figma's layout was not.
  *
- * The previous design bound the whole tile to one action and replaced it with the other when a
- * story appeared: tapping the avatar then opened my existing story instead of letting me add a
- * new one. The corner plus badge was a workaround, not a fix — it was easy to miss and the rest
- * of the tile still opened the viewer. Two surfaces, two actions, no ambiguity.
+ * So the two actions stay, drawn as the design already draws them (§6):
+ *
+ * 1. **Avatar** (the top [SharePlusTop]dp): opens the viewer on my tile. With no story it is the
+ *    placeholder asset and not a tap target — there is nothing to view yet.
+ * 2. **Plus badge and caption** (everything below it): **always** opens the upload flow. They are
+ *    one button, which is what the badge sitting on the caption's own column already looks like.
+ *
+ * The seam falls at the badge's top edge, so the badge belongs to "add" and the avatar above it to
+ * "view" — which is the reading the design invites anyway.
  */
 @Composable
 private fun ShareMealTile(
@@ -801,98 +788,97 @@ private fun ShareMealTile(
             .height(ShareTileHeight)
             .clip(RoundedCornerShape(ShareTileCorner))
             .background(OmniFeedSurface),
-        contentAlignment = Alignment.TopCenter,
+        contentAlignment = Alignment.Center,
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // `Meal Image and Text` is 81 x 92 inside the 93 x 105 tile: 6 a side, 6.5 at the top.
+        Box(
+            modifier = Modifier
+                .width(ShareInnerWidth)
+                .height(ShareInnerHeight),
         ) {
-            // The avatar strip. When there is a story, tapping it opens the viewer; when there is
-            // not, the placeholder asset is decorative only — the bottom strip is the only action.
+            // The ring box is [ShareRingInset]dp larger than the avatar on every side and offset
+            // back by the same amount, so the avatar lands on Figma's mark whether or not a ring is
+            // drawn around it and the ring grows outwards into the tile's top margin.
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(ShareAvatarStrip)
+                    .align(Alignment.TopCenter)
+                    .offset(x = ShareAvatarNudge, y = -ShareRingInset)
+                    .size(ShareRingSize)
+                    // The same gradient ring the other tiles wear (§8), drawn round *my* avatar only
+                    // while I have a live story. My own tile has no seen/unseen state —
+                    // [StoriesViewModel] deliberately does not mark my tile watched — so here the ring
+                    // means exactly one thing: "your story is up". It disappears on its own when the
+                    // story expires, because `hasStory` is the presence of a tile on the rail and the
+                    // rail only carries stories whose `expiresAt` is still ahead of now.
+                    .let { base ->
+                        if (hasStory) {
+                            base.border(width = UnseenRing, brush = StoryRingBrush, shape = CircleShape)
+                        } else {
+                            base
+                        }
+                    }
                     .let { base ->
                         if (hasStory) base.clickable(onClick = onOpenViewer) else base
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                // The same gradient ring the other tiles wear (§8), drawn round *my* avatar only
-                // while I have a live story. My own tile has no seen/unseen state — [StoriesViewModel]
-                // deliberately does not mark my tile watched — so here the ring means exactly one
-                // thing: "your story is up". It disappears on its own when the story expires,
-                // because `hasStory` is the presence of a tile on the rail and the rail only
-                // carries stories whose `expiresAt` is still ahead of now.
-                Box(
-                    modifier = Modifier
-                        .size(ShareRingSize)
-                        .let { base ->
-                            if (hasStory) {
-                                base.border(
-                                    width = UnseenRing,
-                                    brush = StoryRingBrush,
-                                    shape = CircleShape,
-                                )
-                            } else {
-                                base
-                            }
-                        },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (photoUrl != null) {
-                        coil3.compose.AsyncImage(
-                            model = photoUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(ShareAvatarSize)
-                                .clip(CircleShape),
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(R.drawable.feed_story_share_avatar),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(ShareAvatarSize)
-                                .clip(CircleShape),
-                        )
-                    }
+                if (photoUrl != null) {
+                    coil3.compose.AsyncImage(
+                        model = photoUrl,
+                        // Named only while it is a target. Decorative otherwise — the caption below
+                        // already says what the tile is for.
+                        contentDescription = if (hasStory) "Your story" else null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(ShareAvatarSize)
+                            .clip(CircleShape)
+                            // The placeholder asset carries this hairline in the PNG itself. A real
+                            // photo has to be given it, or swapping one in would quietly drop a ring
+                            // the design draws — and only while no story ring is already there.
+                            .let { base ->
+                                if (hasStory) {
+                                    base
+                                } else {
+                                    base.border(SharePhotoRing, OmniFeedHint, CircleShape)
+                                }
+                            },
+                    )
+                } else {
+                    Image(
+                        painter = painterResource(R.drawable.feed_story_share_avatar),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(ShareAvatarSize)
+                            .clip(CircleShape),
+                    )
                 }
             }
 
-            // The "Add to your story" button. **Always** clickable, **always** carrying the plus
-            // glyph — adding a new story is what the user means when they tap here, regardless of
-            // what is already on the rail.
-            Box(
+            // The plus badge and the caption — one button, always live. Adding a new story is what
+            // the user means down here, regardless of what is already on the rail. Declared after the
+            // avatar so it wins the hit test where the two overlap, which is the badge's own footprint.
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
+                    .align(Alignment.TopStart)
+                    .offset(y = SharePlusTop)
+                    .width(ShareInnerWidth)
                     .clickable(onClick = onAddStory),
-                contentAlignment = Alignment.Center,
+                verticalArrangement = Arrangement.spacedBy(ShareCaptionGap),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Row(
+                Image(
+                    painter = painterResource(R.drawable.ic_feed_share_plus),
+                    contentDescription = "Add to your story",
+                    modifier = Modifier.size(SharePlusSize),
+                )
+                Text(
+                    text = "Share Your healthy meal",
+                    style = FeedType.StoryCaption,
+                    color = OmniFeedVerified,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(
-                        ShareAddGap,
-                        Alignment.CenterHorizontally,
-                    ),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_feed_share_plus),
-                        contentDescription = null,
-                        modifier = Modifier.size(ShareAddIconSize),
-                    )
-                    Text(
-                        text = "Add to your story",
-                        style = FeedType.StoryCaption,
-                        color = OmniFeedVerified,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
+                )
             }
         }
     }
@@ -1358,13 +1344,12 @@ private val StoryRingBrush = Brush.linearGradient(
     listOf(OmniAuthHeading, OmniNutriChipCarbs, OmniAuthHeading),
 )
 
-// ---- The "Add to your story" tile's own geometry --------------------------------------------------
+// ---- The share-meal tile's own geometry -----------------------------------------------------------
 //
-// Same 93 x 105 outline the design draws for the share tile, but the interior is now two strips:
-// an avatar strip on top (52dp tall, fitting the existing 46dp avatar + 6dp breathing room) and
-// the always-clickable "Add to your story" strip below it. The old geometry put a 46 avatar on top
-// and a centred caption-and-plus on top of it; the new one separates them so the two actions
-// (viewer vs. add) cannot be confused for one (§6).
+// Figma's numbers off node 124:62, as they were originally measured: a 93 x 105 tile holding an
+// 81 x 92 `Meal Image and Text` frame, a 46 avatar at its top, the plus badge overlapping the
+// avatar's foot, and the caption 10dp under the badge. Only the story ring is not the design's —
+// see [ShareRingSize].
 
 /** Tile outer size — same as [StoryTile]'s, so the rail's spacing reads uniform. */
 private val ShareTileWidth = 93.dp
@@ -1373,26 +1358,35 @@ private val ShareTileHeight = 105.dp
 /** 10dp radius — same as the other tiles. */
 private val ShareTileCorner = 10.dp
 
-/**
- * 58 = the 56dp ring plus a dp either side.
- *
- * It was 52 (46 avatar + 6) before the ring existed; the ring needs its own room or it would sit
- * flush against the tile's top edge. The 6dp comes out of the bottom strip's `weight(1f)`, which
- * still has 47dp for a 14dp glyph and a 12.5dp caption line.
- */
-private val ShareAvatarStrip = 58.dp
+/** The inner frame: 6 a side of the 93, 6.5 top and bottom of the 105. */
+private val ShareInnerWidth = 81.dp
+private val ShareInnerHeight = 92.dp
 
-/** The avatar's own size — unchanged. */
+/** The avatar's own size. */
 private val ShareAvatarSize = 46.dp
 
-/** 56 = 46 avatar + 2 × 2dp stroke + 2 × 3dp gap, so the ring reads as a ring and not as a rim. */
+/** Figma centres the avatar half a point right of the frame's own axis. */
+private val ShareAvatarNudge = 0.5.dp
+
+/**
+ * 56 = 46 avatar + 2 × 2dp stroke + 2 × 3dp gap, so the ring reads as a ring and not as a rim.
+ *
+ * The ring itself is the §8 divergence, not Figma's — the design has no active-story state to draw.
+ * It grows outwards into the tile's 6.5dp top margin rather than moving the avatar, which is what
+ * [ShareRingInset] is for: 5 = (56 − 46) / 2, so the avatar stays on the design's mark either way.
+ */
 private val ShareRingSize = 56.dp
+private val ShareRingInset = 5.dp
 
-/** Between the plus glyph and the caption text in the bottom strip. */
-private val ShareAddGap = 4.dp
+/** The hairline the placeholder PNG has baked in, redrawn for a real photo that does not. */
+private val SharePhotoRing = 1.dp
 
-/** The plus glyph's own size in the bottom strip. */
-private val ShareAddIconSize = 14.dp
+/** The badge sits 38 down the frame, so its 18dp laps the avatar's last 8. */
+private val SharePlusTop = 38.dp
+private val SharePlusSize = 18.dp
+
+/** Between the badge and the caption's first line. */
+private val ShareCaptionGap = 10.dp
 
 /** 45% black — the name plate's scrim over any photograph. */
 private val NamePlateScrim = androidx.compose.ui.graphics.Color(0x73000000)

@@ -145,14 +145,26 @@ Every Omni screen is a **415dp Figma artboard** (`iPhone 14 & 15 Pro`), reproduc
 coordinates verbatim. A real phone is narrower (~360–412dp). `DesignFrame` reconciles the two by
 **scaling density once at the screen root** so the content is *genuinely 415 wide*:
 
-- **Width scaling:** `density = outer.density * (maxWidth / 415.dp)`. At 393dp physical, one design dp
-  becomes 393/415 = 0.947 physical dp, so a child laid out at `415.dp` fills the screen and every
-  Figma dp/sp is literally correct without translation. This is what makes the app responsive across
-  360 / 393 / 412+ **without** per-child tweaks.
+- **Short-edge scaling:** `density = outer.density * (min(maxWidth, maxHeight) / 415.dp)`. The scale is
+  keyed to the **short edge**, not the width, so it is the same value whichever way the phone is held —
+  the short edge is physically the portrait width in both orientations. At 393dp physical (short edge),
+  one design dp becomes 393/415 = 0.947 physical dp, so a child laid out at `415.dp` fills the short edge
+  and every Figma dp/sp is literally correct without translation. This is what makes the app responsive
+  across 360 / 393 / 412+ **without** per-child tweaks, **and** what keeps landscape from exploding:
+  keying to `maxWidth` alone used the phone's *long* edge in landscape (~851dp), blowing the density up
+  ~2× — the rotation bug. See `DesignFrame.kt`'s KDoc for the full reasoning.
+- **Landscape = letterbox + scroll, never reflow.** In landscape the artboard renders at portrait
+  density (393-wide), **centred**, with the long edge spent on `OmniBackground` letterbox margins. The
+  design's height (~899 design-dp) no longer fits the ~415 design-dp landscape viewport, so **every
+  screen that can exceed its viewport must carry a vertical scroll** — the frame does not add one. This
+  is a rotation-*safe* artboard, not a landscape redesign: the pixel layout is identical to portrait.
 - **Density:** overridden **only here**, via `CompositionLocalProvider(LocalDensity provides …)`.
 - **Font scaling:** **pinned to `fontScale = 1f`** (see §4).
 - **Insets:** `statusBarsPadding` / `systemBarsPadding` are consumed *inside* the frame, so they still
   reserve the correct physical pixels.
+- **Rotation preserves state** via `MainActivity`'s `android:configChanges` (the Activity re-measures
+  instead of recreating) plus `rememberSaveable` on the router state for process death — **not** an
+  `android:screenOrientation` lock. The app rotates freely; the frame just re-runs `BoxWithConstraints`.
 
 ### Rules
 

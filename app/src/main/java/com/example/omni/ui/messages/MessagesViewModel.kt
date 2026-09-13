@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -53,6 +54,7 @@ data class ProfessionalRowState(
 data class OpenChatState(
     val conversationId: String,
     val selfUid: String,
+    val otherUid: String,
     val otherName: String,
     val otherPhotoUrl: String? = null,
     val messages: List<Message> = emptyList(),
@@ -115,6 +117,26 @@ class MessagesViewModel(
     private val draft = MutableStateFlow("")
     private val picker = MutableStateFlow(false)
 
+    /**
+     * Live profiles keyed by uid — the source of truth that overrides the stale denormalised identity
+     * baked onto each [Conversation] when the thread was last opened.
+     *
+     * The thread summary carries `participantNames.{other}` and `participantPhotos.{other}` — the
+     * denormalisation that keeps a thread list from being N extra `users/{uid}` reads per row — but
+     * that denormalisation is only refreshed on [openConversation] (i.e. when somebody starts a new
+     * thread). A user who *renamed themselves* or *changed their photo* after a thread already
+     * existed keeps their old identity in every inbox until somebody re-opens it, and the conversation
+     * list opens threads rather than starting them, so the identity is never refreshed that way.
+     *
+     * The fix is the same shape [com.example.omni.ui.feed.FeedViewModel] uses for posts: a session
+     * cache of profiles, one `users/{uid}` read per missing uid, and the live profile applied on top
+     * of whatever the conversation's denormalised copy said.
+     */
+    private val authors = MutableStateFlow<Map<String, User>>(emptyMap())
+
+    /** Uids already asked for, so a missing profile is not re-requested on every emission. */
+    private val requestedAuthors = mutableSetOf<String>()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private val conversations: Flow<List<Conversation>> = uid.flatMapLatest { uid ->
         if (uid == null) {
@@ -126,6 +148,19 @@ class MessagesViewModel(
             }
         }
     }
+
+    /**
+     * The conversation list with live identity applied — fresh `name` and `photoUrl` win over the
+     * thread's own denormalised copy.
+     *
+     * The trigger lives on this flow rather than on [conversations] so the resolution fires only
+     * while the list is something a screen is drawing (and could miss it).
+     */
+    private val enrichedConversations: Flow<List<Conversation>> = conversations
+        .onEach { list -> resolveAuthors(list.map { it.otherUid }) }
+        .combine(authors) { list, people ->
+            list.map { it.withAuthor(people[it.otherUid]) }
+        }
 
     /**
      * The picker's contents — and **only while the picker is open**.
@@ -216,7 +251,7 @@ class MessagesViewModel(
             }
         }
 
-    private val chat: Flow<OpenChatState?> =
+    private val chatRaw: Flow<OpenChatState?> =
         combine(uid, openThread, messages, draft) { uid, thread, messages, draft ->
             if (uid == null || thread == null) {
                 null
@@ -224,6 +259,7 @@ class MessagesViewModel(
                 OpenChatState(
                     conversationId = thread.conversationId,
                     selfUid = uid,
+                    otherUid = thread.otherUid,
                     otherName = thread.otherName,
                     otherPhotoUrl = thread.otherPhotoUrl,
                     messages = messages,
@@ -231,9 +267,37 @@ class MessagesViewModel(
                 )
             }
         }
+        .onEach { state ->
+            // The header is drawn off the open thread's identity, which is the denormalised copy
+            // baked on when the thread was opened. A rename or new photo of the other participant
+            // never reaches this header until somebody re-opens the chat, which is exactly the bug
+            // the user reported ("chat profile name and picture not showing"). Resolving it here on
+            // every open keeps the header live, the same shape [enrichedConversations] applies to
+            // the list.
+            if (state != null) resolveAuthors(listOf(state.otherUid))
+        }
+
+    /**
+     * The chat, with the open thread's other-participant identity replaced by the live profile when
+     * one is in hand.
+     *
+     * Sub-flow rather than a fifth argument on [chatRaw]'s combine — the typed `combine` overloads
+     * stop at five flows, and [uiState] already uses all five on the messages side.
+     */
+    private val chat: Flow<OpenChatState?> = chatRaw.combine(authors) { state, people ->
+        if (state == null) {
+            null
+        } else {
+            val live = people[state.otherUid]
+            state.copy(
+                otherName = live?.name?.ifBlank { null } ?: state.otherName,
+                otherPhotoUrl = live?.photoUrl ?: state.otherPhotoUrl,
+            )
+        }
+    }
 
     val uiState: StateFlow<MessagesUiState> =
-        combine(conversations, people, professionals, picker, chat) {
+        combine(enrichedConversations, people, professionals, picker, chat) {
                 conversations, people, professionals, picker, chat ->
             MessagesUiState(
                 conversations = conversations,
@@ -382,6 +446,39 @@ class MessagesViewModel(
         val otherName: String,
         val otherPhotoUrl: String?,
     )
+
+    /**
+     * The conversation as its other participant is *now*, falling back to the identity denormalised
+     * onto the thread.
+     *
+     * A live `name` wins when it is non-blank; a live `photoUrl` wins when it is non-null. Either
+     * field missing on the live profile keeps whatever the thread had — the thread is still the
+     * source of truth for an account that has not been read this session.
+     */
+    private fun Conversation.withAuthor(author: User?): Conversation {
+        if (author == null) return this
+        return copy(
+            otherName = author.name.ifBlank { otherName },
+            otherPhotoUrl = author.photoUrl ?: otherPhotoUrl,
+        )
+    }
+
+    /**
+     * Fetches any of [uids] not already held or already asked for. One read each, once.
+     *
+     * A uid that resolves to `null` (the account exists but could not be read, or never did) is not
+     * re-fetched — same shape [com.example.omni.ui.feed.FeedViewModel.resolveAuthors] uses.
+     */
+    private fun resolveAuthors(uids: List<String>) {
+        val missing = uids.filter { it.isNotBlank() && requestedAuthors.add(it) }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            missing.forEach { uid ->
+                val user = userRepository.getUser(uid)
+                if (user != null) authors.value = authors.value + (uid to user)
+            }
+        }
+    }
 
     private companion object {
         /** Outlives a rotation; a backgrounded app stops paying for the thread listeners. */

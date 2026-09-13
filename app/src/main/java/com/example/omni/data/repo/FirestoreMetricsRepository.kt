@@ -2,6 +2,7 @@ package com.example.omni.data.repo
 
 import com.example.omni.data.model.DailyMetrics
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -39,6 +40,32 @@ class FirestoreMetricsRepository(
             }
             trySend(snapshot?.toDailyMetrics(date))
         }
+        awaitClose { registration.remove() }
+    }
+
+    /**
+     * The month as one range query over document ids.
+     *
+     * Ranged on [FieldPath.documentId] rather than on the `date` field, even though every write in this
+     * app sets `date`: the id is the one thing a day document cannot be missing, so a document written by
+     * an older build or typed into the console still lands in the right month. `"$month-01".."$month-32"`
+     * brackets the whole month lexicographically — ids are fixed-width `yyyy-MM-dd`, so `-32` sorts after
+     * every real day and no month needs to know how long it is.
+     */
+    override fun observeMonth(uid: String, month: String): Flow<Map<String, DailyMetrics>> = callbackFlow {
+        val registration = firestore.collection(Users).document(uid).collection(Days)
+            .whereGreaterThanOrEqualTo(FieldPath.documentId(), "$month-01")
+            .whereLessThanOrEqualTo(FieldPath.documentId(), "$month-32")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val days = snapshot?.documents.orEmpty().mapNotNull { document ->
+                    document.toDailyMetrics(document.id)?.let { document.id to it }
+                }
+                trySend(days.toMap())
+            }
         awaitClose { registration.remove() }
     }
 

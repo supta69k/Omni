@@ -63,6 +63,56 @@ class StepStateTest {
         assertEquals(Tomorrow, today.date)
     }
 
+    // ---- account isolation on a shared device --------------------------------------------------
+    //
+    // The pedometer counts since boot and is shared by every account on the phone. When a new account
+    // is read for the first time, `DeviceStepsRepository` seeds a state that already carries today's
+    // date (from Firestore, or empty) but has never been anchored — bootId 0. The first sensor reading
+    // must adopt that raw value as the anchor and add nothing; the old bug fell through to the normal
+    // delta and credited the entire since-boot count to the new account, so every account on the phone
+    // converged on the same number.
+
+    @Test
+    fun `a seeded same-day account anchors at the sensor and does not inherit the boot count`() {
+        // What a fresh account looks like the instant before its first reading: today's date, nothing
+        // walked, never anchored (bootId 0).
+        val seeded = StepState(date = Today)
+
+        // The device's shared since-boot counter is deep into five figures because a previous account
+        // walked all day. The new account must not be handed those steps.
+        val after = seeded.reconcile(raw = 5_100, bootId = Boot, date = Today)
+
+        assertEquals(0, after.total)
+        assertEquals(5_100, after.anchorRaw)
+        assertEquals(Boot, after.bootId)
+    }
+
+    @Test
+    fun `a seeded account keeps its cross-device total but not the boot count`() {
+        // This account already logged 800 steps today on another phone; the seed carries that total.
+        val seeded = StepState(date = Today, total = 800, syncedTotal = 800)
+
+        val anchored = seeded.reconcile(raw = 5_100, bootId = Boot, date = Today)
+        assertEquals(800, anchored.total)      // the other device's steps survive
+        assertEquals(5_100, anchored.anchorRaw) // and this device anchors here, adding nothing
+
+        // Walking 40 steps on this device now accrues on top of the 800, not on top of the boot count.
+        val walked = anchored.reconcile(raw = 5_140, bootId = Boot, date = Today)
+        assertEquals(840, walked.total)
+    }
+
+    @Test
+    fun `two accounts seeded from the same shared counter stay independent`() {
+        // Both read the same physical sensor value in turn; neither may pick up the other's total.
+        val a = StepState(date = Today, total = 5_000, syncedTotal = 5_000)
+            .reconcile(raw = 9_000, bootId = Boot, date = Today)
+        val b = StepState(date = Today) // fresh account, nothing logged anywhere
+            .reconcile(raw = 9_000, bootId = Boot, date = Today)
+
+        assertEquals(5_000, a.total)
+        assertEquals(0, b.total)
+    }
+
     // ---- the reboot rule -----------------------------------------------------------------------
 
     /**

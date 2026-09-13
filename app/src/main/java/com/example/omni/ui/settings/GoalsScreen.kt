@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -220,6 +221,15 @@ private fun GoalCard(
                 onClick = { onStep(row.kind, false) },
             )
 
+            // The reading and its unit sit on **one baseline**, not in one bottom-aligned box.
+            //
+            // They were bottom-aligned, and the two do not mean the same thing here: `StepsUnit` is
+            // `StepsValue.copy(fontSize = 12.sp)`, so it keeps the 21sp run's 33.29sp line height and
+            // a 12sp glyph floats inside a box built for a much larger one. Matching the boxes' feet
+            // therefore left the unit's own feet well below the number's — "glasses" sagging under the
+            // "13". `alignByBaseline` matches the lines the two are actually written on and lets the
+            // boxes fall where they must, which is what the dashboard gets for free by drawing this
+            // pair as one annotated string (see `HomeBento`).
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.Center,
@@ -231,13 +241,19 @@ private fun GoalCard(
                     color = OmniCardInk,
                     maxLines = 1,
                     softWrap = false,
+                    modifier = Modifier.alignByBaseline(),
                 )
+                // A measured gap rather than the space character it used to lead with: at 12sp that
+                // space was barely 3dp, and it scaled with the *unit's* size rather than with the
+                // number it has to stand clear of.
+                Spacer(Modifier.width(ValueUnitGap))
                 Text(
-                    text = " ${row.unit}",
+                    text = row.unit,
                     style = HomeType.StepsUnit,
                     color = OmniFootnote,
                     maxLines = 1,
                     softWrap = false,
+                    modifier = Modifier.alignByBaseline(),
                 )
             }
 
@@ -346,6 +362,14 @@ private val StepperTop = 12.dp
  * thirty dp of scroll. 42 still clears the 40dp minimum this app uses for its own back button.
  */
 private val StepButtonSize = 42.dp
+
+/**
+ * Between the number and its unit — a quarter of the number's own 21sp, near enough.
+ *
+ * Wide enough that "13" and "glasses" read as two things rather than as one long word, narrow enough
+ * that they still read as one reading rather than as two columns.
+ */
+private val ValueUnitGap = 5.dp
 
 private val SaveTop = 28.dp
 private val DiscardTop = 14.dp

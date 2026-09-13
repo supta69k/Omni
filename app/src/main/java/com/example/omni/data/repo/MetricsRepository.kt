@@ -18,6 +18,17 @@ interface MetricsRepository {
     fun observeDay(uid: String, date: String): Flow<DailyMetrics?>
 
     /**
+     * Every day document in [month] (`yyyy-MM`), keyed by its `yyyy-MM-dd` id.
+     *
+     * One query rather than 31 [observeDay] listeners, because the caller is the month picker: it draws a
+     * whole calendar at once and only needs each day's roll-up, not a live per-day subscription. Days with
+     * nothing logged are simply absent from the map — an empty square is the honest reading of "nothing
+     * happened", and materialising a zeroed [DailyMetrics] for them would make an untouched month look
+     * like a fully logged one whose numbers all came out 0.
+     */
+    fun observeMonth(uid: String, month: String): Flow<Map<String, DailyMetrics>>
+
+    /**
      * Adds one glass of water to [date], creating the document if it does not exist.
      *
      * Deliberately not `setWater(count)`: two devices doing read-modify-write on the same day would

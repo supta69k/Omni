@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -58,13 +59,32 @@ data class DayChipState(
 data class NutritionUiState(
     val week: List<DayChipState> = emptyList(),
     val selectedIndex: Int = 0,
-    /** The month whose days the week strip shows. Displayed as a tappable label above the strip. */
-    val selectedMonth: java.time.YearMonth = java.time.YearMonth.now(),
+    /** The month the selected day falls in. Drawn as the tappable label above the strip. */
+    val selectedMonth: YearMonth = YearMonth.now(),
+    /** Whether the month picker is open. Held here, not in the screen, because it gates [monthCalories]. */
+    val monthPickerOpen: Boolean = false,
+    /** The month the *picker* is showing, which is only the same as [selectedMonth] until an arrow is tapped. */
+    val pickerMonth: YearMonth = YearMonth.now(),
+    /** Calories logged per day of [pickerMonth]. A day with no document is absent, not zero. */
+    val monthCalories: Map<LocalDate, Int> = emptyMap(),
     val meals: List<Meal> = emptyList(),
     val nutrition: DayNutrition = DayNutrition(),
     val steps: Int = 0,
     val glasses: Int = 0,
     val sleepHours: Float = 0f,
+)
+
+/**
+ * The month picker's three pieces of state, folded into one value.
+ *
+ * Together rather than as three flows because Kotlin's typed [combine] stops at five, and [uiState]
+ * already spends four on the day. They also change together: opening the picker, paging it and the
+ * calories arriving are all one question — "what is the calendar showing".
+ */
+private data class MonthView(
+    val open: Boolean,
+    val month: YearMonth,
+    val calories: Map<LocalDate, Int>,
 )
 
 /**
@@ -87,24 +107,13 @@ class NutritionViewModel(
     private val uid: StateFlow<String?> = authRepository.sessionUid
 
     /**
-     * The seven days ending today, rebuilt whenever today changes.
+     * Today, as a date that does not go stale.
      *
      * Derived from [todayKeyFlow] rather than computed once, so an app left open past midnight slides the
      * strip forward instead of stranding the user on a week that ended yesterday.
      */
-    private val week: Flow<List<DayChipState>> = todayKeyFlow().map { key ->
-        val today = runCatching { LocalDate.parse(key) }.getOrElse { LocalDate.now() }
-        weekEndingOn(today).map { date ->
-            DayChipState(
-                date = date,
-                initial = date.dayOfWeek
-                    .getDisplayName(TextStyle.NARROW, Locale.getDefault())
-                    .take(1)
-                    .uppercase(Locale.getDefault()),
-                number = "%02d".format(Locale.US, date.dayOfMonth),
-                selectable = !date.isAfter(today),
-            )
-        }
+    private val today: Flow<LocalDate> = todayKeyFlow().map { key ->
+        runCatching { LocalDate.parse(key) }.getOrElse { LocalDate.now() }
     }
 
     /**
@@ -117,13 +126,72 @@ class NutritionViewModel(
      */
     private val selected = MutableStateFlow<LocalDate?>(null)
 
-    /** The day actually being read: the selection, or today when there is none. */
-    private val activeDate: Flow<LocalDate> = combine(week, selected) { days, pick ->
-        val today = days.lastOrNull()?.date ?: LocalDate.now()
-        // A selection that has scrolled off the strip (open past midnight for a week) falls back to today
-        // rather than reading a day the user can no longer see.
-        pick?.takeIf { date -> days.any { it.date == date } } ?: today
+    /**
+     * The day actually being read: the selection, or today when there is none.
+     *
+     * Only a *future* selection is refused. It used to be narrower than that — a date outside the seven
+     * chips on screen fell back to today — which was right while the strip was the only way to choose a
+     * day and wrong the moment the month picker could hand over one from March. The strip now follows the
+     * selection instead (see [week]), so "off the strip" is no longer a thing a selection can be.
+     */
+    private val activeDate: Flow<LocalDate> = combine(today, selected) { today, pick ->
+        pick?.takeIf { !it.isAfter(today) } ?: today
     }.distinctUntilChanged()
+
+    /**
+     * The seven chips on screen — the week ending today, or the week ending on the selected day when that
+     * day is not in this one.
+     *
+     * The strip stays put for an ordinary tap inside the current week (which is every tap the design's own
+     * UI can produce) and only slides when the picker hands over a day from further back. Without that, a
+     * day chosen from the calendar would be read and written correctly while no chip on screen was lit.
+     */
+    private val week: Flow<List<DayChipState>> = combine(today, activeDate) { today, date ->
+        val thisWeek = weekEndingOn(today)
+        val anchor = if (thisWeek.any { it == date }) today else date
+        weekEndingOn(anchor).map { day ->
+            DayChipState(
+                date = day,
+                initial = day.dayOfWeek
+                    .getDisplayName(TextStyle.NARROW, Locale.getDefault())
+                    .take(1)
+                    .uppercase(Locale.getDefault()),
+                number = "%02d".format(Locale.US, day.dayOfMonth),
+                selectable = !day.isAfter(today),
+            )
+        }
+    }
+
+    /** Whether the month picker is open, and which month it has been paged to. */
+    private val picking = MutableStateFlow(false)
+    private val browsing = MutableStateFlow<YearMonth?>(null)
+
+    /**
+     * The calendar the picker draws.
+     *
+     * The month query only runs while the sheet is open: it is thirty-odd documents the rest of the screen
+     * has no use for, and the day the page actually shows has its own listener already. Closing the sheet
+     * tears it down again, which is why [picking] is part of the key rather than a flag the UI keeps to
+     * itself.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val monthView: Flow<MonthView> =
+        combine(uid, activeDate, picking, browsing) { uid, date, open, browse ->
+            Triple(uid, open, browse ?: YearMonth.from(date))
+        }
+            .distinctUntilChanged()
+            .flatMapLatest { (uid, open, month) ->
+                if (uid == null || !open) {
+                    flowOf(MonthView(open, month, emptyMap()))
+                } else {
+                    metricsRepository.observeMonth(uid, month.toString())
+                        .map { days -> MonthView(open, month, days.toCalorieMap()) }
+                        .catch { cause ->
+                            Log.w("Omni", "users/$uid/days for $month could not be read", cause)
+                            emit(MonthView(open, month, emptyMap()))
+                        }
+                }
+            }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val meals: Flow<List<Meal>> = combine(uid, activeDate) { uid, date -> uid to date }
@@ -154,10 +222,14 @@ class NutritionViewModel(
         }
 
     val uiState: StateFlow<NutritionUiState> =
-        combine(week, activeDate, meals, metrics) { days, date, log, day ->
+        combine(week, activeDate, meals, metrics, monthView) { days, date, log, day, month ->
             NutritionUiState(
                 week = days,
                 selectedIndex = days.indexOfFirst { it.date == date }.coerceAtLeast(0),
+                selectedMonth = YearMonth.from(date),
+                monthPickerOpen = month.open,
+                pickerMonth = month.month,
+                monthCalories = month.calories,
                 meals = log,
                 nutrition = log.toDayNutrition(),
                 steps = day.steps,
@@ -174,6 +246,32 @@ class NutritionViewModel(
     fun onSelectDay(date: LocalDate) {
         if (date.isAfter(LocalDate.now())) return
         selected.value = date
+        // Choosing a day answers the question the picker was open to ask, so it closes — and the paged
+        // month is dropped, so re-opening starts on the month of whatever day is now selected rather
+        // than wherever the last browse left off.
+        picking.value = false
+        browsing.value = null
+    }
+
+    fun onOpenMonthPicker() {
+        picking.value = true
+    }
+
+    /** Closing without choosing keeps the day, and forgets which month was being read. */
+    fun onDismissMonthPicker() {
+        picking.value = false
+        browsing.value = null
+    }
+
+    /**
+     * Pages the picker to another month.
+     *
+     * A month past the current one is refused for the same reason a future chip is: there is nothing to
+     * show there, and letting the calendar walk forward forever invites a query per empty month.
+     */
+    fun onBrowseMonth(month: YearMonth) {
+        if (month.isAfter(YearMonth.now())) return
+        browsing.value = month
     }
 
     /**
@@ -217,6 +315,18 @@ class NutritionViewModel(
     }
 }
 
-/** The selected day's document id, or `null` before the first emission has built the strip. */
+/**
+ * The selected day's document id, or `null` before the first emission has built the strip.
+ *
+ * Reading it off the strip is safe because the strip is built *around* the selection — a day chosen from
+ * the month picker slides the seven chips onto its own week — so `week[selectedIndex]` is the selected day
+ * rather than a fallback to today.
+ */
 private val NutritionUiState.dateKey: String?
     get() = week.getOrNull(selectedIndex)?.date?.toString()
+
+/** Day documents as "which day had how many calories", dropping ids that are not a date and days at 0. */
+private fun Map<String, DailyMetrics>.toCalorieMap(): Map<LocalDate, Int> = mapNotNull { (key, day) ->
+    val date = runCatching { LocalDate.parse(key) }.getOrNull() ?: return@mapNotNull null
+    if (day.calories <= 0) null else date to day.calories
+}.toMap()

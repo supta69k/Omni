@@ -44,11 +44,22 @@ class PreviewUserRepository(
             .take(limit)
     }
 
+    /**
+     * The fields the account pages actually write, applied in memory.
+     *
+     * Blank is dropped rather than stored, which is [FirestoreUserRepository]'s reading rule seen from
+     * the writing side — clearing a field on the real backend stores `""` and reads back as `null`, and
+     * a fake that kept the empty string would make a preview of "nothing answered yet" impossible.
+     */
     override suspend fun updateProfile(uid: String, fields: Map<String, Any?>) {
+        fun field(key: String): String? = (fields[key] as? String)?.takeIf { it.isNotBlank() }
         user.update { current ->
             current.copy(
-                name = fields["name"] as? String ?: current.name,
-                photoUrl = fields["photoUrl"] as? String ?: current.photoUrl,
+                name = field("name") ?: current.name,
+                email = field("email") ?: current.email,
+                photoUrl = if ("photoUrl" in fields) field("photoUrl") else current.photoUrl,
+                dob = if ("dob" in fields) field("dob") else current.dob,
+                gender = if ("gender" in fields) field("gender") else current.gender,
             )
         }
     }

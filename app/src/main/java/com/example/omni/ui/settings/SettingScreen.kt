@@ -110,7 +110,10 @@ fun SettingScreen(
     onNavigate: (OmniNavItem) -> Unit = {},
     onBack: () -> Unit = {},
     onChangePhoto: () -> Unit = {},
-    onAccountAction: (String) -> Unit = {},
+    /** The "Account Details" group's two rows, named like the two below them rather than dispatched
+     *  on the trailing word — that string was a label, and routing on it made the label load-bearing. */
+    onPersonalInformation: () -> Unit = {},
+    onSecurity: () -> Unit = {},
     onSavedEmergencies: () -> Unit = {},
     onDailyGoals: () -> Unit = {},
     onPushNotificationsChange: (Boolean) -> Unit = {},
@@ -170,7 +173,7 @@ fun SettingScreen(
                         title = "Personal Information",
                         subtitle = "Name, DOB, Gender",
                         textWidth = 164.dp,
-                        onClick = { onAccountAction("Edit") },
+                        onClick = onPersonalInformation,
                     ) {
                         Text(
                             text = "Edit",
@@ -185,7 +188,7 @@ fun SettingScreen(
                         title = "Security",
                         subtitle = "Email, Password",
                         textWidth = 164.dp,
-                        onClick = { onAccountAction("Change") },
+                        onClick = onSecurity,
                     ) {
                         Text(
                             text = "Change",

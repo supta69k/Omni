@@ -63,8 +63,8 @@ import com.example.omni.domain.formatAmount
 import com.example.omni.domain.progressOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
 import com.example.omni.ui.components.OmniHeader
+import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderHeight
 import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
@@ -92,6 +92,7 @@ import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniStepsCream
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.OmniWaterTeal
+import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
@@ -134,7 +135,17 @@ fun NutritionScreen(
     selectedIndex: Int = 0,
     /** The month label shown above the week strip; tapping opens the month picker. */
     selectedMonth: YearMonth = YearMonth.now(),
-    onSelectMonth: (YearMonth) -> Unit = {},
+    /** Whether the month picker is open. Hoisted, because the month query behind it is the ViewModel's. */
+    monthPickerOpen: Boolean = false,
+    /** The month the picker is showing, which follows its arrows rather than the selected day. */
+    pickerMonth: YearMonth = YearMonth.now(),
+    /** Calories logged per day of [pickerMonth]; a day with nothing logged is absent, not zero. */
+    monthCalories: Map<LocalDate, Int> = emptyMap(),
+    onOpenMonthPicker: () -> Unit = {},
+    onDismissMonthPicker: () -> Unit = {},
+    onBrowseMonth: (YearMonth) -> Unit = {},
+    /** A day chosen from the calendar, which may be outside the seven chips on screen. */
+    onSelectDate: (LocalDate) -> Unit = {},
     meals: List<Meal> = emptyList(),
     nutrition: DayNutrition = DayNutrition(),
     steps: Int = 0,
@@ -166,6 +177,10 @@ fun NutritionScreen(
     }
 
     DesignFrame {
+        OmniTabScaffold(
+            selected = OmniNavItem.Fitness,
+            onNavigate = onNavigate,
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -199,7 +214,7 @@ fun NutritionScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = ScreenPadding)
-                                .clickable { onSelectMonth(selectedMonth) },
+                                .clickable(onClick = onOpenMonthPicker),
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             Text(
@@ -303,6 +318,18 @@ fun NutritionScreen(
                     isAdding = false
                     editingMeal = null
                 },
+            )
+
+            // Last child of the box, above the meal sheet in z-order but never open at the same time:
+            // the month label is behind the meal sheet's scrim while that one is up.
+            MonthPickerSheet(
+                visible = monthPickerOpen,
+                month = pickerMonth,
+                selected = week.getOrNull(selectedIndex)?.date ?: LocalDate.now(),
+                calories = monthCalories,
+                onDismiss = onDismissMonthPicker,
+                onBrowseMonth = onBrowseMonth,
+                onSelectDate = onSelectDate,
             )
         }
     }

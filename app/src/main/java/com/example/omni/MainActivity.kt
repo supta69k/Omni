@@ -27,6 +27,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -74,7 +75,11 @@ import com.example.omni.ui.onboarding.OnboardingScreen
 import com.example.omni.ui.settings.EmergencyContactsViewModel
 import com.example.omni.ui.settings.GoalsScreen
 import com.example.omni.ui.settings.GoalsViewModel
+import com.example.omni.ui.settings.PersonalInformationScreen
+import com.example.omni.ui.settings.PersonalInformationViewModel
 import com.example.omni.ui.settings.SavedEmergenciesScreen
+import com.example.omni.ui.settings.SecurityScreen
+import com.example.omni.ui.settings.SecurityViewModel
 import com.example.omni.ui.settings.SettingScreen
 import com.example.omni.ui.settings.VerificationScreen
 import com.example.omni.ui.settings.VerificationViewModel
@@ -157,7 +162,11 @@ private fun OmniApp() {
         } ?: OmniHeaderState(userName = "")
     }
 
-    var screen by remember { mutableStateOf(DesignPreviewScreen ?: AppScreen.Splash) }
+    // rememberSaveable, not remember: configChanges already keeps this across a rotation, but a
+    // low-memory process kill recreates the Activity from a bundle, and a router that came back on
+    // Splash would run the gate again and walk a deep-linked page (Security, a Profile) back to Home.
+    // AppScreen is an enum, so the default saver serialises it by name with no custom Saver.
+    var screen by rememberSaveable { mutableStateOf(DesignPreviewScreen ?: AppScreen.Splash) }
 
     /**
      * Whose profile [AppScreen.Profile] shows. Beside the screen state because the destination is
@@ -165,7 +174,7 @@ private fun OmniApp() {
      * one profile replaces the page, and back still walks to where the first profile was opened
      * from — the one stack the enum router has.
      */
-    var profileUid by remember { mutableStateOf<String?>(null) }
+    var profileUid by rememberSaveable { mutableStateOf<String?>(null) }
 
     /**
      * The last bottom-bar tab the user stood on — where the three header pages go back to.
@@ -177,7 +186,7 @@ private fun OmniApp() {
      *
      * It only ever holds one of the four tabs, so it can never point at a page that has its own back.
      */
-    var lastTab by remember { mutableStateOf(AppScreen.Home) }
+    var lastTab by rememberSaveable { mutableStateOf(AppScreen.Home) }
 
     /**
      * Android's own convention for a bar: back from a secondary tab returns to the start destination,
@@ -701,6 +710,14 @@ private fun OmniApp() {
                     header = header,
                     week = state.week,
                     selectedIndex = state.selectedIndex,
+                    selectedMonth = state.selectedMonth,
+                    monthPickerOpen = state.monthPickerOpen,
+                    pickerMonth = state.pickerMonth,
+                    monthCalories = state.monthCalories,
+                    onOpenMonthPicker = nutrition::onOpenMonthPicker,
+                    onDismissMonthPicker = nutrition::onDismissMonthPicker,
+                    onBrowseMonth = nutrition::onBrowseMonth,
+                    onSelectDate = nutrition::onSelectDay,
                     meals = state.meals,
                     nutrition = state.nutrition,
                     steps = state.steps,
@@ -780,6 +797,8 @@ private fun OmniApp() {
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
                     },
+                    onPersonalInformation = { screen = AppScreen.PersonalInformation },
+                    onSecurity = { screen = AppScreen.Security },
                     onSavedEmergencies = { screen = AppScreen.SavedEmergencies },
                     onDailyGoals = { screen = AppScreen.Goals },
                     onApplyForVerification = { screen = AppScreen.Verification },
@@ -828,6 +847,46 @@ private fun OmniApp() {
                             container.authRepository.signOut()
                         }
                     },
+                )
+            }
+
+            // The first of the two "Account Details" rows. Nothing is hoisted: the name it edits is the
+            // same `users/{uid}.name` the profile stream already carries, so a save moves the header, the
+            // settings row and every author row through `user` rather than through anything passed here.
+            AppScreen.PersonalInformation -> {
+                val personal: PersonalInformationViewModel = viewModel(factory = AppContainer.factory())
+                val state by personal.uiState.collectAsStateWithLifecycle()
+
+                PersonalInformationScreen(
+                    state = state,
+                    onBack = { screen = AppScreen.Setting },
+                    onNameChange = personal::onNameChange,
+                    onDayChange = personal::onDayChange,
+                    onMonthChange = personal::onMonthChange,
+                    onYearChange = personal::onYearChange,
+                    onGenderChange = personal::onGenderChange,
+                    onSave = personal::save,
+                    onDiscard = personal::discard,
+                )
+            }
+
+            // The second of the two. Auth-only, so the profile stream is not involved at all — except
+            // that `SessionViewModel` copies a confirmed address change onto `users/{uid}.email`, which
+            // is what the settings row above this page reads.
+            AppScreen.Security -> {
+                val security: SecurityViewModel = viewModel(factory = AppContainer.factory())
+                val state by security.uiState.collectAsStateWithLifecycle()
+
+                SecurityScreen(
+                    state = state,
+                    onBack = { screen = AppScreen.Setting },
+                    onNewEmailChange = security::onNewEmailChange,
+                    onEmailPasswordChange = security::onEmailPasswordChange,
+                    onSubmitEmail = security::submitEmail,
+                    onCurrentPasswordChange = security::onCurrentPasswordChange,
+                    onNewPasswordChange = security::onNewPasswordChange,
+                    onConfirmPasswordChange = security::onConfirmPasswordChange,
+                    onSubmitPassword = security::submitPassword,
                 )
             }
 
@@ -1311,6 +1370,8 @@ private enum class AppScreen {
     Splash, Onboarding, SignUp, SignIn,
     Home, Feed, Sos, Nutrition,
     Setting, Messages, Notifications, FirstAid, ComposePost, SavedEmergencies, Goals, Verification,
+    /** The two halves of Settings' "Account Details" group: the profile document, then the credentials. */
+    PersonalInformation, Security,
     /** A public profile — the uid it shows travels beside [MainActivity]'s `profileUid`. */
     Profile,
 }

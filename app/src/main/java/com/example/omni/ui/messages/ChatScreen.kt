@@ -356,6 +356,7 @@ private const val InputMaxLines = 5
 val PreviewChat = OpenChatState(
     conversationId = "preview-thread",
     selfUid = "self",
+    otherUid = "dr-rahman",
     otherName = "Dr. Sadia Rahman",
     messages = listOf(
         Message(
@@ -387,6 +388,7 @@ private fun ChatScreenEmptyPreview() {
             state = OpenChatState(
                 conversationId = "preview-thread",
                 selfUid = "self",
+                otherUid = "tanvir-karim",
                 otherName = "Tanvir Karim",
                 draft = "Hi, I'd like some help planning meals.",
             ),

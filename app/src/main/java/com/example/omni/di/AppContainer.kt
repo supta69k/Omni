@@ -67,6 +67,8 @@ import com.example.omni.ui.notifications.NotificationsViewModel
 import com.example.omni.ui.nutrition.NutritionViewModel
 import com.example.omni.ui.settings.EmergencyContactsViewModel
 import com.example.omni.ui.settings.GoalsViewModel
+import com.example.omni.ui.settings.PersonalInformationViewModel
+import com.example.omni.ui.settings.SecurityViewModel
 import com.example.omni.ui.settings.VerificationViewModel
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.BuildConfig
@@ -300,6 +302,16 @@ class AppContainer private constructor(
                         current.authRepository,
                         current.userRepository,
                     ) as T
+                PersonalInformationViewModel::class.java ->
+                    PersonalInformationViewModel(
+                        current.authRepository,
+                        current.userRepository,
+                    ) as T
+                // Auth alone: the address on the account and the password are Firebase's, not
+                // `users/{uid}`'s. The profile document's copy of the email is reconciled by
+                // `SessionViewModel` once a change has actually landed.
+                SecurityViewModel::class.java ->
+                    SecurityViewModel(current.authRepository) as T
                 VerificationViewModel::class.java ->
                     VerificationViewModel(
                         current.authRepository,

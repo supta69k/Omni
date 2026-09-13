@@ -19,13 +19,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.omni.R
+import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniBackground
@@ -651,3 +656,111 @@ private val NavTintSpring = spring<Color>(stiffness = Spring.StiffnessMediumLow)
 
 /** The bar floats 16 above the system navigation bar. */
 val OmniNavBottomGap = 16.dp
+
+// ---- Adaptive scaffold + navigation rail --------------------------------------------------------
+
+/**
+ * The shared chrome wrapper every tab-reachable screen uses to pick its navigation affordance by
+ * orientation, so the portrait-vs-landscape switch lives in **one** place instead of in every screen.
+ *
+ * - **Portrait** overlays today's floating [OmniBottomNav] at the bottom — pixel-identical to before.
+ *   The [content] fills the frame and scrolls under the bar exactly as it always has.
+ * - **Landscape** puts an [OmniNavRail] on the left edge and gives [content] the remaining width. The
+ *   screen's own [OmniHeader] and body then span that content column, starting after the rail.
+ *
+ * It reads [LocalDesignWindow] (the design-dp orientation signal from [com.example.omni.ui.DesignFrame])
+ * rather than any physical-dp source. It is a *component* like [OmniHeader] and [OmniBottomNav]: each
+ * screen still owns exactly one [com.example.omni.ui.DesignFrame] and invokes this inside it, so the
+ * "one frame per screen" rule (`UI_ARCHITECTURE.md` §2a) holds — the bar is simply chosen here now.
+ *
+ * [selected] lights the matching rail/bar pill; pass a non-[NavBarItems] member (e.g. a header-opened
+ * destination) to show the chrome with nothing lit, as the bar-bearing header pages already do.
+ */
+@Composable
+fun OmniTabScaffold(
+    selected: OmniNavItem,
+    modifier: Modifier = Modifier,
+    onNavigate: (OmniNavItem) -> Unit = {},
+    content: @Composable () -> Unit,
+) {
+    val window = LocalDesignWindow.current
+    if (window.isLandscape) {
+        Row(modifier = modifier.fillMaxSize()) {
+            OmniNavRail(
+                selected = selected,
+                onSelect = onNavigate,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .systemBarsPadding()
+                    .padding(start = OmniNavBottomGap, end = RailContentGap),
+            )
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                content()
+            }
+        }
+    } else {
+        Box(modifier = modifier.fillMaxSize()) {
+            content()
+            OmniBottomNav(
+                selected = selected,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = OmniNavBottomGap),
+                onSelect = onNavigate,
+            )
+        }
+    }
+}
+
+/**
+ * The landscape navigation rail — the [OmniBottomNav] pill stood on its end.
+ *
+ * It reuses the bar's exact vocabulary: the same [NavBarItems], the same dark [OmniNavBar] track, and
+ * the same [NavCell] whose white pill springs its label out on selection. Laid out as a centred [Column]
+ * instead of a [Row], so the four tabs stack and the selected one grows its label to the right of its
+ * icon, unselected ones staying bare 24 icons aligned to the same start edge. The rail width is fixed
+ * ([RailWidth]) so the track itself does not resize as the pill animates.
+ */
+@Composable
+fun OmniNavRail(
+    selected: OmniNavItem,
+    modifier: Modifier = Modifier,
+    onSelect: (OmniNavItem) -> Unit = {},
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.CenterStart) {
+        Column(
+            modifier = Modifier
+                .width(RailWidth)
+                .clip(RoundedCornerShape(35.dp))
+                .background(OmniNavBar)
+                .padding(horizontal = RailIconInset, vertical = RailVerticalPadding),
+            verticalArrangement = Arrangement.spacedBy(RailItemGap),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            NavBarItems.forEach { item ->
+                NavCell(
+                    item = item,
+                    selected = item == selected,
+                    onClick = { onSelect(item) },
+                )
+            }
+        }
+    }
+}
+
+/** Fixed rail width — wide enough for the widest expanded pill so the track never resizes. */
+private val RailWidth = 140.dp
+
+/** The rail track's own inset to its icons, mirroring the bar's 23 icon inset. */
+private val RailIconInset = 19.dp
+
+/** Top/bottom breathing room inside the rail track. */
+private val RailVerticalPadding = 20.dp
+
+/** Vertical gap between the four stacked tabs. */
+private val RailItemGap = 14.dp
+
+/** Gap between the rail and the content column in landscape. */
+private val RailContentGap = 8.dp
+

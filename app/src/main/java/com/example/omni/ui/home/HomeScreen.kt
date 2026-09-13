@@ -33,8 +33,8 @@ import com.example.omni.data.model.DefaultStepsGoal
 import com.example.omni.data.model.DefaultWaterGoal
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
 import com.example.omni.ui.components.OmniHeader
+import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderHeight
 import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
@@ -94,97 +94,92 @@ fun HomeScreen(
     var sleepSheetOpen by remember { mutableStateOf(startSleepSheetOpen) }
 
     DesignFrame {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(OmniBackground),
+        OmniTabScaffold(
+            selected = OmniNavItem.Home,
+            onNavigate = onNavigate,
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .statusBarsPadding()
-                    .padding(horizontal = ScreenPadding),
+                    .background(OmniBackground),
             ) {
-                Spacer(Modifier.height(HeaderHeight + GreetingGap))
-                HomeGreeting(name = header.greetingName)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .statusBarsPadding()
+                        .padding(horizontal = ScreenPadding),
+                ) {
+                    Spacer(Modifier.height(HeaderHeight + GreetingGap))
+                    HomeGreeting(name = header.greetingName)
 
-                Spacer(Modifier.height(BentoGap))
+                    Spacer(Modifier.height(BentoGap))
 
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FirstAidCard(onExplore = onExploreFirstAid)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        WaterCard(
-                            glasses = glasses,
-                            goal = waterGoal,
-                            onAdd = onAddGlass,
-                            modifier = Modifier.weight(WaterCardWeight),
-                        )
-                        StepsCard(
-                            steps = steps,
-                            goal = stepsGoal,
-                            permissionNeeded = stepPermissionNeeded,
-                            onEnableTracking = onEnableStepTracking,
-                            modifier = Modifier.weight(StepsCardWeight),
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FirstAidCard(onExplore = onExploreFirstAid)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            WaterCard(
+                                glasses = glasses,
+                                goal = waterGoal,
+                                onAdd = onAddGlass,
+                                modifier = Modifier.weight(WaterCardWeight),
+                            )
+                            StepsCard(
+                                steps = steps,
+                                goal = stepsGoal,
+                                permissionNeeded = stepPermissionNeeded,
+                                onEnableTracking = onEnableStepTracking,
+                                modifier = Modifier.weight(StepsCardWeight),
+                            )
+                        }
                     }
-                }
 
-                Spacer(Modifier.height(SectionGap))
+                    Spacer(Modifier.height(SectionGap))
 
-                Text(
-                    text = "Daily updates & Recomindation",
-                    style = HomeType.SectionTitle,
-                    color = OmniSectionTitle,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(Modifier.height(DashboardGap))
-
-                Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
-                    SleepCard(
-                        hours = sleepHours,
-                        goalHours = sleepGoal,
-                        onLog = { sleepSheetOpen = true },
+                    Text(
+                        text = "Daily updates & Recomindation",
+                        style = HomeType.SectionTitle,
+                        color = OmniSectionTitle,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    CprCard(percent = cprPercent)
+
+                    Spacer(Modifier.height(DashboardGap))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
+                        SleepCard(
+                            hours = sleepHours,
+                            goalHours = sleepGoal,
+                            onLog = { sleepSheetOpen = true },
+                        )
+                        CprCard(percent = cprPercent)
+                    }
+
+                    Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
                 }
 
-                Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                OmniHeader(
+                    state = header,
+                    onProfileClick = { onNavigate(OmniNavItem.Setting) },
+                    onMessagesClick = { onNavigate(OmniNavItem.Messages) },
+                    onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
+                )
             }
-
-            OmniHeader(
-                state = header,
-                onProfileClick = { onNavigate(OmniNavItem.Setting) },
-                onMessagesClick = { onNavigate(OmniNavItem.Messages) },
-                onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
-            )
-
-            OmniBottomNav(
-                selected = OmniNavItem.Home,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
-            )
-
-            // Last child of the root box, so it dims the header and the floating bar too — a sheet that
-            // left either of them live would be a sheet you could navigate out from under.
-            SleepEntrySheet(
-                visible = sleepSheetOpen,
-                hours = sleepHours,
-                onDismiss = { sleepSheetOpen = false },
-                onSave = { hours ->
-                    sleepSheetOpen = false
-                    onLogSleep(hours)
-                },
-            )
         }
+
+        // Sheet is sibling of scaffold so it overlays bar/rail (KDoc rule 11)
+        SleepEntrySheet(
+            visible = sleepSheetOpen,
+            hours = sleepHours,
+            onDismiss = { sleepSheetOpen = false },
+            onSave = { hours ->
+                sleepSheetOpen = false
+                onLogSleep(hours)
+            },
+        )
     }
 }
 

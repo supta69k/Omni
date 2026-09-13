@@ -147,6 +147,19 @@ class FeedViewModel(
     private val optimistic = MutableStateFlow<Map<String, Post>>(emptyMap())
 
     /**
+     * The live comment count per post id, populated by the comments sheet's own listener.
+     *
+     * The post document carries a structural `commentCount` field that the rules permit on create
+     * but never on update — `posts/{id}`'s rule is `request.resource.data.commentCount ==
+     * resource.data.commentCount`, which is what makes the counter honest about being server-side.
+     * Without Cloud Functions (§9's `onCommentCreated` is Phase 12's) there is no write that can
+     * move it, so it stays at zero on every post. The fix is to count from the live listener the
+     * comments sheet is paying for anyway: a count we already have is the honest count, and a
+     * comment that the sheet has not seen has not been written.
+     */
+    private val commentCounts = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+    /**
      * Authors by uid, resolved once each from `users/{uid}` and then reused.
      *
      * A post carries the name and photo its author had *when it was written* — the denormalisation
@@ -272,19 +285,42 @@ class FeedViewModel(
                     flowOf(null to emptyList())
                 } else {
                     feedRepository.observeComments(id)
+                        // Before the `catch`, deliberately: a read that failed must not be counted.
+                        // The fallback below emits an empty list so the sheet can draw its empty
+                        // state, and letting that reach the counter would tell the pill the post has
+                        // no comments when what actually happened is that nobody could read them.
+                        .onEach { list ->
+                            resolveAuthors(list.map { it.authorId })
+                            // The listener is live on the subcollection, so this re-fires the moment
+                            // a comment is added — which is what makes the pill's number move on the
+                            // same frame the comment appears in the sheet above it.
+                            commentCounts.value = commentCounts.value + (id to list.size)
+                        }
                         .catch { cause ->
                             Log.w("Omni", "Comments on $id could not be read", cause)
                             emit(emptyList())
                         }
-                        .onEach { list -> resolveAuthors(list.map { it.authorId }) }
                         .map { list -> id to list.map { it.toRow() } }
                 }
             }
 
-    /** The loaded pages, with the optimistic overrides folded over them by id. */
+    /**
+     * The loaded pages, with the optimistic overrides and the known comment counts folded over them
+     * by id.
+     *
+     * Four flows, which the typed [combine] overloads still take — [uiState] is the one that is at
+     * its five-flow ceiling, which is why the counts are folded in *here* rather than added there.
+     */
     private val loaded: Flow<Pair<FeedSegment, List<Post>>> =
-        combine(firstPage, olderPages, optimistic) { (seg, first), older, overrides ->
-            seg to (first + older).map { post -> overrides[post.id] ?: post }
+        combine(firstPage, olderPages, optimistic, commentCounts) { (seg, first), older, overrides, counts ->
+            seg to (first + older).map { post ->
+                val base = overrides[post.id] ?: post
+                // Only a count we have actually counted replaces the document's own. A post whose
+                // sheet has never been opened keeps whatever the document says rather than being
+                // told it has zero comments by a map that has never heard of it.
+                val known = counts[post.id]
+                if (known == null) base else base.copy(commentCount = known)
+            }
         }.onEach { (_, posts) -> resolveAuthors(posts.map { it.authorId }) }
 
     /**

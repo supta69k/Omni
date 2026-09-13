@@ -4,6 +4,7 @@ import com.example.omni.data.model.DailyMetrics
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 
 /**
@@ -34,6 +35,19 @@ class PreviewMetricsRepository(
             )
         }
 
+    /**
+     * A plausible half-logged month, so the picker's calendar has something to draw in a preview.
+     *
+     * Only days up to the 28th and only every other one: a month where every square is filled would hide
+     * the empty state the real calendar spends most of its squares in.
+     */
+    override fun observeMonth(uid: String, month: String): Flow<Map<String, DailyMetrics>> = flowOf(
+        (1..28 step 2).associate { day ->
+            val key = "%s-%02d".format(month, day)
+            key to DailyMetrics(date = key, calories = PreviewCalories + day * 20)
+        }
+    )
+
     override suspend fun addGlass(uid: String, date: String) {
         glasses.update { it + 1 }
     }
@@ -55,5 +69,8 @@ class PreviewMetricsRepository(
 
         /** Likewise the sleep card's. Its setter really does update, so the entry sheet works in a preview. */
         const val PreviewSleepHours = 6.5f
+
+        /** The floor of the month picker's mock day totals, near the default calorie goal. */
+        const val PreviewCalories = 1_400
     }
 }

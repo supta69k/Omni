@@ -39,6 +39,15 @@ interface AuthRepository {
     /** The signed-in user's uid, or null. Drives the `users/{uid}` paths everywhere else. */
     val currentUid: String?
 
+    /**
+     * The signed-in account's email address, or null.
+     *
+     * Read from Firebase Auth rather than from the `users/{uid}` document on purpose: Auth's copy is the
+     * one that signs you in, and the two can legitimately disagree for as long as it takes a pending
+     * email change to be confirmed from the inbox. The security page reauthenticates against *this* one.
+     */
+    val currentEmail: String?
+
     /** Creates the account and the `users/{uid}` document (name goes with it in one flow). */
     suspend fun signUp(name: String, email: String, password: String)
 
@@ -46,6 +55,25 @@ interface AuthRepository {
 
     /** Sends the reset email through Firebase; the UI just confirms it was requested. */
     suspend fun sendPasswordReset(email: String)
+
+    /**
+     * Starts a change of sign-in address: reauthenticates with [currentPassword], then asks Firebase to
+     * send a confirmation link to [newEmail].
+     *
+     * It **starts** the change rather than completing it. Firebase's own method here is
+     * `verifyBeforeUpdateEmail`, which does not touch the account until the link in that message is
+     * opened — and that is the right behaviour to expose: an address nobody has proved they can read is
+     * an address that would lock the account out. The caller's job is therefore to say "check your
+     * inbox", not "done".
+     *
+     * The password is required because Firebase refuses a credential change on a session that has been
+     * signed in for a while, and asking for it up front turns "this operation requires recent
+     * authentication" into a field on the form rather than an error after the fact.
+     */
+    suspend fun changeEmail(currentPassword: String, newEmail: String)
+
+    /** Reauthenticates with [currentPassword], then replaces it with [newPassword]. Takes effect at once. */
+    suspend fun changePassword(currentPassword: String, newPassword: String)
 
     fun signOut()
 }
@@ -62,6 +90,13 @@ fun firebaseAuthErrorMessage(code: String): String = when (code) {
     "ERROR_EMAIL_ALREADY_IN_USE" -> "That email already has an account. Sign in instead?"
     "ERROR_WEAK_PASSWORD" -> "Passwords need at least 6 characters."
     "ERROR_TOO_MANY_REQUESTS" -> "Too many attempts. Wait a moment and try again."
+    // The three the account pages can produce that the sign-in pages cannot. `INVALID_CREDENTIAL` is
+    // what a modern project returns instead of `WRONG_PASSWORD` once email-enumeration protection is on,
+    // and on these pages it can only mean the current password was wrong — there is no "or the account
+    // doesn't exist" branch when the account is the one already signed in.
+    "ERROR_INVALID_CREDENTIAL" -> "Wrong password. Try again or reset it."
+    "ERROR_REQUIRES_RECENT_LOGIN" -> "Please sign out and back in, then try again."
+    "ERROR_OPERATION_NOT_ALLOWED" -> "Your account can't change this here. Contact support."
     "ERROR_NETWORK_REQUEST_FAILED" -> "No connection. Check your internet and try again."
     else -> "Something went wrong. Please try again."
 }

@@ -24,6 +24,17 @@ data class User(
     val profession: Profession? = null,
     val verified: Boolean = false,
     val photoUrl: String? = null,
+    /**
+     * Date of birth as `yyyy-MM-dd`, or `null` when it has never been filled in.
+     *
+     * A string rather than a `LocalDate` for the same reason the day documents are keyed by one: it is
+     * what Firestore stores, it sorts correctly as text, and it does not carry a time zone that would
+     * make a birthday shift by a day depending on where the phone is. The account page parses it on the
+     * way in and formats it on the way out; nothing else in the app reads it yet.
+     */
+    val dob: String? = null,
+    /** Free text, as typed on the account page. Blank is stored as absent — see `toUser`. */
+    val gender: String? = null,
     val unreadMessages: Int = 0,
     val unreadNotifications: Int = 0,
     val waterGoal: Int = DefaultWaterGoal,

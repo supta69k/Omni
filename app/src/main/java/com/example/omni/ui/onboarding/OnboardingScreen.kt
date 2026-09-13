@@ -62,6 +62,13 @@ import kotlinx.coroutines.launch
  *
  * The page indicator and the bottom call-to-action live outside the pager: in the design they are
  * repeated identically on every slide, which means they are chrome, not page content.
+ *
+ * Landscape is a **deliberately accepted degradation**, not a bug. The weighted layout squeezes and the
+ * illustration crops (saved from a hard clip by [clipToBounds]) in the short landscape viewport, because
+ * a real fix would mean giving the pager a fixed page height and a root scroll — which changes the
+ * portrait layout and breaks the pixel-identity the whole `DesignFrame` artboard depends on
+ * (`UI_ARCHITECTURE.md` §3). Onboarding is shown once and landscape-during-onboarding is rare, so the
+ * crop is the right trade against a refactor that risks every other screen's portrait fidelity.
  */
 @Composable
 fun OnboardingScreen(

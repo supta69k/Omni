@@ -2,6 +2,7 @@ package com.example.omni.data.repo
 
 import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.UserRole
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldValue
@@ -39,6 +40,9 @@ class FirebaseAuthRepository(
 
     override val currentUid: String?
         get() = auth.currentUser?.uid
+
+    override val currentEmail: String?
+        get() = auth.currentUser?.email
 
     init {
         // FirebaseAuth persists its session across process deaths, so this fires immediately on
@@ -80,6 +84,46 @@ class FirebaseAuthRepository(
         } catch (e: Exception) {
             throw mapped(e)
         }
+    }
+
+    override suspend fun changeEmail(currentPassword: String, newEmail: String) {
+        val user = reauthenticated(currentPassword)
+        try {
+            // `verifyBeforeUpdateEmail`, not `updateEmail`. The latter throws on any project with
+            // email-enumeration protection turned on, which is the default for projects created since
+            // 2023 — and even where it works it swaps the sign-in address for one nobody has proved
+            // they can open, which is a lock-out waiting to happen.
+            user.verifyBeforeUpdateEmail(newEmail.trim()).await()
+        } catch (e: Exception) {
+            throw mapped(e)
+        }
+    }
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String) {
+        val user = reauthenticated(currentPassword)
+        try {
+            user.updatePassword(newPassword).await()
+        } catch (e: Exception) {
+            throw mapped(e)
+        }
+    }
+
+    /**
+     * The signed-in user, with a credential Firebase has just re-checked.
+     *
+     * Both credential changes need this: Firebase rejects them outright on a session older than a few
+     * minutes, and doing the check here rather than at each call site means the "wrong password"
+     * sentence comes from one place and cannot drift between the two forms.
+     */
+    private suspend fun reauthenticated(currentPassword: String): FirebaseUser {
+        val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
+        val email = user.email ?: throw AuthException("This account has no email address to change.")
+        try {
+            user.reauthenticate(EmailAuthProvider.getCredential(email, currentPassword)).await()
+        } catch (e: Exception) {
+            throw mapped(e)
+        }
+        return user
     }
 
     override fun signOut() {

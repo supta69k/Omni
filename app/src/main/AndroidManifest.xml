@@ -41,8 +41,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Omni">
+        <!-- The app handles rotation itself rather than being recreated on it. This is NOT a portrait
+             lock — the window still rotates; the Activity simply stays alive, so DesignFrame re-measures
+             through BoxWithConstraints and all in-memory UI state (scroll positions, the onboarding
+             pager page, open sheets, half-typed drafts) survives the turn instead of resetting to
+             Splash. rememberSaveable on the router state (MainActivity) covers the separate case of a
+             low-memory process kill, which configChanges cannot. -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Omni"

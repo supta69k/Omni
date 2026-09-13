@@ -30,14 +30,22 @@ data class StepState(
 /**
  * Folds one raw sensor reading into the state — the only place the reboot rule lives.
  *
- * Three cases, in this order:
+ * Four cases, in this order:
  *
  *  1. **The day changed** (including the very first reading ever): today starts at zero whatever the
  *     sensor says, and the new day owes no writes yet. Callers must flush the outgoing day *before*
  *     calling this, because this is where its total is dropped.
- *  2. **The device rebooted**: the counter restarted at 0, so the anchor has to as well, and the whole
+ *  2. **Not yet anchored on this device** ([bootId] still 0): adopt [raw] as the anchor and add
+ *     nothing. This is a state that already has today's date but has never seen a sensor reading —
+ *     which is exactly what [DeviceStepsRepository] seeds when an account is first read on this phone
+ *     (from Firestore, or from empty). Without this case that first reading would fall through to
+ *     *Normal* and gain `raw − 0` — the **entire since-boot count**, a device-global number the account
+ *     never walked. That is how one account's steps used to bleed into the next on the same phone: the
+ *     boot counter is shared, so every freshly-seeded account converged on the same value. Any total the
+ *     seed carried (a day already part-walked on another device) is kept — only the anchor is set.
+ *  3. **The device rebooted**: the counter restarted at 0, so the anchor has to as well, and the whole
  *     of [raw] is new.
- *  3. **Normal**: add the delta since the last reading.
+ *  4. **Normal**: add the delta since the last reading.
  *
  * BACKEND_PLAN §11 Phase 4 sketches case 2 as "if the raw value is lower than the stored baseline,
  * assume a reboot and set the baseline to 0". That is tightened here to require **both** a changed
@@ -57,6 +65,13 @@ data class StepState(
 fun StepState.reconcile(raw: Int, bootId: Long, date: String): StepState {
     if (date != this.date) {
         return StepState(bootId = bootId, anchorRaw = raw, total = 0, syncedTotal = 0, date = date)
+    }
+
+    // Case 2: seeded for today but never anchored on this device. Take raw as the anchor and gain
+    // nothing, keeping whatever total the seed carried. This is the account-isolation fix — see the
+    // KDoc. A real bootId is `currentTimeMillis − elapsedRealtime`, so 0 can only be the seed's default.
+    if (this.bootId == 0L) {
+        return copy(bootId = bootId, anchorRaw = raw)
     }
 
     val rebooted = abs(bootId - this.bootId) > BootDriftToleranceMillis && raw < anchorRaw
