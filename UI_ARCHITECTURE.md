@@ -64,10 +64,13 @@ no navigation library. Six rules keep it honest:
    moves through it (entry flow, then the four bottom-bar destinations in `OmniNavItem`'s own
    left-to-right order, then the three the header opens) so the enum reads as the app's map; adding a
    tab means placing it at the position it occupies in the bar.
-2. **Every screen keeps its own `DesignFrame` and its own `OmniBottomNav`.** The transition crossfades
-   whole pages, so the bar is redrawn per screen rather than hoisted into a shared scaffold. This is
-   what keeps §3's "exactly one frame per screen" rule true — do not hoist the nav without
-   revisiting that rule. The bar shows **four** tabs (`Home`, `Feed`, `Sos`, `Fitness`) in a
+2. **Every *destination* screen keeps its own `DesignFrame` and picks its own nav affordance.**
+   The transition crossfades whole pages, so the chrome is redrawn per screen rather than hoisted into
+   a shared scaffold. This is what keeps §3's "exactly one frame per screen" rule true — do not hoist
+   the nav without revisiting that rule. A screen chooses the affordance by orientation through
+   `OmniTabScaffold` (§3a): the floating `OmniBottomNav` in portrait, the `OmniNavRail` in landscape.
+   A screen **entered from another page** rather than from the bar — Settings and everything behind it
+   — draws neither (see §3a's last paragraph). The bar shows **four** tabs (`Home`, `Feed`, `Sos`, `Fitness`) in a
    `SpaceBetween` row; the selected one becomes a white pill whose label springs out of the icon while
    the siblings reflow, all on a bouncy `spring` (plus a `ripple` on tap) — that overshoot is the
    "fluid" quality, so keep the springs, not linear tweens. The pill wraps its content rather than
@@ -90,11 +93,11 @@ no navigation library. Six rules keep it honest:
    already passes for its tabs, which is why they are `OmniNavItem` members at all: one lambda per
    screen instead of a callback per icon. This keeps the bar to four tabs (more room for the pill
    animation) and matches the reference UX. Those three entries route to real screens — `SettingScreen`
-   and two `ComingSoonScreen` stubs — they just are not among the four `NavBarItems` the bar renders, so
-   each passes its own bar-absent item as `selected` and lights no pill, which is the honest read: they
-   are not bottom-bar destinations.
+   and two `ComingSoonScreen` stubs — and because they are not among the four `NavBarItems` they are not
+   bottom-bar destinations: `ComingSoonScreen` carries its own item so the stub still lights its tab,
+   and `SettingScreen` draws no chrome at all, portrait or landscape (§3a).
 4. **A nav destination must never route to a different screen than the tab it lights.** Each screen
-   hardcodes its own `OmniBottomNav(selected = …)`, so pointing a tab at another screen lights the
+   hardcodes its own `OmniTabScaffold(selected = …)` / `OmniBottomNav(selected = …)`, so pointing a tab at another screen lights the
    wrong pill. **Figma is not the authority on which pill is lit.** Several frames were duplicated
    from an earlier one and still draw the *previous* screen's selection — both SOS frames draw Home's
    pill. The tab that opens a screen is the tab that lights, whatever the mock shows. A future
@@ -153,11 +156,17 @@ coordinates verbatim. A real phone is narrower (~360–412dp). `DesignFrame` rec
   across 360 / 393 / 412+ **without** per-child tweaks, **and** what keeps landscape from exploding:
   keying to `maxWidth` alone used the phone's *long* edge in landscape (~851dp), blowing the density up
   ~2× — the rotation bug. See `DesignFrame.kt`'s KDoc for the full reasoning.
-- **Landscape = letterbox + scroll, never reflow.** In landscape the artboard renders at portrait
-  density (393-wide), **centred**, with the long edge spent on `OmniBackground` letterbox margins. The
-  design's height (~899 design-dp) no longer fits the ~415 design-dp landscape viewport, so **every
-  screen that can exceed its viewport must carry a vertical scroll** — the frame does not add one. This
-  is a rotation-*safe* artboard, not a landscape redesign: the pixel layout is identical to portrait.
+- **Landscape = real reflow, not a letterbox.** Landscape was previously a centred 415 column with
+  `OmniBackground` bars down the long edges. It is not any more: in landscape the content box is
+  `fillMaxSize()`, so the design-dp window is roughly **899 × 415** and each screen reflows its body
+  into that width — a left nav rail instead of the floating bottom bar, two-column groups, grids that
+  deal items round-robin, centred-and-capped forms. Portrait is unchanged and remains pixel-perfect;
+  the landscape branch is entered through `LocalDesignWindow.isLandscape` and nowhere else (§3a).
+  The scale itself still comes from the short edge, so rotating a phone does not change what one design
+  dp is worth and text metrics are identical in both orientations.
+- **Screens still own their own vertical scroll.** The wide landscape viewport is *shorter* (~415 design-dp
+  against the design's ~899), so every screen whose content can exceed its viewport must carry
+  `verticalScroll` — the frame does not add one.
 - **Density:** overridden **only here**, via `CompositionLocalProvider(LocalDensity provides …)`.
 - **Font scaling:** **pinned to `fontScale = 1f`** (see §4).
 - **Insets:** `statusBarsPadding` / `systemBarsPadding` are consumed *inside* the frame, so they still
@@ -179,6 +188,42 @@ coordinates verbatim. A real phone is narrower (~360–412dp). `DesignFrame` rec
 5. **Nested components** just use normal Compose layout (`fillMaxWidth`, `weight`, `Arrangement`,
    Figma dp coordinates). Because the frame already made the space 415 wide, Figma's absolute numbers
    are valid inside them.
+
+### 3a. Landscape reflow — the sanctioned vocabulary
+
+Read `LocalDesignWindow.current` (§3) and **only** that to branch on orientation. Never
+`LocalConfiguration.screenWidthDp`, never `WindowSizeClass`, never a raw `maxWidth` comparison in a
+screen. The frame's density scaling means a physical dp is a different physical size in each
+orientation; the composition local is the one value the frame normalises.
+
+Four moves cover every screen shipped so far. Reach for these before inventing a fifth:
+
+| Move | Component | Portrait behaviour | Landscape behaviour |
+|------|-----------|--------------------|---------------------|
+| **Chrome swap** | `OmniTabScaffold(selected, onNavigate)` | content + floating `OmniBottomNav` | `OmniNavRail` on the left, content fills the rest |
+| **Grid** | `AdaptiveColumnGrid(items, verticalSpacing, horizontalSpacing)` | one column, byte-identical to a plain `Column` | items dealt round-robin into two columns |
+| **Row split** | `AdaptiveRow(itemCount, spacing) { index -> }` | stacks its slots vertically | lays them out side by side |
+| **Groups into columns** | plain `Row { Column(weight(1f)) … }` | (not used — portrait stays single-column) | short grouped sections reflow two-up |
+
+Plus **centre-and-cap** for forms: `Modifier.widthIn(max = DesignFrameWidth)` inside a centred box, so a
+wide landscape window does not stretch a portrait-shaped form into an unreadable band. `OmniSheetScaffold`
+already does this for every bottom sheet (§6 rule 11).
+
+**The two rules that keep portrait pixel-perfect while this happens:**
+
+1. **The portrait branch must reproduce the Figma geometry literally** — the design's own left gutter,
+   its own fixed widths, its own stacking. A convenience modifier added to a *shared* composable (a
+   `fillMaxWidth()` baked into a group body, say) silently changes portrait too and is how the Settings
+   gutter regression happened. Pass geometry in through a `modifier: Modifier = Modifier` parameter,
+   per call site, rather than fixing it inside the shared body.
+2. **A landscape-only difference must not leak into portrait.** If a screen's landscape branch needs a
+   different width or spacing, that value belongs in the branch, not in the shared constant.
+
+**Not every screen reflows.** A page entered from another page — `SettingScreen`, `SavedEmergenciesScreen`,
+`GoalsScreen`, `PersonalInformationScreen`, `SecurityScreen`, `VerificationScreen` — draws **no** bottom
+bar and **no** rail in either orientation, because none of them is one of the four destinations
+(§2a rule 3) and a bar that can only show four unlit pills misreports the page. Their way out is the
+back arrow, and it is the only one. Do not add `OmniTabScaffold` to these pages.
 
 ---
 

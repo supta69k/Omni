@@ -33,6 +33,7 @@ import com.example.omni.data.model.DefaultStepsGoal
 import com.example.omni.data.model.DefaultWaterGoal
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.components.AdaptiveRow
 import com.example.omni.ui.components.OmniHeader
 import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderHeight
@@ -148,14 +149,26 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(DashboardGap))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
-                        SleepCard(
-                            hours = sleepHours,
-                            goalHours = sleepGoal,
-                            onLog = { sleepSheetOpen = true },
-                        )
-                        CprCard(percent = cprPercent)
+                    // The three cards stack in portrait — `AdaptiveRow` collapses to one column when
+                    // the design window says portrait, so this branch is the only place the layout
+                    // differs. Landscape splits the dashboard into two columns: the day's two
+                    // goal readings (fiber, sleep) on the left, the percentile card (cpr) on the
+                    // right. The hero block above keeps its portrait shape because it is one tall
+                    // card sitting above the day-stat row, not a peer of the cards below.
+                    AdaptiveRow(
+                        horizontalSpacing = DashboardStackGap,
+                    ) { columnIndex, _ ->
+                        when (columnIndex) {
+                            0 -> Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
+                                FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
+                                SleepCard(
+                                    hours = sleepHours,
+                                    goalHours = sleepGoal,
+                                    onLog = { sleepSheetOpen = true },
+                                )
+                            }
+                            else -> CprCard(percent = cprPercent)
+                        }
                     }
 
                     Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
@@ -238,6 +251,9 @@ private val SectionGap = 31.dp
 
 /** The dashboard container's own 20 between the section title and the card stack. */
 private val DashboardGap = 20.dp
+
+/** The dashboard cards' own 24 between cards — also used as the landscape column gap. */
+private val DashboardStackGap = 24.dp
 
 /** Breathing room so the last card can scroll clear of the floating bar. */
 private val ContentBottomGap = 24.dp

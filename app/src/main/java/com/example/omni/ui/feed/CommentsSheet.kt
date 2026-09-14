@@ -1,14 +1,7 @@
 package com.example.omni.ui.feed
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +44,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.omni.R
+import com.example.omni.ui.components.OmniSheetScaffold
+import com.example.omni.ui.components.sheetNoRipple
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniAuthError
@@ -60,7 +55,6 @@ import com.example.omni.ui.theme.OmniFeedTimestamp
 import com.example.omni.ui.theme.OmniFeedVerified
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
-import com.example.omni.ui.theme.OmniScrim
 import com.example.omni.ui.theme.OmniSectionTitle
 import com.example.omni.ui.theme.OmniSheetShadow
 import com.example.omni.ui.theme.OmniSheetSurface
@@ -91,43 +85,29 @@ internal fun CommentsSheet(
     onOpenProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        // Closing the sheet takes the keyboard with it. Without this the IME stays up over a feed
-        // with no field on it, and the only way back is the system back button.
-        val focus = LocalFocusManager.current
-        val keyboard = LocalSoftwareKeyboardController.current
-        val dismiss: () -> Unit = {
-            focus.clearFocus()
-            keyboard?.hide()
-            onDismiss()
-        }
+    // Closing the sheet takes the keyboard with it. Without this the IME stays up over a feed
+    // with no field on it, and the only way back is the system back button. Wrapped here so the
+    // shared scaffold dismisses through it too — the scaffold is unaware of focus or IME.
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val dismiss: () -> Unit = {
+        focus.clearFocus()
+        keyboard?.hide()
+        onDismiss()
+    }
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(SheetMillis)),
-            exit = fadeOut(tween(SheetMillis)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(OmniScrim)
-                    .noRipple(onClick = dismiss),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = slideInVertically(tween(SheetMillis)) { it } + fadeIn(tween(SheetMillis)),
-            exit = slideOutVertically(tween(SheetMillis)) { it } + fadeOut(tween(SheetMillis)),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            CommentsPanel(
-                comments = comments,
-                onDismiss = dismiss,
-                onSend = onSend,
-                onOpenProfile = onOpenProfile,
-            )
-        }
+    // Shared scrim + slide envelope (ui/components/OmniSheetScaffold).
+    OmniSheetScaffold(
+        visible = visible,
+        onDismiss = dismiss,
+        modifier = modifier,
+    ) {
+        CommentsPanel(
+            comments = comments,
+            onDismiss = dismiss,
+            onSend = onSend,
+            onOpenProfile = onOpenProfile,
+        )
     }
 }
 
@@ -153,7 +133,7 @@ private fun CommentsPanel(
             .shadow(10.dp, SheetShape, ambientColor = OmniSheetShadow, spotColor = OmniSheetShadow)
             .clip(SheetShape)
             .background(OmniSheetSurface)
-            .noRipple(onClick = {})
+            .sheetNoRipple(onClick = {})
             .navigationBarsPadding()
             .imePadding()
             .padding(horizontal = SheetPadding),
@@ -166,7 +146,7 @@ private fun CommentsPanel(
             modifier = Modifier
                 .width(59.dp)
                 .height(5.dp)
-                .noRipple(onClick = onDismiss),
+                .sheetNoRipple(onClick = onDismiss),
         )
 
         Spacer(Modifier.height(HeadingTop))
@@ -399,13 +379,6 @@ private fun CommentRowCard(comment: CommentRow, onOpenProfile: () -> Unit) {
     }
 }
 
-@Composable
-private fun Modifier.noRipple(onClick: () -> Unit): Modifier = clickable(
-    interactionSource = remember { MutableInteractionSource() },
-    indication = null,
-    onClick = onClick,
-)
-
 /** Rounded at the top only, like the sleep and meal sheets. */
 private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
 
@@ -441,6 +414,3 @@ private val ComposerSurface = com.example.omni.ui.theme.OmniFieldSurface
 
 /** Long enough for a thoughtful reply, short enough that three fit the list. */
 private const val MaxCommentLength = 280
-
-/** `SosScreen`'s own reveal timing, the same as the sleep and meal sheets. */
-private const val SheetMillis = 280

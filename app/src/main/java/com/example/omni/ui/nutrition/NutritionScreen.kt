@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -63,6 +62,8 @@ import com.example.omni.domain.formatAmount
 import com.example.omni.domain.progressOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.LocalDesignWindow
+import com.example.omni.ui.components.AdaptiveRow
 import com.example.omni.ui.components.OmniHeader
 import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderHeight
@@ -181,157 +182,152 @@ fun NutritionScreen(
             selected = OmniNavItem.Fitness,
             onNavigate = onNavigate,
         ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(OmniBackground),
-        ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .statusBarsPadding(),
+                    .background(OmniBackground),
             ) {
-                // The wash is shorter than the content, so the content is what sizes this box.
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Image(
-                        painter = painterResource(R.drawable.nutrition_glow),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillBounds,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .offset(y = GlowTop)
-                            .fillMaxWidth()
-                            .height(GlowHeight),
-                    )
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Spacer(Modifier.height(HeaderHeight + DayRowGap))
-
-                        // Month label — tappable to open the month picker modal. The design has no
-                        // explicit frame for this, so we borrow the settings row title style and centre it.
-                        Row(
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .statusBarsPadding(),
+                ) {
+                    // The wash is shorter than the content, so the content is what sizes this box.
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Image(
+                            painter = painterResource(R.drawable.nutrition_glow),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillBounds,
                             modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .offset(y = GlowTop)
                                 .fillMaxWidth()
-                                .padding(horizontal = ScreenPadding)
-                                .clickable(onClick = onOpenMonthPicker),
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = selectedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
-                                    " ${selectedMonth.year}",
-                                style = NutritionType.FoodName,
-                                color = OmniInk,
-                                maxLines = 1,
-                            )
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-
-                        DayRow(week = week, selected = selectedIndex, onSelect = onSelectDay)
-
-                        Spacer(Modifier.height(GaugeGap))
-
-                        GoalGauge(calories = nutrition.calories, calorieGoal = calorieGoal)
-
-                        Spacer(Modifier.height(RingsGap))
-
-                        RingPager(state = pagerState, pages = ringPages)
-
-                        Spacer(Modifier.height(DotsGap))
-
-                        PageDots(
-                            current = pagerState.currentPage,
-                            count = ringPages.size,
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                                .height(GlowHeight),
                         )
 
-                        Spacer(Modifier.height(FoodLogGap))
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Spacer(Modifier.height(HeaderHeight + DayRowGap))
 
-                        FoodLogHeader(onLog = { isAdding = true })
-
-                        if (meals.isEmpty()) {
-                            Spacer(Modifier.height(EmptyGap))
-                            Text(
-                                text = "No meals logged yet.",
-                                style = NutritionType.FoodCalories,
-                                color = OmniNutriMacroLabel,
-                                maxLines = 1,
-                                softWrap = false,
-                                // The column has no horizontal padding — every child sets its own — so
-                                // without this the line started at the screen edge while "Food Log"
-                                // above it started at 18. The empty state has to hang off the same
-                                // margin as the section it is empty *of*.
-                                modifier = Modifier.padding(start = ScreenPadding),
-                            )
-                        } else {
-                            meals.forEach { meal ->
-                                Spacer(Modifier.height(EntryGap))
-                                FoodLogEntry(
-                                    meal = meal,
-                                    onClick = { editingMeal = meal },
+                            // Month label — tappable to open the month picker modal. The design has no
+                            // explicit frame for this, so we borrow the settings row title style and centre it.
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = ScreenPadding)
+                                    .clickable(onClick = onOpenMonthPicker),
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                Text(
+                                    text = selectedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
+                                        " ${selectedMonth.year}",
+                                    style = NutritionType.FoodName,
+                                    color = OmniInk,
+                                    maxLines = 1,
                                 )
                             }
-                        }
 
-                        Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                            Spacer(Modifier.height(8.dp))
+
+                            DayRow(week = week, selected = selectedIndex, onSelect = onSelectDay)
+
+                            Spacer(Modifier.height(GaugeGap))
+
+                            GoalGauge(calories = nutrition.calories, calorieGoal = calorieGoal)
+
+                            Spacer(Modifier.height(RingsGap))
+
+                            RingPager(state = pagerState, pages = ringPages)
+
+                            // The dots point at which page the pager is showing. Landscape shows both
+                            // pages at once, so there is nothing left to point at — the dots go with it.
+                            if (!LocalDesignWindow.current.isLandscape) {
+                                Spacer(Modifier.height(DotsGap))
+
+                                PageDots(
+                                    current = pagerState.currentPage,
+                                    count = ringPages.size,
+                                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                                )
+                            }
+
+                            Spacer(Modifier.height(FoodLogGap))
+
+                            FoodLogHeader(onLog = { isAdding = true })
+
+                            if (meals.isEmpty()) {
+                                Spacer(Modifier.height(EmptyGap))
+                                Text(
+                                    text = "No meals logged yet.",
+                                    style = NutritionType.FoodCalories,
+                                    color = OmniNutriMacroLabel,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    // The column has no horizontal padding — every child sets its own — so
+                                    // without this the line started at the screen edge while "Food Log"
+                                    // above it started at 18. The empty state has to hang off the same
+                                    // margin as the section it is empty *of*.
+                                    modifier = Modifier.padding(start = ScreenPadding),
+                                )
+                            } else {
+                                meals.forEach { meal ->
+                                    Spacer(Modifier.height(EntryGap))
+                                    FoodLogEntry(
+                                        meal = meal,
+                                        onClick = { editingMeal = meal },
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                        }
                     }
                 }
+
+                OmniHeader(
+                    state = header,
+                    onProfileClick = { onNavigate(OmniNavItem.Setting) },
+                    onMessagesClick = { onNavigate(OmniNavItem.Messages) },
+                    onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
+                )
             }
-
-            OmniHeader(
-                state = header,
-                onProfileClick = { onNavigate(OmniNavItem.Setting) },
-                onMessagesClick = { onNavigate(OmniNavItem.Messages) },
-                onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
-            )
-
-            // Figma highlights "Feed" here, but that is a slip: the frame's navbar was duplicated
-            // from the feed frame and its pill never re-pointed. `Fitness` is the tab that routes to
-            // this screen, so `Fitness` is the tab that lights up.
-            OmniBottomNav(
-                selected = OmniNavItem.Fitness,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
-            )
-
-            MealEntrySheet(
-                // In "add" mode there is no row behind the sheet, so it receives nothing to edit; the
-                // blank id is the signal a save means *new*, and the filled id means *update*.
-                visible = isAdding || editingMeal != null,
-                editing = if (isAdding) null else editingMeal,
-                onDismiss = { isAdding = false; editingMeal = null },
-                onSave = { meal ->
-                    if (isAdding) {
-                        onAddMeal(meal)
-                    } else {
-                        onEditMeal(meal)
-                    }
-                    isAdding = false
-                    editingMeal = null
-                },
-                onDelete = { mealId ->
-                    onDeleteMeal(mealId)
-                    isAdding = false
-                    editingMeal = null
-                },
-            )
-
-            // Last child of the box, above the meal sheet in z-order but never open at the same time:
-            // the month label is behind the meal sheet's scrim while that one is up.
-            MonthPickerSheet(
-                visible = monthPickerOpen,
-                month = pickerMonth,
-                selected = week.getOrNull(selectedIndex)?.date ?: LocalDate.now(),
-                calories = monthCalories,
-                onDismiss = onDismissMonthPicker,
-                onBrowseMonth = onBrowseMonth,
-                onSelectDate = onSelectDate,
-            )
         }
+
+        // Both sheets are siblings of the scaffold so they overlay the bar in portrait and the rail in
+        // landscape (`UI_ARCHITECTURE.md` §2a rule 11), rather than being inset by either.
+        MealEntrySheet(
+            // In "add" mode there is no row behind the sheet, so it receives nothing to edit; the
+            // blank id is the signal a save means *new*, and the filled id means *update*.
+            visible = isAdding || editingMeal != null,
+            editing = if (isAdding) null else editingMeal,
+            onDismiss = { isAdding = false; editingMeal = null },
+            onSave = { meal ->
+                if (isAdding) {
+                    onAddMeal(meal)
+                } else {
+                    onEditMeal(meal)
+                }
+                isAdding = false
+                editingMeal = null
+            },
+            onDelete = { mealId ->
+                onDeleteMeal(mealId)
+                isAdding = false
+                editingMeal = null
+            },
+        )
+
+        // Above the meal sheet in z-order but never open at the same time: the month label is behind
+        // the meal sheet's scrim while that one is up.
+        MonthPickerSheet(
+            visible = monthPickerOpen,
+            month = pickerMonth,
+            selected = week.getOrNull(selectedIndex)?.date ?: LocalDate.now(),
+            calories = monthCalories,
+            onDismiss = onDismissMonthPicker,
+            onBrowseMonth = onBrowseMonth,
+            onSelectDate = onSelectDate,
+        )
     }
 }
 
@@ -490,14 +486,14 @@ private fun GoalGauge(calories: Int = 0, calorieGoal: Int = DefaultCalorieGoal) 
             unit = "kg",
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .offset(x = WeightX, y = MeasurementTop),
+                .padding(start = WeightStart, top = MeasurementTop),
         )
         Measurement(
             value = "5.7",
             unit = "foot",
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .offset(x = HeightX, y = MeasurementTop),
+                .align(Alignment.TopEnd)
+                .padding(end = HeightEnd, top = MeasurementTop),
         )
     }
 }
@@ -604,8 +600,40 @@ private fun goalSentence(percent: Int): AnnotatedString {
  * lays out side by side off-canvas: `Main card` at x=32 and `Activity cards` at x=451.645, both 350
  * wide, which is where the page spacing comes from.
  */
+/**
+ * Figma `Nutrient and activity container` (node 151:480) — two pages of three rings that the design
+ * lays out side by side off-canvas: `Main card` at x=32 and `Activity cards` at x=451.645, both 350
+ * wide, which is where the page spacing comes from.
+ *
+ * In landscape the two pages now sit side-by-side, each taking half the remaining width after the two
+ * gutters. The existing `HorizontalPager` is replaced with `AdaptiveRow` so the two columns reflow
+ * automatically without duplicating code or introducing a new dimension.
+ */
+/**
+ * Figma `Nutrient and activity container` (node 151:480) — two pages of three rings that the design
+ * lays out side by side off-canvas: `Main card` at x=32 and `Activity cards` at x=451.645, both 350
+ * wide, which is where the page spacing comes from.
+ *
+ * Portrait is byte-identical to the design: one swipeable [HorizontalPager] showing a page at a time,
+ * with the [PageDots] below telling you which. Landscape has the width to show both pages at once, so
+ * the pager becomes a two-column [AdaptiveRow] — the swipe and its dots are then redundant and the
+ * caller drops them. State is still hoisted in either branch, so a rotation mid-swipe keeps its page.
+ */
 @Composable
 private fun RingPager(state: PagerState, pages: List<List<Ring>>) {
+    if (LocalDesignWindow.current.isLandscape) {
+        AdaptiveRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(RingBlockHeight)
+                .padding(top = RingCardY),
+            horizontalSpacing = RingGap,
+        ) { columnIndex, _ ->
+            RingRow(rings = pages[columnIndex])
+        }
+        return
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -619,14 +647,20 @@ private fun RingPager(state: PagerState, pages: List<List<Ring>>) {
                 .height(RingCardHeight),
             pageSpacing = RingPageSpacing,
         ) { page ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(RingGap),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                pages[page].forEach { RingGauge(ring = it) }
-            }
+            RingRow(rings = pages[page])
         }
+    }
+}
+
+/** A single page of three rings, shared by the portrait pager and the landscape two-column layout. */
+@Composable
+private fun RingRow(rings: List<Ring>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(RingGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        rings.forEach { RingGauge(ring = it) }
     }
 }
 
@@ -750,8 +784,8 @@ private fun FoodLogHeader(onLog: () -> Unit) {
 private fun FoodLogEntry(meal: Meal, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .padding(start = ScreenPadding)
-            .width(EntryWidth)
+            .fillMaxWidth()
+            .padding(start = ScreenPadding, end = EntryEndPadding)
             .height(EntryHeight)
             .clickable(onClick = onClick),
     ) {
@@ -950,8 +984,16 @@ private val MeasurementWidth = 74.dp
 
 /** 211 − 203.7246 — the two measurements sit slightly below the card's top edge. */
 private val MeasurementTop = 7.275.dp
-private val WeightX = 30.dp
-private val HeightX = 316.dp
+
+/**
+ * The weight hugs the left gutter and the height the right, flanking the centred arc — where the frame
+ * pins them at x=30 and x=316 (a 74-wide box ending at 390). Anchored to the two edges rather than to
+ * absolute x so the pair spreads to the frame's margins in landscape instead of jamming against the
+ * left where a fixed x=316 would fall on a 899-wide window; portrait is unchanged (start 30, end
+ * 415 − 390 = 25).
+ */
+private val WeightStart = 30.dp
+private val HeightEnd = 25.dp
 
 /** 420 − 380.2746, arc to rings. */
 private val RingsGap = 39.725.dp
@@ -990,7 +1032,12 @@ private val PlusSize = 24.dp
 /** 415 − (377 + 24) — the plus is inset less than everything else on the screen. */
 private val PlusPadding = 14.dp
 
-private val EntryWidth = 383.021.dp
+/**
+ * The row fills the width less its two gutters rather than carrying the frame's literal 383.021: in
+ * portrait `18 + (415 − 18 − 13.979 =) 383.021 + 13.979` is the same box, but on a wide window the row
+ * now stretches so the name and its chips hold the two edges instead of huddling at the left.
+ */
+private val EntryEndPadding = 13.979.dp
 private val EntryHeight = 47.dp
 private val EntryRuleHeight = 1.dp
 

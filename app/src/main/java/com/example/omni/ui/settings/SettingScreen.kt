@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,10 +42,7 @@ import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
-import com.example.omni.ui.components.OmniNavBottomGap
-import com.example.omni.ui.components.OmniNavHeight
-import com.example.omni.ui.components.OmniNavItem
+import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniOnInk
@@ -85,13 +81,17 @@ import com.example.omni.ui.theme.SettingsType
  * card. Here it is ordinary scrolling content, as on the dashboard, and scrolls clear of the floating
  * bar.
  *
- * Settings is no longer a bottom-bar tab — it opens from the header avatar. The bar is still drawn so
- * the user can jump back to a tab, but passing the (now bar-absent) [OmniNavItem.Setting] simply
- * lights no pill, which is the honest read: this page is not one of the four destinations.
+ * Settings is no longer a bottom-bar tab — it opens from the header avatar — and it **draws no bar or
+ * rail at all**. Keeping the bar meant drawing four pills with none of them lit, because Settings is not
+ * one of the four destinations; a chrome that can only misreport its own state is worse than no chrome.
+ * So this page joins its own children ([SavedEmergenciesScreen], [GoalsScreen],
+ * [PersonalInformationScreen]): a bare [DesignFrame] whose only way out is the back arrow. That also
+ * gives the content the full height back, which is what un-collided the card's "Apply for Verification"
+ * button from the floating bar in portrait.
  *
  * **The back row above the profile is not in the frame** (§6 rule 9). The frame was drawn when this was
- * a tab, and a page you *enter* needs a way out that does not require choosing a different destination
- * first — the bar alone cannot say "back where I was". It is the same 40dp mirrored-arrow circle
+ * a tab, and a page you *enter* needs a way out — with the bar gone it is the *only* way out, so it is
+ * load-bearing rather than a convenience. It is the same 40dp mirrored-arrow circle
  * [SavedEmergenciesScreen] and [GoalsScreen] use, so all three pages behind Settings now leave the same
  * way. It costs 23.3dp: the profile row moves from 36.7 below the status bar to 60, which the page
  * absorbs by scrolling. Everything below it keeps the design's own arithmetic.
@@ -107,7 +107,6 @@ fun SettingScreen(
     photoError: String? = null,
     pushNotifications: Boolean = true,
     offlineCache: Boolean = true,
-    onNavigate: (OmniNavItem) -> Unit = {},
     onBack: () -> Unit = {},
     onChangePhoto: () -> Unit = {},
     /** The "Account Details" group's two rows, named like the two below them rather than dispatched
@@ -167,97 +166,67 @@ fun SettingScreen(
 
                 Spacer(Modifier.height(AccountGroupGap))
 
-                SettingsGroup(label = "Account Details", width = 363.dp) {
-                    // First row: Personal Information (name, DOB, gender)
-                    SettingsRow(
-                        title = "Personal Information",
-                        subtitle = "Name, DOB, Gender",
-                        textWidth = 164.dp,
-                        onClick = onPersonalInformation,
+                // Portrait keeps the design's single-column stack, byte-for-byte: each group carries its
+                // own Figma width at the 16 left gutter, which is why the modifiers below are spelled
+                // out per call rather than folded into [SettingsGroup]. Landscape unlocks a wide window,
+                // so the three short groups reflow into two columns that fill the width instead of a
+                // portrait column stranded at the left gutter (§ landscape reflow).
+                if (LocalDesignWindow.current.isLandscape) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = PagePadding),
+                        horizontalArrangement = Arrangement.spacedBy(LandscapeColumnGap),
                     ) {
-                        Text(
-                            text = "Edit",
-                            style = SettingsType.RowAction,
-                            color = OmniSetRowAction,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(EmergencyGroupGap),
+                        ) {
+                            AccountDetailsGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                onPersonalInformation = onPersonalInformation,
+                                onSecurity = onSecurity,
+                            )
+                            EmergencyGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                onSavedEmergencies = onSavedEmergencies,
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            PreferencesGroup(
+                                modifier = Modifier.fillMaxWidth(),
+                                onDailyGoals = onDailyGoals,
+                                pushNotifications = pushNotifications,
+                                onPushNotificationsChange = onPushNotificationsChange,
+                                offlineCache = offlineCache,
+                                onOfflineCacheChange = onOfflineCacheChange,
+                            )
+                        }
                     }
-                    // Second row: Security (email, password) — was duplicated "Personal Information"
-                    SettingsRow(
-                        title = "Security",
-                        subtitle = "Email, Password",
-                        textWidth = 164.dp,
-                        onClick = onSecurity,
-                    ) {
-                        Text(
-                            text = "Change",
-                            style = SettingsType.RowAction,
-                            color = OmniSetRowAction,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
-                }
+                } else {
+                    AccountDetailsGroup(
+                        modifier = Modifier.padding(start = PagePadding).width(AccountGroupWidth),
+                        onPersonalInformation = onPersonalInformation,
+                        onSecurity = onSecurity,
+                    )
 
-                Spacer(Modifier.height(EmergencyGroupGap))
+                    Spacer(Modifier.height(EmergencyGroupGap))
 
-                SettingsGroup(label = "Emergency & Medical", width = 364.dp) {
-                    SettingsRow(
-                        title = "Saved Emergencies",
-                        subtitle = "Medical ID, Blood Type, Allergies",
-                        textWidth = 201.dp,
-                        onClick = onSavedEmergencies,
-                    ) {
-                        Image(
-                            painter = painterResource(R.drawable.ic_set_arrow_right),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                }
+                    EmergencyGroup(
+                        modifier = Modifier.padding(start = PagePadding).width(EmergencyGroupWidth),
+                        onSavedEmergencies = onSavedEmergencies,
+                    )
 
-                Spacer(Modifier.height(PreferencesGroupGap))
+                    Spacer(Modifier.height(PreferencesGroupGap))
 
-                SettingsGroup(label = "Preferences", width = 363.dp) {
-                    // First in the group because it is the only row here that changes what the other
-                    // screens *say* — the two below it change what the app does in the background.
-                    SettingsRow(
-                        title = "Daily Goals",
-                        subtitle = "Water, steps, sleep, food",
-                        textWidth = 201.dp,
-                        onClick = onDailyGoals,
-                    ) {
-                        Image(
-                            painter = painterResource(R.drawable.ic_set_arrow_right),
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                    SettingsRow(
-                        title = "Push Notifications",
-                        subtitle = "Alerts, reminders, community",
-                        textWidth = 201.dp,
-                        onClick = { onPushNotificationsChange(!pushNotifications) },
-                    ) {
-                        PreferenceSwitch(
-                            checked = pushNotifications,
-                            trackOn = OmniSetTogglePush,
-                            onCheckedChange = onPushNotificationsChange,
-                        )
-                    }
-                    SettingsRow(
-                        title = "Offline First Aid Cache",
-                        subtitle = "Download guides for offline use",
-                        textWidth = 201.dp,
-                        onClick = { onOfflineCacheChange(!offlineCache) },
-                    ) {
-                        PreferenceSwitch(
-                            checked = offlineCache,
-                            trackOn = OmniSetToggleCache,
-                            onCheckedChange = onOfflineCacheChange,
-                        )
-                    }
+                    PreferencesGroup(
+                        modifier = Modifier.padding(start = PagePadding).width(PreferencesGroupWidth),
+                        onDailyGoals = onDailyGoals,
+                        pushNotifications = pushNotifications,
+                        onPushNotificationsChange = onPushNotificationsChange,
+                        offlineCache = offlineCache,
+                        onOfflineCacheChange = onOfflineCacheChange,
+                    )
                 }
 
                 Spacer(Modifier.height(HealthcareCardGap))
@@ -268,16 +237,126 @@ fun SettingScreen(
 
                 LogOutButton(onClick = onLogOut)
 
-                Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                Spacer(Modifier.height(ContentBottomGap))
             }
+        }
+    }
+}
 
-            OmniBottomNav(
-                selected = OmniNavItem.Setting,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
+/**
+ * The three labelled sections, extracted so the portrait stack and the landscape two-column layout can
+ * each place them without duplicating their rows. Each is exactly the block it was inline before.
+ *
+ * The [modifier] is what makes one body serve both: portrait hands it the design's own
+ * `padding(start = 16).width(363/364)`, landscape hands it `fillMaxWidth()` inside a weighted column.
+ */
+@Composable
+private fun AccountDetailsGroup(
+    modifier: Modifier = Modifier,
+    onPersonalInformation: () -> Unit,
+    onSecurity: () -> Unit,
+) {
+    SettingsGroup(label = "Account Details", modifier = modifier) {
+        // First row: Personal Information (name, DOB, gender)
+        SettingsRow(
+            title = "Personal Information",
+            subtitle = "Name, DOB, Gender",
+            textWidth = 164.dp,
+            onClick = onPersonalInformation,
+        ) {
+            Text(
+                text = "Edit",
+                style = SettingsType.RowAction,
+                color = OmniSetRowAction,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        // Second row: Security (email, password) — was duplicated "Personal Information"
+        SettingsRow(
+            title = "Security",
+            subtitle = "Email, Password",
+            textWidth = 164.dp,
+            onClick = onSecurity,
+        ) {
+            Text(
+                text = "Change",
+                style = SettingsType.RowAction,
+                color = OmniSetRowAction,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmergencyGroup(
+    modifier: Modifier = Modifier,
+    onSavedEmergencies: () -> Unit,
+) {
+    SettingsGroup(label = "Emergency & Medical", modifier = modifier) {
+        SettingsRow(
+            title = "Saved Emergencies",
+            subtitle = "Medical ID, Blood Type, Allergies",
+            textWidth = 201.dp,
+            onClick = onSavedEmergencies,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_set_arrow_right),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreferencesGroup(
+    modifier: Modifier = Modifier,
+    onDailyGoals: () -> Unit,
+    pushNotifications: Boolean,
+    onPushNotificationsChange: (Boolean) -> Unit,
+    offlineCache: Boolean,
+    onOfflineCacheChange: (Boolean) -> Unit,
+) {
+    SettingsGroup(label = "Preferences", modifier = modifier) {
+        // First in the group because it is the only row here that changes what the other
+        // screens *say* — the two below it change what the app does in the background.
+        SettingsRow(
+            title = "Daily Goals",
+            subtitle = "Water, steps, sleep, food",
+            textWidth = 201.dp,
+            onClick = onDailyGoals,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_set_arrow_right),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        SettingsRow(
+            title = "Push Notifications",
+            subtitle = "Alerts, reminders, community",
+            textWidth = 201.dp,
+            onClick = { onPushNotificationsChange(!pushNotifications) },
+        ) {
+            PreferenceSwitch(
+                checked = pushNotifications,
+                trackOn = OmniSetTogglePush,
+                onCheckedChange = onPushNotificationsChange,
+            )
+        }
+        SettingsRow(
+            title = "Offline First Aid Cache",
+            subtitle = "Download guides for offline use",
+            textWidth = 201.dp,
+            onClick = { onOfflineCacheChange(!offlineCache) },
+        ) {
+            PreferenceSwitch(
+                checked = offlineCache,
+                trackOn = OmniSetToggleCache,
+                onCheckedChange = onOfflineCacheChange,
             )
         }
     }
@@ -394,17 +473,20 @@ private fun ProfileRow(
  *
  * All three are the same shape: a grey label, 12 of air, then rows 18 apart. Only the width differs,
  * and only by the one pixel the source gives the emergency group.
+ *
+ * The geometry lives entirely in the caller's [modifier]: portrait passes the design's own left gutter
+ * and fixed width, landscape passes `fillMaxWidth()`. This body deliberately adds neither, because a
+ * `fillMaxWidth()` baked in here was exactly the regression that ate the 16dp gutter in portrait and
+ * pushed the rows off the left edge of the phone.
  */
 @Composable
 private fun SettingsGroup(
     label: String,
-    width: Dp,
+    modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .padding(start = PagePadding)
-            .width(width),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
@@ -502,16 +584,19 @@ private fun PreferenceSwitch(
 /**
  * "Healthcare Professional?" — Figma node 163:44, a 383 x 225 card at radius 13.
  *
- * Its three pieces are absolutely placed in the source (header at 22, paragraph at 83, button at 169)
- * and the paragraph's own centre is half a pixel left of the card's, so the card stays a [Box] with
- * Figma's offsets rather than becoming a column of spacers.
+ * Its three pieces are placed by the source at 22 / 83 / 169 from the top; those are vertical offsets,
+ * which are the same physical distance in either orientation, so they stay. What used to pin the card
+ * to a literal 383 and the button to `start = 46` — both of which jam against the left of a wide
+ * landscape window — is now relative: the card fills its gutters (portrait keeps 383, since
+ * `415 − 16 − 16 = 383`) and the button centres like the header and paragraph above it (the design's
+ * symmetric 46/46 side gutters on a 383 card are a centred button spelled out in absolute x).
  */
 @Composable
 private fun HealthcareCard(onApply: () -> Unit) {
     Box(
         modifier = Modifier
-            .padding(start = PagePadding)
-            .width(383.dp)
+            .fillMaxWidth()
+            .padding(start = PagePadding, end = PagePadding)
             .height(225.dp)
             .clip(RoundedCornerShape(13.dp))
             .background(OmniSetCardSurface),
@@ -551,8 +636,8 @@ private fun HealthcareCard(onApply: () -> Unit) {
 
         Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 46.dp, top = 169.dp)
+                .align(Alignment.TopCenter)
+                .padding(top = 169.dp)
                 .clip(RoundedCornerShape(23.dp))
                 .background(OmniSetApply)
                 .clickable(onClick = onApply)
@@ -608,6 +693,14 @@ private val AccountRows = listOf("Edit", "Change")
 private val PagePadding = 16.dp
 
 /**
+ * The three groups' own Figma widths, at the 16 left gutter — 363 / 364 / 363. The odd one out is the
+ * source's, not a typo here. Portrait applies them; landscape ignores them for `fillMaxWidth()`.
+ */
+private val AccountGroupWidth = 363.dp
+private val EmergencyGroupWidth = 364.dp
+private val PreferencesGroupWidth = 363.dp
+
+/**
  * The back row's own top gap.
  *
  * It stands in for the design's 36.664 (= 61 − 24.336, the profile row's y less the mock iOS status bar
@@ -631,13 +724,20 @@ private val EmergencyGroupGap = 33.dp
 /** 458 − 428 */
 private val PreferencesGroupGap = 30.dp
 
+/**
+ * The air between the two landscape columns. Not a Figma value — the frame is portrait-only — so it
+ * matches [com.example.omni.ui.components.AdaptiveRow]'s own 16 inter-column default, which every other
+ * reflowed screen uses.
+ */
+private val LandscapeColumnGap = 16.dp
+
 /** 653 − 613 */
 private val HealthcareCardGap = 40.dp
 
 /** 940 − 878 */
 private val LogOutGap = 62.dp
 
-/** Breathing room so the log-out button can scroll clear of the floating bar. */
+/** Breathing room under the log-out button, now that no floating bar overlaps it. */
 private val ContentBottomGap = 24.dp
 
 @DevicePreviews

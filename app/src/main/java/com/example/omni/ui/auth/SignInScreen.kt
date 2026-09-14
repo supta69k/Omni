@@ -71,6 +71,7 @@ fun SignInScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
         ) {
             Spacer(Modifier.height(TopSpacing))
 

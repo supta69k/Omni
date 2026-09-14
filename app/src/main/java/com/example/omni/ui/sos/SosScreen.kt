@@ -10,6 +10,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -77,6 +79,7 @@ import com.example.omni.data.model.distanceLabel
 import com.example.omni.data.model.etaLabel
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.components.OmniHeader
 import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderHeight
@@ -239,6 +242,10 @@ fun SosScreen(
             (if (sheetOpen) SheetHeight else SwipeSlot).roundToPx()
         }
 
+        OmniTabScaffold(
+            selected = OmniNavItem.Sos,
+            onNavigate = onNavigate,
+        ) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -332,10 +339,18 @@ fun SosScreen(
                 visible = userLocation != null,
                 enter = fadeIn(tween(StateChangeMillis)),
                 exit = fadeOut(tween(StateChangeMillis)),
+                // Portrait: bottom-end (Figma's right corner). Landscape: bottom-start so the
+                // button clears the side-docked hospitals sheet sitting at center-end.
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(if (LocalDesignWindow.current.isLandscape) Alignment.BottomStart else Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(end = RecenterEnd, bottom = recenterBottom),
+                    // The end-padding is what puts a 21dp gutter between the button and the right edge
+                    // when it is anchored at BottomEnd (portrait). In landscape the button sits at
+                    // BottomStart, so the end-padding just floats it 21dp off the rail — drop it.
+                    .padding(
+                        end = if (LocalDesignWindow.current.isLandscape) 0.dp else RecenterEnd,
+                        bottom = recenterBottom,
+                    ),
             ) {
                 RecenterButton(onClick = onRecenter)
             }
@@ -344,10 +359,19 @@ fun SosScreen(
                 visible = !sheetOpen,
                 enter = slideInVertically(tween(StateChangeMillis)) { it } + fadeIn(tween(StateChangeMillis)),
                 exit = slideOutVertically(tween(StateChangeMillis)) { it } + fadeOut(tween(StateChangeMillis)),
+                // Landscape has no bottom bar — the navigation is a rail on the left edge — so the
+                // clearance only matters in portrait.
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .navigationBarsPadding()
-                    .padding(start = SliderStart, bottom = OmniNavBottomGap + OmniNavHeight + SliderNavGap),
+                    .padding(
+                        start = SliderStart,
+                        bottom = if (LocalDesignWindow.current.isLandscape) {
+                            SliderNavGap
+                        } else {
+                            OmniNavBottomGap + OmniNavHeight + SliderNavGap
+                        },
+                    ),
             ) {
                 SosSwipeTrack(onActivate = {
                     sheetOpen = true
@@ -357,10 +381,23 @@ fun SosScreen(
 
             AnimatedVisibility(
                 visible = sheetOpen,
-                enter = slideInVertically(tween(StateChangeMillis)) { it } + fadeIn(tween(StateChangeMillis)),
-                exit = slideOutVertically(tween(StateChangeMillis)) { it } + fadeOut(tween(StateChangeMillis)),
+                // In portrait the sheet rises from the bottom edge (Figma's own slide). Landscape
+                // moves it to the right edge — the sheet is 360 wide on a ~859dp content column, so
+                // it sits inside the map's right gutter and the map continues to fill the rest of
+                // the pane, instead of being covered by a 480-tall sheet that would clip the
+                // grab handle off the top of a ~415dp tall window.
+                enter = if (LocalDesignWindow.current.isLandscape) {
+                    slideInHorizontally(tween(StateChangeMillis)) { it } + fadeIn(tween(StateChangeMillis))
+                } else {
+                    slideInVertically(tween(StateChangeMillis)) { it } + fadeIn(tween(StateChangeMillis))
+                },
+                exit = if (LocalDesignWindow.current.isLandscape) {
+                    slideOutHorizontally(tween(StateChangeMillis)) { it } + fadeOut(tween(StateChangeMillis))
+                } else {
+                    slideOutVertically(tween(StateChangeMillis)) { it } + fadeOut(tween(StateChangeMillis))
+                },
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(if (LocalDesignWindow.current.isLandscape) Alignment.CenterEnd else Alignment.BottomCenter)
                     .navigationBarsPadding(),
             ) {
                 HospitalSheet(
@@ -383,14 +420,10 @@ fun SosScreen(
                 )
             }
 
-            OmniBottomNav(
-                selected = OmniNavItem.Sos,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
-            )
+            // The floating bar (portrait) / rail (landscape) is supplied by OmniTabScaffold now.
+            // In landscape the sheet above sits in the content column, beside the rail; in portrait
+            // the bar floats over the sheet's foot exactly as Figma frame `- 30` draws it.
+        }
         }
     }
 }

@@ -1,21 +1,13 @@
 package com.example.omni.ui.home
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -39,13 +31,14 @@ import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.data.model.DefaultSleepGoal
 import com.example.omni.domain.formatAmount
+import com.example.omni.ui.components.OmniSheetScaffold
+import com.example.omni.ui.components.sheetNoRipple
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFieldSurface
 import com.example.omni.ui.theme.OmniFootnote
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
-import com.example.omni.ui.theme.OmniScrim
 import com.example.omni.ui.theme.OmniSectionTitle
 import com.example.omni.ui.theme.OmniSheetShadow
 import com.example.omni.ui.theme.OmniSheetSurface
@@ -80,34 +73,18 @@ internal fun SleepEntrySheet(
     onSave: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        // The dim is its own layer so it fades while the sheet slides, and it is what swallows taps meant
-        // for the page underneath — including the sleep card itself, which would otherwise re-open this.
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(SheetMillis)),
-            exit = fadeOut(tween(SheetMillis)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(OmniScrim)
-                    .noRipple(onClick = onDismiss),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = slideInVertically(tween(SheetMillis)) { it } + fadeIn(tween(SheetMillis)),
-            exit = slideOutVertically(tween(SheetMillis)) { it } + fadeOut(tween(SheetMillis)),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            SleepSheet(
-                initial = hours,
-                onDismiss = onDismiss,
-                onSave = onSave,
-            )
-        }
+    // Shared scrim + slide envelope (ui/components/OmniSheetScaffold). The scaffold owns the scrim
+    // tap-to-dismiss and the slide animation; this sheet owns its surface, stepper, and save.
+    OmniSheetScaffold(
+        visible = visible,
+        onDismiss = onDismiss,
+        modifier = modifier,
+    ) {
+        SleepSheet(
+            initial = hours,
+            onDismiss = onDismiss,
+            onSave = onSave,
+        )
     }
 }
 
@@ -133,7 +110,7 @@ private fun SleepSheet(
             .background(OmniSheetSurface)
             // A tap on the sheet's own blank surface would otherwise fall through to the scrim behind it
             // and close the sheet mid-edit. This consumes it and does nothing, which is the point.
-            .noRipple(onClick = {})
+            .sheetNoRipple(onClick = {})
             .navigationBarsPadding()
             .padding(horizontal = SheetPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -142,7 +119,7 @@ private fun SleepSheet(
         Image(
             painter = painterResource(R.drawable.ic_hosp_grab),
             contentDescription = "Close",
-            modifier = Modifier.width(59.dp).height(5.dp).noRipple(onClick = onDismiss),
+            modifier = Modifier.width(59.dp).height(5.dp).sheetNoRipple(onClick = onDismiss),
         )
 
         Spacer(Modifier.height(HeadingTop))
@@ -233,17 +210,6 @@ private fun StepButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
 private fun onGrid(hours: Float): Float =
     if (hours.isFinite()) (hours * 2f).roundToInt() / 2f else DefaultSleepGoal
 
-/**
- * A tap with no ink — for the three places here that are hit targets without being buttons: the scrim, the
- * grab handle, and the sheet's own surface swallowing what the scrim would otherwise catch.
- */
-@Composable
-private fun Modifier.noRipple(onClick: () -> Unit): Modifier = clickable(
-    interactionSource = remember { MutableInteractionSource() },
-    indication = null,
-    onClick = onClick,
-)
-
 /** Rounded at the top only: the sheet's other three corners are off the bottom of the screen. */
 private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
 
@@ -272,6 +238,3 @@ private const val SleepMin = 0f
 private const val SleepMax = 12f
 
 private const val SleepStep = 0.5f
-
-/** `SosScreen`'s own reveal timing, since this is the same motion. */
-private const val SheetMillis = 280

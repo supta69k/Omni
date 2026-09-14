@@ -1,21 +1,13 @@
 package com.example.omni.ui.feed
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
@@ -46,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.Image
 import com.example.omni.R
+import com.example.omni.ui.components.OmniSheetScaffold
+import com.example.omni.ui.components.sheetNoRipple
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniFieldSurface
@@ -53,7 +47,6 @@ import com.example.omni.ui.theme.OmniFeedHint
 import com.example.omni.ui.theme.OmniFeedSurface
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
-import com.example.omni.ui.theme.OmniScrim
 import com.example.omni.ui.theme.OmniSectionTitle
 import com.example.omni.ui.theme.OmniSheetShadow
 import com.example.omni.ui.theme.OmniSheetSurface
@@ -82,36 +75,21 @@ internal fun CreateStorySheet(
     onPublish: (caption: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(SheetMillis)),
-            exit = fadeOut(tween(SheetMillis)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(OmniScrim)
-                    .noRipple(onClick = onDismiss),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = slideInVertically(tween(SheetMillis)) { it } + fadeIn(tween(SheetMillis)),
-            exit = slideOutVertically(tween(SheetMillis)) { it } + fadeOut(tween(SheetMillis)),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            StoryPanel(
-                image = image,
-                isPublishing = isPublishing,
-                errorText = errorText,
-                onPickImage = onPickImage,
-                onRemoveImage = onRemoveImage,
-                onDismiss = onDismiss,
-                onPublish = onPublish,
-            )
-        }
+    // Shared scrim + slide envelope (ui/components/OmniSheetScaffold).
+    OmniSheetScaffold(
+        visible = visible,
+        onDismiss = onDismiss,
+        modifier = modifier,
+    ) {
+        StoryPanel(
+            image = image,
+            isPublishing = isPublishing,
+            errorText = errorText,
+            onPickImage = onPickImage,
+            onRemoveImage = onRemoveImage,
+            onDismiss = onDismiss,
+            onPublish = onPublish,
+        )
     }
 }
 
@@ -133,7 +111,7 @@ private fun StoryPanel(
             .shadow(10.dp, SheetShape, ambientColor = OmniSheetShadow, spotColor = OmniSheetShadow)
             .clip(SheetShape)
             .background(OmniSheetSurface)
-            .noRipple(onClick = {})
+            .sheetNoRipple(onClick = {})
             .navigationBarsPadding()
             .imePadding()
             // The sheet scrolls (§12). Its resting height is about 460dp — grab, heading, a 255dp
@@ -154,7 +132,7 @@ private fun StoryPanel(
             modifier = Modifier
                 .width(59.dp)
                 .height(5.dp)
-                .noRipple(onClick = onDismiss),
+                .sheetNoRipple(onClick = onDismiss),
         )
 
         Spacer(Modifier.height(HeadingTop))
@@ -228,7 +206,7 @@ private fun StoryPanel(
                         .size(28.dp)
                         .clip(RoundedCornerShape(percent = 50))
                         .background(OmniInk)
-                        .noRipple(onClick = onRemoveImage),
+                        .sheetNoRipple(onClick = onRemoveImage),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -320,13 +298,6 @@ private fun StoryPanel(
     }
 }
 
-@Composable
-private fun Modifier.noRipple(onClick: () -> Unit): Modifier = clickable(
-    interactionSource = remember { MutableInteractionSource() },
-    indication = null,
-    onClick = onClick,
-)
-
 /** Rounded at the top only, like the sleep, meal and comments sheets. */
 private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
 
@@ -347,6 +318,3 @@ private val PickerLabelInset = 24.dp
 
 /** A caption is a line, not a paragraph — the viewer draws it in one line over the photo. */
 private const val MaxCaptionLength = 80
-
-/** `SosScreen`'s own reveal timing, the same as every other sheet. */
-private const val SheetMillis = 280

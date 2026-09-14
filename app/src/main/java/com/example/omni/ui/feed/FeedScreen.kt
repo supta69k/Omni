@@ -56,6 +56,7 @@ import com.example.omni.data.model.compactCount
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.components.OmniHeader
 import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniHeaderState
@@ -144,7 +145,13 @@ fun FeedScreen(
 ) {
     val context = LocalContext.current
 
+    val landscape = LocalDesignWindow.current.isLandscape
+
     DesignFrame {
+        OmniTabScaffold(
+            selected = OmniNavItem.Feed,
+            onNavigate = onNavigate,
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -156,9 +163,17 @@ fun FeedScreen(
                     .statusBarsPadding(),
                 // What used to be the leading and trailing `Spacer`s. As content padding they are
                 // part of the scroll range rather than two items the list has to keep measured.
+                //
+                // The bottom clearance is the floating bar's, so it only applies where the bar is:
+                // in landscape the navigation is a rail beside the list, and reserving 100dp under
+                // the last post there is dead space no bar ever covers.
                 contentPadding = PaddingValues(
                     top = HeaderHeight + StoryStripGap,
-                    bottom = OmniNavHeight + OmniNavBottomGap + ContentBottomGap,
+                    bottom = if (landscape) {
+                        ContentBottomGap
+                    } else {
+                        OmniNavHeight + OmniNavBottomGap + ContentBottomGap
+                    },
                 ),
             ) {
                 // One item, not five: the strip, the control and the "Recently Post" line always
@@ -338,6 +353,7 @@ fun FeedScreen(
                     onOpenProfile(uid)
                 },
             )
+        }
         }
 
         // Sheet is sibling of scaffold so it overlays bar/rail (KDoc rule 11)

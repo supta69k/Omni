@@ -32,6 +32,7 @@ import com.example.omni.R
 import com.example.omni.data.model.HealthGoals
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.components.AdaptiveColumnGrid
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniCardInk
@@ -140,10 +141,16 @@ fun GoalsScreen(
                     color = OmniFeedHint,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(RowGap)) {
-                    state.rows.forEach { row ->
-                        GoalCard(row = row, onStep = onStep)
-                    }
+                // One card per goal. Portrait stacks them, which is byte-identical to the plain
+                // `Column` this was; landscape deals them round-robin into two columns so the
+                // ~859dp content pane carries two cards abreast instead of one stranded at the
+                // left gutter.
+                AdaptiveColumnGrid(
+                    items = state.rows,
+                    verticalSpacing = RowGap,
+                    horizontalSpacing = RowGap,
+                ) { row ->
+                    GoalCard(row = row, onStep = onStep)
                 }
 
                 Spacer(Modifier.height(SaveTop))

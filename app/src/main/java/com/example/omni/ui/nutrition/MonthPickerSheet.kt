@@ -1,22 +1,14 @@
 package com.example.omni.ui.nutrition
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -37,13 +29,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.ui.components.OmniSheetScaffold
+import com.example.omni.ui.components.sheetNoRipple
 import com.example.omni.ui.theme.NutritionType
 import com.example.omni.ui.theme.OmniNutriDayIdle
 import com.example.omni.ui.theme.OmniNutriDaySelected
 import com.example.omni.ui.theme.OmniNutriDaySurface
 import com.example.omni.ui.theme.OmniNutriMacroLabel
 import com.example.omni.ui.theme.OmniOnInk
-import com.example.omni.ui.theme.OmniScrim
 import com.example.omni.ui.theme.OmniSectionTitle
 import com.example.omni.ui.theme.OmniSheetShadow
 import com.example.omni.ui.theme.OmniSheetSurface
@@ -82,35 +75,20 @@ internal fun MonthPickerSheet(
     onSelectDate: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(SheetMillis)),
-            exit = fadeOut(tween(SheetMillis)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(OmniScrim)
-                    .noRipple(onClick = onDismiss),
-            )
-        }
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = slideInVertically(tween(SheetMillis)) { it } + fadeIn(tween(SheetMillis)),
-            exit = slideOutVertically(tween(SheetMillis)) { it } + fadeOut(tween(SheetMillis)),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            MonthSheet(
-                month = month,
-                selected = selected,
-                calories = calories,
-                onDismiss = onDismiss,
-                onBrowseMonth = onBrowseMonth,
-                onSelectDate = onSelectDate,
-            )
-        }
+    // Shared scrim + slide envelope (ui/components/OmniSheetScaffold).
+    OmniSheetScaffold(
+        visible = visible,
+        onDismiss = onDismiss,
+        modifier = modifier,
+    ) {
+        MonthSheet(
+            month = month,
+            selected = selected,
+            calories = calories,
+            onDismiss = onDismiss,
+            onBrowseMonth = onBrowseMonth,
+            onSelectDate = onSelectDate,
+        )
     }
 }
 
@@ -138,7 +116,8 @@ private fun MonthSheet(
             .shadow(10.dp, SheetShape, ambientColor = OmniSheetShadow, spotColor = OmniSheetShadow)
             .clip(SheetShape)
             .background(OmniSheetSurface)
-            .noRipple(onClick = {})
+            // A tap on the sheet's own blank surface must not fall through to the scrim behind it.
+            .sheetNoRipple(onClick = {})
             .navigationBarsPadding()
             .padding(horizontal = SheetPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -147,7 +126,7 @@ private fun MonthSheet(
         Image(
             painter = painterResource(R.drawable.ic_hosp_grab),
             contentDescription = "Close",
-            modifier = Modifier.width(59.dp).height(5.dp).noRipple(onClick = onDismiss),
+            modifier = Modifier.width(59.dp).height(5.dp).sheetNoRipple(onClick = onDismiss),
         )
 
         Spacer(Modifier.height(HeadingTop))
@@ -237,7 +216,7 @@ private fun MonthSheet(
             style = NutritionType.FoodCalories,
             color = OmniNutriDaySelected,
             maxLines = 1,
-            modifier = Modifier.noRipple { onSelectDate(today) },
+            modifier = Modifier.sheetNoRipple { onSelectDate(today) },
         )
 
         Spacer(Modifier.height(SheetBottom))
@@ -356,13 +335,6 @@ private fun YearMonth.weekGrid(firstColumn: DayOfWeek): List<List<LocalDate?>> {
     return cells.chunked(DaysInWeek)
 }
 
-@Composable
-private fun Modifier.noRipple(onClick: () -> Unit): Modifier = clickable(
-    interactionSource = remember { MutableInteractionSource() },
-    indication = null,
-    onClick = onClick,
-)
-
 private const val DaysInWeek = 7
 
 private val SheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
@@ -389,6 +361,3 @@ private val ArrowSize = 22.dp
 /** The week strip's own dimming for a day that cannot be chosen. */
 private const val IdleAlpha = 0.4f
 private const val DisabledArrowAlpha = 0.3f
-
-/** `MealEntrySheet`'s timing, which is `SosScreen`'s. One motion for every sheet in the app. */
-private const val SheetMillis = 280

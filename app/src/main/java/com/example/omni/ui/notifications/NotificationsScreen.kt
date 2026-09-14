@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -36,7 +35,8 @@ import com.example.omni.data.model.NotificationType
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
+import com.example.omni.ui.components.AdaptiveColumnGrid
+import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
@@ -88,6 +88,10 @@ fun NotificationsScreen(
     BackHandler(onBack = onBack)
 
     DesignFrame {
+        OmniTabScaffold(
+            selected = OmniNavItem.Notifications,
+            onNavigate = onNavigate,
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -165,24 +169,17 @@ fun NotificationsScreen(
                         color = OmniSetRowSubtitle,
                     )
 
-                    else -> Column(verticalArrangement = Arrangement.spacedBy(RowGap)) {
-                        state.items.forEach { item ->
-                            NotificationRow(item = item, onClick = { onOpen(item) })
-                        }
+                    else -> AdaptiveColumnGrid(
+                        items = state.items,
+                        verticalSpacing = RowGap,
+                    ) { item ->
+                        NotificationRow(item = item, onClick = { onOpen(item) })
                     }
                 }
 
                 Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
             }
-
-            OmniBottomNav(
-                selected = OmniNavItem.Notifications,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
-            )
+        }
         }
     }
 }

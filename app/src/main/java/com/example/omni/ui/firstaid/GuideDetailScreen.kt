@@ -35,6 +35,7 @@ import com.example.omni.data.model.GuideSeverity
 import com.example.omni.data.model.GuideStep
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.components.AdaptiveColumnGrid
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.theme.HomeType
@@ -131,14 +132,21 @@ fun GuideDetailScreen(
 
             Spacer(Modifier.height(StepsGap))
 
-            Column(verticalArrangement = Arrangement.spacedBy(StepGap)) {
-                state.guide.steps.forEach { step ->
-                    StepCard(
-                        step = step,
-                        done = step.order in state.completed,
-                        onToggle = { onToggleStep(step.order) },
-                    )
-                }
+            // The numbered steps. Portrait stacks them, byte-identical to the plain `Column` this
+            // was; landscape deals them round-robin into two columns so the wide content pane
+            // carries two steps abreast instead of one at the left gutter. The intro paragraph and
+            // warning card above and below stay single-column — they're not lists, and forcing them
+            // into the grid would only break the way they read.
+            AdaptiveColumnGrid(
+                items = state.guide.steps,
+                verticalSpacing = StepGap,
+                horizontalSpacing = StepGap,
+            ) { step ->
+                StepCard(
+                    step = step,
+                    done = step.order in state.completed,
+                    onToggle = { onToggleStep(step.order) },
+                )
             }
 
             Spacer(Modifier.height(WarningGap))

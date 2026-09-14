@@ -41,6 +41,7 @@ import com.example.omni.R
 import com.example.omni.data.model.Message
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
@@ -96,9 +97,18 @@ fun ChatScreen(
     }
 
     DesignFrame {
+        // A reading-and-writing surface: cap the page at the artboard width and centre it. Portrait
+        // stays byte-identical (the frame is already 415 wide, so the cap and the centring Box are
+        // both inert); landscape centres the chat in the wide viewport instead of leaving the messages
+        // stretched to the new long edge. No orientation branch needed.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .widthIn(max = DesignFrameWidth)
                 .background(OmniBackground)
                 .statusBarsPadding()
                 .imePadding(),
@@ -187,6 +197,7 @@ fun ChatScreen(
                 onDraftChange = onDraftChange,
                 onSend = onSend,
             )
+        }
         }
     }
 }

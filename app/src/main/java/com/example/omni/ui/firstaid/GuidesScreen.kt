@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -35,7 +34,8 @@ import com.example.omni.R
 import com.example.omni.data.model.GuideSeverity
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.components.OmniBottomNav
+import com.example.omni.ui.components.AdaptiveColumnGrid
+import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
@@ -78,6 +78,10 @@ fun GuidesScreen(
     BackHandler(onBack = onBack)
 
     DesignFrame {
+        OmniTabScaffold(
+            selected = OmniNavItem.Home,
+            onNavigate = onNavigate,
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -131,24 +135,17 @@ fun GuidesScreen(
                         color = OmniInk,
                     )
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
-                        state.matches.forEach { card ->
-                            GuideCard(card = card, onClick = { onOpenGuide(card.id) })
-                        }
+                    AdaptiveColumnGrid(
+                        items = state.matches,
+                        verticalSpacing = CardGap,
+                    ) { card ->
+                        GuideCard(card = card, onClick = { onOpenGuide(card.id) })
                     }
                 }
 
                 Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
             }
-
-            OmniBottomNav(
-                selected = OmniNavItem.Home,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
-                onSelect = onNavigate,
-            )
+        }
         }
     }
 }

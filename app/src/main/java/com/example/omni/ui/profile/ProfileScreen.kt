@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -34,6 +35,7 @@ import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.data.model.Post
 import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniNavItem
 import com.example.omni.ui.theme.FeedType
@@ -78,9 +80,18 @@ fun ProfileScreen(
     BackHandler(onBack = onBack)
 
     DesignFrame {
+        // A reading page, not a tab: cap the column at the artboard width and centre it. Portrait
+        // stays byte-identical (the frame is already 415 wide, so the cap and the centring Box are
+        // both inert); landscape centres the profile in the wide viewport instead of stranding it at
+        // the left gutter. No orientation branch needed.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .widthIn(max = DesignFrameWidth)
                 .background(OmniBackground)
                 .statusBarsPadding()
                 .navigationBarsPadding()
@@ -288,6 +299,7 @@ fun ProfileScreen(
                     item { Spacer(Modifier.height(24.dp)) }
                 }
             }
+        }
         }
     }
 }

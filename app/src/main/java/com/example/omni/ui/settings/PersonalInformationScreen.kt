@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
@@ -86,9 +88,18 @@ fun PersonalInformationScreen(
     BackHandler(onBack = onBack)
 
     DesignFrame {
+        // A pure form: cap the scroll column at the artboard width and centre it. Portrait stays
+        // byte-identical (the frame is already 415 wide, so the cap and the centring Box are both
+        // inert); landscape centres the form in the wide viewport instead of stranding it at the left
+        // gutter. No orientation branch needed.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .widthIn(max = DesignFrameWidth)
                 .background(OmniBackground)
                 .verticalScroll(rememberScrollState())
                 .statusBarsPadding()
@@ -195,6 +206,7 @@ fun PersonalInformationScreen(
             }
 
             Spacer(Modifier.height(ContentBottomGap))
+        }
         }
     }
 }

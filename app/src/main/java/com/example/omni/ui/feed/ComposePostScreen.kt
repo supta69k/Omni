@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
@@ -103,9 +105,18 @@ fun ComposePostScreen(
     BackHandler(onBack = onBack)
 
     DesignFrame {
+        // A reading-and-writing form: cap the page at the artboard width and centre it. Portrait
+        // stays byte-identical (the frame is already 415 wide, so the cap and the centring Box are
+        // both inert); landscape centres the composer in the wide viewport instead of stretching
+        // every text input to the long edge. No orientation branch needed.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .widthIn(max = DesignFrameWidth)
                 .background(OmniBackground)
                 .verticalScroll(rememberScrollState())
                 .statusBarsPadding()
@@ -238,6 +249,7 @@ fun ComposePostScreen(
             }
 
             Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+        }
         }
     }
 }

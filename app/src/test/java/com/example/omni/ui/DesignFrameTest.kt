@@ -44,6 +44,34 @@ class DesignFrameTest {
         assertEquals(800f / 415f, designFrameScale(maxWidth = 1280.dp, maxHeight = 800.dp), Tolerance)
     }
 
+    @Test
+    fun `designWindow portrait is not landscape and keeps the 415 artboard width`() {
+        val window = designWindow(maxWidth = 393.dp, maxHeight = 851.dp)
+
+        assertEquals(false, window.isLandscape)
+        // widthDp = maxWidth / budget = 393 / (393/415) = 415 design-dp, exactly the artboard.
+        assertEquals(415f, window.widthDp.value, Tolerance)
+        // heightDp = maxHeight / budget, the design-dp tall edge (≈899).
+        assertEquals(851f / (393f / 415f), window.heightDp.value, Tolerance)
+    }
+
+    @Test
+    fun `designWindow landscape flags true and hands the long edge back as width`() {
+        val window = designWindow(maxWidth = 851.dp, maxHeight = 393.dp)
+
+        assertEquals(true, window.isLandscape)
+        // The short edge (393) still drives the scale, so the long edge widens to ≈899 design-dp —
+        // the extra room landscape screens reflow into instead of letterboxing.
+        assertEquals(851f / (393f / 415f), window.widthDp.value, Tolerance)
+        assertEquals(415f, window.heightDp.value, Tolerance)
+    }
+
+    @Test
+    fun `designWindow square counts as portrait`() {
+        // `maxWidth > maxHeight` is the single source of truth; a square is not landscape.
+        assertEquals(false, designWindow(maxWidth = 500.dp, maxHeight = 500.dp).isLandscape)
+    }
+
     private companion object {
         const val Tolerance = 0.0001f
     }

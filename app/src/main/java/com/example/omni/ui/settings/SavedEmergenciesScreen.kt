@@ -38,6 +38,7 @@ import com.example.omni.data.model.EmergencyContact
 import com.example.omni.data.model.MaxEmergencyContacts
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.components.AdaptiveColumnGrid
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniAlertRed
@@ -155,14 +156,19 @@ fun SavedEmergenciesScreen(
                     color = OmniSetRowSubtitle,
                 )
 
-                else -> Column(verticalArrangement = Arrangement.spacedBy(RowGap)) {
-                    state.contacts.forEach { contact ->
-                        ContactRow(
-                            contact = contact,
-                            onCall = { onCall(contact.phone) },
-                            onDelete = { onDelete(contact.id) },
-                        )
-                    }
+                // Portrait stacks the contacts, byte-identical to the plain `Column`; landscape
+                // deals them round-robin into two columns so the wide content pane carries two
+                // contacts abreast instead of one at the left gutter.
+                else -> AdaptiveColumnGrid(
+                    items = state.contacts,
+                    verticalSpacing = RowGap,
+                    horizontalSpacing = RowGap,
+                ) { contact ->
+                    ContactRow(
+                        contact = contact,
+                        onCall = { onCall(contact.phone) },
+                        onDelete = { onDelete(contact.id) },
+                    )
                 }
             }
 

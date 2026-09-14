@@ -789,7 +789,8 @@ private fun OmniApp() {
                     // always drawn — see `User.pushNotifications`.
                     pushNotifications = user?.pushNotifications ?: true,
                     offlineCache = user?.offlineCache ?: true,
-                    onNavigate = navigate,
+                    // No `onNavigate`: Settings draws no bar or rail, so the back arrow is the only
+                    // way out and it returns to whichever tab opened it.
                     onBack = { screen = lastTab },
                     onChangePhoto = {
                         session.clearPhotoError()
