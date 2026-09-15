@@ -29,16 +29,24 @@ class PreviewAuthRepository : AuthRepository {
     override val currentEmail: String?
         get() = _currentEmail.value
 
+    /** A fresh account is never verified, which is the whole reason the verification screen exists. */
     override suspend fun signUp(name: String, email: String, password: String) {
         require("@" in email) { "That email address doesn't look right." }
         require(password.length >= 6) { "Passwords need at least 6 characters." }
         this.password = password
+        emailVerified = false
         enter("preview-$email", email)
     }
 
+    /**
+     * Signing in adopts [nextReloadVerified], because the real Firebase reads the flag off the server
+     * as part of the sign-in — which is what lets a test sign into an account that was *left*
+     * unverified and assert it is sent to the verification screen rather than Home.
+     */
     override suspend fun signIn(email: String, password: String) {
         if (password.isEmpty()) throw AuthException("Wrong password. Try again or reset it.")
         this.password = password
+        emailVerified = nextReloadVerified
         enter("preview-$email", email)
     }
 
@@ -67,6 +75,63 @@ class PreviewAuthRepository : AuthRepository {
         _currentEmail.value = null
         _authState.value = AuthState.UNAUTHENTICATED
     }
+
+    /** Records the send so a test can assert it happened; there is no inbox to deliver to. */
+    var verificationEmailsSent: Int = 0
+        private set
+
+    override suspend fun sendEmailVerification() {
+        if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")
+        verificationEmailsSent++
+    }
+
+    /**
+     * Publishes whatever [nextReloadVerified] holds, standing in for the server having seen the link
+     * opened. A test flips that field to model the user finishing in their browser; leaving it alone
+     * models the far more important case — a reload that finds the address *still* unproven.
+     */
+    override suspend fun reloadCurrentUser() {
+        if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")
+        emailVerified = nextReloadVerified
+    }
+
+    /**
+     * What the next [reloadCurrentUser] will discover. Defaults to verified so previews and the
+     * screens that merely pass through this fake are not parked on the verification page.
+     */
+    var nextReloadVerified: Boolean = true
+
+    private var emailVerified: Boolean = true
+
+    override val isEmailVerified: Boolean
+        get() = emailVerified
+
+    override suspend fun sendOtpCode() {
+        if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")
+        // Preview: pretend we sent a code
+        otpCodeSent = "123456" // Fixed code for testing
+        otpCodeSentAt = System.currentTimeMillis()
+    }
+
+    override suspend fun verifyOtpCode(code: String): Boolean {
+        if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")
+        if (code.length != 6 || !code.all { it.isDigit() }) return false
+
+        // Check if code matches and not expired (10 min)
+        val now = System.currentTimeMillis()
+        val isValid = code == otpCodeSent && (now - otpCodeSentAt) < 10 * 60 * 1000
+
+        if (isValid) {
+            emailVerified = true
+            otpCodeSent = null
+            otpCodeSentAt = 0
+        }
+
+        return isValid
+    }
+
+    private var otpCodeSent: String? = null
+    private var otpCodeSentAt: Long = 0
 
     private fun reauthenticate(currentPassword: String) {
         if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")

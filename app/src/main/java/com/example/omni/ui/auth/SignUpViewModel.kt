@@ -47,7 +47,10 @@ class SignUpViewModel(
             _uiState.value = SignUpUiState(isLoading = true)
             try {
                 authRepository.signUp(name.trim(), email.trim(), password)
+                // Send email verification after successful signup
+                authRepository.sendEmailVerification()
                 _uiState.value = SignUpUiState(isLoading = false)
+                // Navigate to email verification screen instead of going directly to Home
                 onSuccess()
             } catch (e: AuthException) {
                 _uiState.value = SignUpUiState(isLoading = false, errorMessage = e.message)

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.omni.data.repo.AuthException
 import com.example.omni.data.repo.AuthRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,18 @@ data class SignInUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val isResetEmailSent: Boolean = false,
+    val isVerifyingCode: Boolean = false,        // OTP verification in progress
+    val isVerifyingLink: Boolean = false,       // Link verification in progress
+    val isResendingCode: Boolean = false,       // Resending OTP code
+    val isResendingLink: Boolean = false,       // Resending verification email
+    val resendCodeError: String? = null,
+    val resendLinkError: String? = null,
+    val resendCodeSuccess: String? = null,
+    val resendLinkSuccess: String? = null,
+    val resendCodeCooldown: Int = 0,
+    val resendLinkCooldown: Int = 0,
+    val codeError: String? = null,
+    val linkError: String? = null,
 )
 
 class SignInViewModel(
@@ -21,6 +34,9 @@ class SignInViewModel(
 
     private val _uiState = MutableStateFlow(SignInUiState())
     val uiState: StateFlow<SignInUiState> = _uiState.asStateFlow()
+
+    private var resendCodeCooldownJob: kotlinx.coroutines.Job? = null
+    private var resendLinkCooldownJob: kotlinx.coroutines.Job? = null
 
     fun signIn(email: String, password: String, onSuccess: () -> Unit = {}) {
         if (email.isBlank() || password.isBlank()) {
@@ -32,8 +48,15 @@ class SignInViewModel(
             _uiState.value = SignInUiState(isLoading = true)
             try {
                 authRepository.signIn(email.trim(), password)
-                _uiState.value = SignInUiState(isLoading = false)
-                onSuccess()
+                // Check if email is verified after sign in
+                if (authRepository.isEmailVerified) {
+                    _uiState.value = SignInUiState(isLoading = false)
+                    onSuccess()
+                } else {
+                    _uiState.value = SignInUiState(isLoading = false)
+                    // Navigate to verification screen instead of going to Home
+                    onSuccess()
+                }
             } catch (e: AuthException) {
                 _uiState.value = SignInUiState(isLoading = false, errorMessage = e.message)
             } catch (e: Exception) {
@@ -61,7 +84,183 @@ class SignInViewModel(
         }
     }
 
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
+    /**
+     * Verifies a 6-digit OTP code.
+     * Returns true if code is valid and email is now verified.
+     */
+    fun verifyCode(code: String, onResult: (Boolean) -> Unit = {}) {
+        if (code.length != 6 || !code.all { it.isDigit() }) {
+            _uiState.value = _uiState.value.copy(codeError = "Please enter a valid 6-digit code.")
+            onResult(false)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isVerifyingCode = true, codeError = null)
+        viewModelScope.launch {
+            try {
+                val isValid = authRepository.verifyOtpCode(code)
+
+                if (isValid) {
+                    // Reload user to get updated emailVerified status
+                    authRepository.reloadCurrentUser()
+                    val isVerified = authRepository.isEmailVerified
+
+                    if (isVerified) {
+                        _uiState.value = _uiState.value.copy(isVerifyingCode = false)
+                        onResult(true)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isVerifyingCode = false,
+                            codeError = "Verification succeeded but email not marked verified. Please try again."
+                        )
+                        onResult(false)
+                    }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isVerifyingCode = false,
+                        codeError = "Incorrect or expired code."
+                    )
+                    onResult(false)
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isVerifyingCode = false,
+                    codeError = "Failed to verify code. Please try again."
+                )
+                onResult(false)
+            }
+        }
+    }
+
+    /**
+     * Reloads the current user and checks if email is verified (Firebase link flow).
+     */
+    fun verifyLink(onResult: (Boolean) -> Unit = {}) {
+        _uiState.value = _uiState.value.copy(isVerifyingLink = true, linkError = null)
+        viewModelScope.launch {
+            try {
+                authRepository.reloadCurrentUser()
+                val isVerified = authRepository.isEmailVerified
+                if (isVerified) {
+                    _uiState.value = _uiState.value.copy(isVerifyingLink = false)
+                    onResult(true)
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isVerifyingLink = false,
+                        linkError = "Your email isn't verified yet. Please tap the link in your email."
+                    )
+                    onResult(false)
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isVerifyingLink = false,
+                    linkError = "Failed to check verification status. Please try again."
+                )
+                onResult(false)
+            }
+        }
+    }
+
+    /**
+     * Resends the 6-digit OTP code.
+     */
+    fun resendCode(onResult: (Boolean) -> Unit = {}) {
+        val currentEmail = authRepository.currentEmail ?: return onResult(false)
+        if (currentEmail.isBlank()) return onResult(false)
+
+        _uiState.value = _uiState.value.copy(
+            isResendingCode = true,
+            resendCodeError = null,
+            resendCodeSuccess = null,
+            resendCodeCooldown = 60, // 60 second cooldown
+        )
+
+        // Start cooldown countdown
+        resendCodeCooldownJob?.cancel()
+        resendCodeCooldownJob = viewModelScope.launch {
+            var remaining = 60
+            while (remaining > 0) {
+                delay(1000)
+                remaining--
+                _uiState.value = _uiState.value.copy(resendCodeCooldown = remaining)
+            }
+        }
+
+        viewModelScope.launch {
+            try {
+                authRepository.sendOtpCode()
+                _uiState.value = _uiState.value.copy(
+                    isResendingCode = false,
+                    resendCodeSuccess = "Verification code sent. Please check your email."
+                )
+                onResult(true)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isResendingCode = false,
+                    resendCodeError = "Failed to send verification code. Please try again."
+                )
+                onResult(false)
+            }
+        }
+    }
+
+    /**
+     * Resends the Firebase verification email (link flow).
+     */
+    fun resendLink(onResult: (Boolean) -> Unit = {}) {
+        val currentEmail = authRepository.currentEmail ?: return onResult(false)
+        if (currentEmail.isBlank()) return onResult(false)
+
+        _uiState.value = _uiState.value.copy(
+            isResendingLink = true,
+            resendLinkError = null,
+            resendLinkSuccess = null,
+            resendLinkCooldown = 60,
+        )
+
+        resendLinkCooldownJob?.cancel()
+        resendLinkCooldownJob = viewModelScope.launch {
+            var remaining = 60
+            while (remaining > 0) {
+                delay(1000)
+                remaining--
+                _uiState.value = _uiState.value.copy(resendLinkCooldown = remaining)
+            }
+        }
+
+        viewModelScope.launch {
+            try {
+                authRepository.sendEmailVerification()
+                _uiState.value = _uiState.value.copy(
+                    isResendingLink = false,
+                    resendLinkSuccess = "Verification email sent. Please check your inbox."
+                )
+                onResult(true)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isResendingLink = false,
+                    resendLinkError = "Failed to send verification email. Please try again."
+                )
+                onResult(false)
+            }
+        }
+    }
+
+    fun clearErrors() {
+        _uiState.value = _uiState.value.copy(
+            errorMessage = null,
+            resendCodeError = null,
+            resendLinkError = null,
+            resendCodeSuccess = null,
+            resendLinkSuccess = null,
+            codeError = null,
+            linkError = null,
+        )
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        resendCodeCooldownJob?.cancel()
+        resendLinkCooldownJob?.cancel()
     }
 }

@@ -48,6 +48,7 @@ import com.example.omni.ui.auth.SignInScreen
 import com.example.omni.ui.auth.SignInViewModel
 import com.example.omni.ui.auth.SignUpScreen
 import com.example.omni.ui.auth.SignUpViewModel
+import com.example.omni.ui.auth.VerifyEmailScreen
 import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavItem
 import com.example.omni.ui.feed.ComposePostScreen
@@ -334,7 +335,7 @@ private fun OmniApp() {
                     // created the account *and* the profile document has been written. Navigating on
                     // tap, as this used to, let a failed sign-up land on Home.
                     onCreateAccount = { name, email, password, confirm ->
-                        viewModel.signUp(name, email, password, confirm) { screen = AppScreen.Home }
+                        viewModel.signUp(name, email, password, confirm) { screen = AppScreen.VerifyEmail }
                     },
                     isLoading = state.isLoading,
                     errorMessage = state.errorMessage,
@@ -347,12 +348,76 @@ private fun OmniApp() {
                 SignInScreen(
                     onSignUp = { screen = AppScreen.SignUp },
                     onSignIn = { email, password ->
-                        viewModel.signIn(email, password) { screen = AppScreen.Home }
+                        viewModel.signIn(email, password) {
+                            // Check if email is verified after sign in
+                            if (container.authRepository.isEmailVerified) {
+                                screen = AppScreen.Home
+                            } else {
+                                screen = AppScreen.VerifyEmail
+                            }
+                        }
                     },
                     onForgotPassword = { email -> viewModel.resetPassword(email) },
                     isLoading = state.isLoading,
                     errorMessage = state.errorMessage,
                     noticeMessage = if (state.isResetEmailSent) ResetSentMessage else null,
+                )
+            }
+
+            AppScreen.VerifyEmail -> {
+                val viewModel: SignInViewModel = viewModel(factory = AppContainer.factory())
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                VerifyEmailScreen(
+                    email = user?.email.orEmpty(),
+                    // OTP code verification (primary)
+                    onVerifyCode = { code ->
+                        viewModel.verifyCode(code) { isVerified ->
+                            if (isVerified) {
+                                screen = AppScreen.Home
+                            }
+                        }
+                    },
+                    // Firebase link verification (fallback)
+                    onVerifyLinkClick = {
+                        viewModel.verifyLink { isVerified ->
+                            if (isVerified) {
+                                screen = AppScreen.Home
+                            }
+                        }
+                    },
+                    // Resend 6-digit code
+                    onResendCodeClick = {
+                        viewModel.resendCode()
+                    },
+                    // Resend verification email (Firebase link)
+                    onResendLinkClick = {
+                        viewModel.resendLink()
+                    },
+                    onChangeEmailClick = {
+                        val uid = container.authRepository.currentUid
+                        scope.launch {
+                            if (uid != null) {
+                                try {
+                                    val token = FirebaseMessaging.getInstance().token.await()
+                                    container.notificationRepository.unregisterToken(uid, token)
+                                } catch (cause: Exception) {
+                                    Log.w("Omni", "The FCM token could not be released on sign-out", cause)
+                                }
+                            }
+                            container.authRepository.signOut()
+                            screen = AppScreen.SignIn
+                        }
+                    },
+                    isVerifyingCode = state.isVerifyingCode,
+                    isVerifyingLink = state.isVerifyingLink,
+                    isResendingCode = state.isResendingCode,
+                    isResendingLink = state.isResendingLink,
+                    codeError = state.codeError,
+                    linkError = state.linkError,
+                    resendCodeSuccess = state.resendCodeSuccess,
+                    resendLinkSuccess = state.resendLinkSuccess,
+                    resendCodeCooldown = state.resendCodeCooldown,
+                    resendLinkCooldown = state.resendLinkCooldown,
                 )
             }
 
@@ -1375,4 +1440,6 @@ private enum class AppScreen {
     PersonalInformation, Security,
     /** A public profile — the uid it shows travels beside [MainActivity]'s `profileUid`. */
     Profile,
+    /** Email verification screen shown after signup until email is verified. */
+    VerifyEmail,
 }

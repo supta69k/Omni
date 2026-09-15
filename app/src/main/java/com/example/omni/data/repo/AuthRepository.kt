@@ -76,6 +76,54 @@ interface AuthRepository {
     suspend fun changePassword(currentPassword: String, newPassword: String)
 
     fun signOut()
+
+    /**
+     * Sends Firebase's own verification link to the signed-in account's address.
+     *
+     * Firebase mints and checks the link; nothing about it is stored here or in Firestore. There is
+     * deliberately no "code" to hold, which is why this returns nothing — the only observable result
+     * is a message in the user's inbox, and the only way to learn it was acted on is
+     * [reloadCurrentUser] followed by [isEmailVerified].
+     */
+    suspend fun sendEmailVerification()
+
+    /**
+     * Re-fetches the signed-in user from Firebase so [isEmailVerified] reflects the server.
+     *
+     * Required, not optional: `FirebaseUser` is a local snapshot taken at sign-in, and opening the
+     * link happens in a browser this process never sees. Without a reload the flag stays `false`
+     * forever no matter how many times the user verifies.
+     */
+    suspend fun reloadCurrentUser()
+
+    /**
+     * Whether Firebase Auth considers the signed-in account's email proven — the **only** source of
+     * truth for it.
+     *
+     * A plain read of the current snapshot rather than a flow, and never mirrored into Firestore or
+     * DataStore: a verified flag this app could write is a verified flag this app could be tricked
+     * into writing. Pair it with [reloadCurrentUser] to ask the server; `false` when nobody is
+     * signed in.
+     */
+    val isEmailVerified: Boolean
+
+    /**
+     * Sends a 6-digit OTP verification code to the signed-in account's email.
+     *
+     * This calls the secure backend which generates a cryptographically secure code,
+     * stores it with expiration (10 min), rate limiting, and one-time use enforcement.
+     * The backend sends the code via email.
+     */
+    suspend fun sendOtpCode()
+
+    /**
+     * Verifies a 6-digit OTP code against the secure backend.
+     *
+     * The backend validates the code, checks expiration, rate limiting, and one-time use.
+     * If valid, the backend marks the Firebase user's email as verified.
+     * Returns true if verification succeeded.
+     */
+    suspend fun verifyOtpCode(code: String): Boolean
 }
 
 /** A backend call failed; [message] is the user-facing sentence the screens show under a field. */

@@ -17,6 +17,13 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 /**
  * The real thing: Firebase Auth for the session, Firestore for the `users/{uid}` document.
@@ -31,6 +38,14 @@ class FirebaseAuthRepository(
 ) : AuthRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    private val backendBaseUrl = "https://your-otp-backend.com" // TODO: Replace with your deployed backend URL
 
     private val _authState = MutableStateFlow(AuthState.LOADING)
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -128,6 +143,75 @@ class FirebaseAuthRepository(
 
     override fun signOut() {
         auth.signOut()
+    }
+
+    override suspend fun sendEmailVerification() {
+        val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
+        try {
+            user.sendEmailVerification().await()
+        } catch (e: Exception) {
+            // Through `mapped` like every other call here, so the rate limit Firebase enforces on
+            // this endpoint surfaces as ERROR_TOO_MANY_REQUESTS' own sentence instead of a raw
+            // FirebaseException. Resending is the one action a frustrated user repeats on purpose.
+            throw mapped(e)
+        }
+    }
+
+    override suspend fun reloadCurrentUser() {
+        val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
+        try {
+            user.reload().await()
+        } catch (e: Exception) {
+            throw mapped(e)
+        }
+    }
+
+    override val isEmailVerified: Boolean
+        get() = auth.currentUser?.isEmailVerified ?: false
+
+    override suspend fun sendOtpCode() {
+        val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
+        val idToken = user.getIdToken(false).await()
+
+        val request = Request.Builder()
+            .url("$backendBaseUrl/otp/send")
+            .header("Authorization", "Bearer $idToken")
+            .post("{}".toRequestBody("application/json".toMediaType()))
+            .build()
+
+        withContext(Dispatchers.IO) {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    throw AuthException("Failed to send code: $body")
+                }
+            }
+        }
+    }
+
+    override suspend fun verifyOtpCode(code: String): Boolean {
+        val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
+        val idToken = user.getIdToken(false).await()
+
+        val json = JSONObject().put("code", code)
+        val request = Request.Builder()
+            .url("$backendBaseUrl/otp/verify")
+            .header("Authorization", "Bearer $idToken")
+            .header("Content-Type", "application/json")
+            .post(json.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        return withContext(Dispatchers.IO) {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    throw AuthException("Verification failed: $body")
+                }
+                val responseBody = response.body?.string() ?: "{}"
+                val jsonResponse = JSONObject(responseBody)
+                jsonResponse.getBoolean("verified")
+            }
+        }
     }
 
     /**

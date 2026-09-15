@@ -203,6 +203,18 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // OTP rate limits — backend-only, clients must not access
+    match /otp_rate_limits/{uid} {
+      allow read, write: if false;
+    }
+    match /otp_verify_rate_limits/{uid} {
+      allow read, write: if false;
+    }
+    // OTP codes — backend-only, clients must not access
+    match /otp_codes/{uid} {
+      allow read, write: if false;
+    }
+
     // The public hospital directory (BACKEND_PLAN §7). Read-only for every signed-in client; the
     // documents are written from the console or an import script, never from the app — which is
     // what makes the directory available offline through Firestore's cache after the first sync.
