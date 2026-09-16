@@ -1,6 +1,6 @@
 import sgMail from '@sendgrid/mail';
 import { config } from './config.js';
-import { EmailData, OtpEmailTemplateData } from './types.js';
+import { OtpEmailTemplateData } from './types.js';
 import { generateOtpEmailHtml, generateOtpEmailText } from './email-template.js';
 
 let sendGridInitialized = false;
@@ -41,7 +41,7 @@ export async function sendOtpEmail(data: OtpEmailTemplateData): Promise<void> {
   const html = generateOtpEmailHtml(data);
   const text = generateOtpEmailText(data);
 
-  const msg: EmailData = {
+  const msg = {
     to: data.email,
     from: {
       email: fromEmail,

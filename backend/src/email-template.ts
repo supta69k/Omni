@@ -1,4 +1,5 @@
 import { OtpEmailTemplateData } from './types.js';
+import { formatOtpForDisplay } from './utils.js';
 
 /**
  * Generate professional HTML email for OTP verification
@@ -92,9 +93,6 @@ export function generateOtpEmailHtml(data: OtpEmailTemplateData): string {
 </html>`;
 }
 
-function formatOtpForDisplay(otp: string): string {
-  return otp.replace(/(\d{3})(\d{3})/, '$1 $2');
-}
 
 /**
  * Generate plain-text version of the email

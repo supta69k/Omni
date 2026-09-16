@@ -44,11 +44,12 @@ export interface HealthResponse {
   version: string;
 }
 
-export interface EmailData {
+export interface SendGridEmailData {
   to: string;
+  from: { email: string; name?: string };
   subject: string;
-  html: string;
   text: string;
+  html: string;
 }
 
 export interface OtpEmailTemplateData {

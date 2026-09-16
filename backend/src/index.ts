@@ -2,13 +2,14 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import admin from 'firebase-admin';
-import { RateLimiterFirestore } from 'rate-limiter-flexible';
+import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { z } from 'zod';
 import { config, validateConfig } from './config.js';
 import { initializeSendGrid, sendOtpEmail } from './sendgrid.js';
 import { generateOtp, hashOtp, generateEmailVerificationLink, formatOtpForDisplay, getRemainingSeconds, formatDuration } from './utils.js';
-import { sendOtpEmail as sendOtpEmailTemplate, generateOtpEmailHtml, generateOtpEmailText } from './email-template.js';
+import { generateOtpEmailHtml, generateOtpEmailText } from './email-template.js';
 import { SendOtpRequest, SendOtpResponse, VerifyOtpRequest, VerifyOtpResponse, HealthResponse, OtpDocument, RateLimitDocument } from './types.js';
+import { FirestoreRateLimiter } from './rate-limiter.js';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -66,22 +67,16 @@ async function authenticate(req: Request, res: Response, next: NextFunction): Pr
 }
 
 // Initialize Firestore-backed rate limiters
-const sendRateLimiter = new RateLimiterFirestore({
-  storeClient: db,
-  tableName: 'otp_rate_limits',
-  keyPrefix: 'send_',
+const sendRateLimiter = new FirestoreRateLimiter(db, 'otp_rate_limits', 'send_', {
   points: config.rateLimits.send.points,
-  duration: config.rateLimits.send.durationMinutes * 60,
-  blockDuration: config.rateLimits.send.blockMinutes * 60,
+  durationSeconds: config.rateLimits.send.durationMinutes * 60,
+  blockDurationSeconds: config.rateLimits.send.blockMinutes * 60,
 });
 
-const verifyRateLimiter = new RateLimiterFirestore({
-  storeClient: db,
-  tableName: 'otp_rate_limits',
-  keyPrefix: 'verify_',
+const verifyRateLimiter = new FirestoreRateLimiter(db, 'otp_rate_limits', 'verify_', {
   points: config.rateLimits.verify.points,
-  duration: config.rateLimits.verify.durationMinutes * 60,
-  blockDuration: config.rateLimits.verify.blockMinutes * 60,
+  durationSeconds: config.rateLimits.verify.durationMinutes * 60,
+  blockDurationSeconds: config.rateLimits.verify.blockMinutes * 60,
 });
 
 // POST /otp/send - Send 6-digit OTP to user's email
