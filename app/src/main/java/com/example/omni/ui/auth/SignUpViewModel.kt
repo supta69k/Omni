@@ -26,7 +26,7 @@ class SignUpViewModel(
         email: String,
         password: String,
         confirmPassword: String,
-        onSuccess: () -> Unit = {},
+        onSuccess: (email: String) -> Unit = { _ -> },
     ) {
         if (name.isBlank() || email.isBlank() || password.isBlank()) {
             _uiState.value = SignUpUiState(errorMessage = "Please fill in all fields.")
@@ -47,11 +47,15 @@ class SignUpViewModel(
             _uiState.value = SignUpUiState(isLoading = true)
             try {
                 authRepository.signUp(name.trim(), email.trim(), password)
-                // Send email verification after successful signup
-                authRepository.sendEmailVerification()
-                _uiState.value = SignUpUiState(isLoading = false)
-                // Navigate to email verification screen instead of going directly to Home
-                onSuccess()
+                // Send OTP code after successful signup (primary verification method)
+                val success = authRepository.sendOtpCode()
+                if (success) {
+                    _uiState.value = SignUpUiState(isLoading = false)
+                    // Navigate to email verification screen with the email
+                    onSuccess(email.trim())
+                } else {
+                    _uiState.value = SignUpUiState(isLoading = false, errorMessage = "Failed to send verification code. Please try again.")
+                }
             } catch (e: AuthException) {
                 _uiState.value = SignUpUiState(isLoading = false, errorMessage = e.message)
             } catch (e: Exception) {

@@ -113,8 +113,10 @@ interface AuthRepository {
      * This calls the secure backend which generates a cryptographically secure code,
      * stores it with expiration (10 min), rate limiting, and one-time use enforcement.
      * The backend sends the code via email.
+     *
+     * Returns true if the email was sent successfully, false otherwise.
      */
-    suspend fun sendOtpCode()
+    suspend fun sendOtpCode(): Boolean
 
     /**
      * Verifies a 6-digit OTP code against the secure backend.

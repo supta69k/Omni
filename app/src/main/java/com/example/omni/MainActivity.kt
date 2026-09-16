@@ -178,6 +178,17 @@ private fun OmniApp() {
     var profileUid by rememberSaveable { mutableStateOf<String?>(null) }
 
     /**
+     * Email address for verification screen — passed from SignUp after account creation,
+     * or from SignIn for unverified accounts.
+     */
+    var verificationEmail by rememberSaveable { mutableStateOf("") }
+
+    /**
+     * Whether the initial verification code was sent (true for SignUp flow, false for SignIn flow).
+     */
+    var initialCodeSentForVerification by rememberSaveable { mutableStateOf(false) }
+
+    /**
      * The last bottom-bar tab the user stood on — where the three header pages go back to.
      *
      * This is the whole of the back stack, and one slot is all the app needs: the header sits on every
@@ -265,7 +276,14 @@ private fun OmniApp() {
             AuthState.LOADING -> Unit
 
             AuthState.AUTHENTICATED ->
-                if (screen == AppScreen.Splash || screen in EntryScreens) screen = AppScreen.Home
+                // Check email verification: unverified users must go to VerifyEmail
+                if (screen == AppScreen.Splash || screen in EntryScreens) {
+                    if (container.authRepository.isEmailVerified) {
+                        screen = AppScreen.Home
+                    } else {
+                        screen = AppScreen.VerifyEmail
+                    }
+                }
 
             // Covers both a cold start and a sign-out from deep inside the app.
             AuthState.UNAUTHENTICATED ->
@@ -335,7 +353,11 @@ private fun OmniApp() {
                     // created the account *and* the profile document has been written. Navigating on
                     // tap, as this used to, let a failed sign-up land on Home.
                     onCreateAccount = { name, email, password, confirm ->
-                        viewModel.signUp(name, email, password, confirm) { screen = AppScreen.VerifyEmail }
+                        viewModel.signUp(name, email, password, confirm) { email ->
+                            verificationEmail = email
+                            initialCodeSentForVerification = true
+                            screen = AppScreen.VerifyEmail
+                        }
                     },
                     isLoading = state.isLoading,
                     errorMessage = state.errorMessage,
@@ -353,6 +375,8 @@ private fun OmniApp() {
                             if (container.authRepository.isEmailVerified) {
                                 screen = AppScreen.Home
                             } else {
+                                verificationEmail = email
+                                initialCodeSentForVerification = false
                                 screen = AppScreen.VerifyEmail
                             }
                         }
@@ -368,7 +392,7 @@ private fun OmniApp() {
                 val viewModel: SignInViewModel = viewModel(factory = AppContainer.factory())
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 VerifyEmailScreen(
-                    email = user?.email.orEmpty(),
+                    email = verificationEmail.ifBlank { user?.email.orEmpty() },
                     // OTP code verification (primary)
                     onVerifyCode = { code ->
                         viewModel.verifyCode(code) { isVerified ->
@@ -393,6 +417,7 @@ private fun OmniApp() {
                     onResendLinkClick = {
                         viewModel.resendLink()
                     },
+                    initialCodeSent = initialCodeSentForVerification,
                     onChangeEmailClick = {
                         val uid = container.authRepository.currentUid
                         scope.launch {

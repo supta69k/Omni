@@ -191,7 +191,7 @@ class SignInViewModel(
                 authRepository.sendOtpCode()
                 _uiState.value = _uiState.value.copy(
                     isResendingCode = false,
-                    resendCodeSuccess = "Verification code sent. Please check your email."
+                    resendCodeSuccess = "New verification code sent."
                 )
                 onResult(true)
             } catch (e: Exception) {

@@ -45,7 +45,10 @@ class FirebaseAuthRepository(
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    private val backendBaseUrl = "https://your-otp-backend.com" // TODO: Replace with your deployed backend URL
+    // TODO: Configure via BuildConfig or local.properties for production vs emulator
+    // For emulator: "http://10.0.2.2:5001/omni-2c987/us-central1"
+    // For production: "https://us-central1-omni-2c987.cloudfunctions.net"
+    private val backendBaseUrl: String = "https://omni-jx01.onrender.com" // Deployed Render backend
 
     private val _authState = MutableStateFlow(AuthState.LOADING)
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -169,7 +172,7 @@ class FirebaseAuthRepository(
     override val isEmailVerified: Boolean
         get() = auth.currentUser?.isEmailVerified ?: false
 
-    override suspend fun sendOtpCode() {
+    override suspend fun sendOtpCode(): Boolean {
         val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
         val idToken = user.getIdToken(false).await()
 
@@ -179,11 +182,13 @@ class FirebaseAuthRepository(
             .post("{}".toRequestBody("application/json".toMediaType()))
             .build()
 
-        withContext(Dispatchers.IO) {
+        return withContext(Dispatchers.IO) {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val body = response.body?.string() ?: ""
-                    throw AuthException("Failed to send code: $body")
+                    false
+                } else {
+                    true
                 }
             }
         }

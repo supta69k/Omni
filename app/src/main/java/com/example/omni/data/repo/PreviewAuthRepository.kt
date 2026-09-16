@@ -106,11 +106,12 @@ class PreviewAuthRepository : AuthRepository {
     override val isEmailVerified: Boolean
         get() = emailVerified
 
-    override suspend fun sendOtpCode() {
+    override suspend fun sendOtpCode(): Boolean {
         if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")
         // Preview: pretend we sent a code
         otpCodeSent = "123456" // Fixed code for testing
         otpCodeSentAt = System.currentTimeMillis()
+        return true
     }
 
     override suspend fun verifyOtpCode(code: String): Boolean {
