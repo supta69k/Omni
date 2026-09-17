@@ -99,6 +99,66 @@ export const MEAL_RESPONSE_SCHEMA = {
   required: ['mealName', 'items', 'totals', 'estimated', 'needsClarification'],
 } as const;
 
+/**
+ * A Google API error reason, reduced to something safe to write to a log line.
+ *
+ * Google's error payloads are `{ error: { code, message, status, details: [{ reason, ... }] } }`.
+ * Only the *symbolic* fields are ever taken — never `message`, which can echo request content, and
+ * never the URL, which carries the API key in its query string. On top of that the extracted token
+ * must look like a Google status enum (`SCREAMING_SNAKE_CASE`, <= 64 chars) or it is discarded: an
+ * API key (mixed case, hyphens, ~39 chars) cannot pass that filter, so a malformed or hostile body
+ * cannot smuggle a secret into the logs.
+ */
+const REASON_SHAPE = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+function safeReason(candidate: unknown): string | null {
+  if (typeof candidate !== 'string') return null;
+  return REASON_SHAPE.test(candidate) ? candidate : null;
+}
+
+/**
+ * Turns a failed Gemini response into one sanitized reason token, e.g. `PERMISSION_DENIED`,
+ * `API_KEY_INVALID`, `INVALID_ARGUMENT`. `details[].reason` wins over `error.status` because it is
+ * the more specific of the two (a bad key is `400 INVALID_ARGUMENT` at the top level but
+ * `API_KEY_INVALID` in the details). Never throws: an unparseable body is simply `UNKNOWN`.
+ */
+export function describeGeminiFailure(bodyText: string): string {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return 'UNPARSEABLE_ERROR_BODY';
+  }
+
+  const details = parsed?.error?.details;
+  if (Array.isArray(details)) {
+    for (const detail of details) {
+      const reason = safeReason(detail?.reason);
+      if (reason) return reason;
+    }
+  }
+  return safeReason(parsed?.error?.status) ?? 'UNKNOWN';
+}
+
+/**
+ * The one diagnostic line this phase adds. Status and reason only — enough to tell a missing key
+ * (403 PERMISSION_DENIED) from an invalid one (400 API_KEY_INVALID) from a rejected model
+ * (404 NOT_FOUND) from a rejected schema (400 INVALID_ARGUMENT), which the previous code collapsed
+ * into a single indistinguishable failure. Nothing user-identifying and no secret is written.
+ */
+function logGeminiFailure(status: number | string, reason: string): void {
+  console.error(`[AI_MEAL_GEMINI_ERROR] status=${status} reason=${reason}`);
+}
+
+/** Reads a response body without letting a body-read failure mask the real status. */
+async function readBodySafely(response: Response): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return '';
+  }
+}
+
 /** REST implementation against the official Generative Language API. */
 export class RestGeminiClient implements GeminiClient {
   constructor(
@@ -109,6 +169,13 @@ export class RestGeminiClient implements GeminiClient {
   ) {}
 
   async analyzeMeal(mealText: string): Promise<string> {
+    // An unset GEMINI_API_KEY reaches here as an empty string (index.ts passes `apiKey ?? ''`) and
+    // would otherwise be indistinguishable from any other rejection. Name it explicitly.
+    if (!this.apiKey) {
+      logGeminiFailure('none', 'MISSING_API_KEY');
+      throw new GeminiUnavailableError();
+    }
+
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent` +
       `?key=${this.apiKey}`;
@@ -135,24 +202,42 @@ export class RestGeminiClient implements GeminiClient {
         signal: controller.signal,
       });
     } catch (error) {
-      // Abort, DNS, refused connection — all mean "no answer". The URL (which carries the key) is
-      // deliberately not part of this message.
+      // Abort, DNS, refused connection — all mean "no answer". The URL (which carries the key) and
+      // the error's own message (which can contain the URL) are deliberately never logged; only
+      // which of the two cases it was.
+      const aborted = (error as any)?.name === 'AbortError';
+      logGeminiFailure('none', aborted ? 'REQUEST_TIMEOUT' : 'NETWORK_ERROR');
       throw new GeminiUnavailableError();
     } finally {
       clearTimeout(timer);
     }
 
-    if (response.status === 429) {
-      throw new GeminiRateLimitError();
-    }
     if (!response.ok) {
+      const reason = describeGeminiFailure(await readBodySafely(response));
+      logGeminiFailure(response.status, reason);
+      // Gemini's own quota (429) stays a distinct error; everything else is "unavailable". The raw
+      // body is never returned to Android — the handler maps both onto AI_UNAVAILABLE / 503.
+      throw response.status === 429 ? new GeminiRateLimitError() : new GeminiUnavailableError();
+    }
+
+    const rawBody = await readBodySafely(response);
+    let data: any;
+    try {
+      data = JSON.parse(rawBody);
+    } catch {
+      logGeminiFailure(response.status, 'UNPARSEABLE_SUCCESS_BODY');
       throw new GeminiUnavailableError();
     }
 
-    const data = (await response.json()) as any;
     const text: string | undefined = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (typeof text !== 'string' || text.length === 0) {
       // A 200 with no usable candidate (e.g. a safety block) is still "no answer" to the caller.
+      // `finishReason` / `promptFeedback.blockReason` say which, and are Google enums, so they pass
+      // the same SCREAMING_SNAKE_CASE filter as an error reason.
+      const blocked =
+        safeReason(data?.candidates?.[0]?.finishReason) ??
+        safeReason(data?.promptFeedback?.blockReason);
+      logGeminiFailure(response.status, blocked ?? 'NO_CANDIDATE_TEXT');
       throw new GeminiUnavailableError();
     }
     return text;
