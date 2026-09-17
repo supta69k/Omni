@@ -115,8 +115,17 @@ app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: 
     try {
       verificationLink = await generateEmailVerificationLink(auth, email, config.firebaseHostingUrl);
     } catch (linkError) {
-      console.error('Error generating verification link:', linkError);
-      return res.status(500).json({ error: 'Failed to generate verification link' });
+      console.error('Error generating verification link, retrying:', linkError);
+      // The Firebase identity endpoint is occasionally flaky from a cold Render instance
+      // (observed live: 1 in 3 calls failed with the same input succeeding moments later).
+      // Two retries with backoff cover the flake without adding a visible delay on the happy path.
+      await new Promise(r => setTimeout(r, 800));
+      try {
+        verificationLink = await generateEmailVerificationLink(auth, email, config.firebaseHostingUrl);
+      } catch (secondError) {
+        console.error('Verification link generation failed twice:', secondError);
+        return res.status(500).json({ error: 'Failed to generate verification link' });
+      }
     }
     // The link embeds a time-limited Firebase token; log only that it exists, never the value.
     console.log('[VERIFICATION_LINK_GENERATED] uid=' + uid);
