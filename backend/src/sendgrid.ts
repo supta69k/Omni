@@ -54,14 +54,34 @@ export async function sendOtpEmail(data: OtpEmailTemplateData): Promise<void> {
     subject: `Verify your ${data.appName} email address`,
     text,
     html,
+    // Tag the send so it can be isolated in SendGrid's Activity Feed.
+    categories: ['otp-verification'],
+    // SendGrid rewrites every href for click tracking by default, turning the Firebase action link
+    // into a urlXXXX.sendgrid.net redirect. On a verification email that is doubly wrong: the
+    // display/href domain mismatch is a spam signal, and the rewrite can mangle the signed Firebase
+    // link itself. Open tracking's 1x1 pixel is a smaller but pointless signal on transactional mail.
+    trackingSettings: {
+      clickTracking: { enable: false, enableText: false },
+      openTracking: { enable: false },
+      subscriptionTracking: { enable: false },
+    },
   };
 
   // `to` is the user's own address for their own request; it is what makes the Render log line
   // matchable against an inbox. The OTP and the link are deliberately never logged here.
   console.log('[SENDGRID_SEND_ATTEMPT] to=' + data.email + ' from=' + fromEmail);
   try {
-    await sgMail.send(msg);
-    console.log('[SENDGRID_SEND_SUCCESS] to=' + data.email);
+    const [response] = await sgMail.send(msg);
+    // A 202 means "queued", not "delivered" — everything that silently eats a message (a suppressed
+    // recipient, a DMARC-misaligned sender, an account under review) happens after this line. The
+    // x-message-id is the only handle that ties this send to a row in SendGrid's Activity Feed, so
+    // log it: without it a "SUCCESS" line proves nothing when the user reports an empty inbox.
+    const messageId = response?.headers?.['x-message-id'] ?? 'unknown';
+    console.log(
+      '[SENDGRID_SEND_SUCCESS] to=' + data.email +
+      ' status=' + (response?.statusCode ?? '?') +
+      ' messageId=' + messageId
+    );
   } catch (error: any) {
     // SendGrid's 4xx/5xx body carries a JSON `errors` array; log it, then rethrow with the
     // original message so `/otp/send` reports the failure instead of a success.

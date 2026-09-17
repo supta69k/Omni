@@ -42,6 +42,14 @@ export interface HealthResponse {
   status: 'ok' | 'degraded' | 'down';
   timestamp: string;
   version: string;
+  /** Whether a SendGrid API key is actually loaded — `status` alone hid this before. */
+  sendgrid: boolean;
+  /**
+   * Domain part of SENDGRID_FROM_EMAIL only. The domain is what decides deliverability (a consumer
+   * domain like gmail.com fails DMARC alignment through SendGrid and gets spam-foldered), and it
+   * answers "what is Render actually configured with?" without publishing a full address.
+   */
+  fromDomain: string;
 }
 
 export interface SendGridEmailData {

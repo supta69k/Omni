@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -170,7 +171,17 @@ class FirebaseAuthRepository(
         // Force-refresh, not cache: an ID token is valid for an hour, and `false` hands back the
         // cached one when the session has sat idle longer than that — which the backend then
         // rejects as "Invalid or expired token" and the send dies with no email and no retry.
-        val idToken = user.getIdToken(true).await()
+        //
+        // `getIdToken` returns a `GetTokenResult`, NOT a string. Interpolating the object itself
+        // sends `Bearer com.google.firebase.auth.api.internal.GetTokenResult@1234` — garbage that
+        // the backend rejects with 401 every single time, which is exactly what the device showed.
+        val tokenResult = user.getIdToken(true).await()
+        var idToken = tokenResult.token
+        // `expirationTimestamp` is the JWT `exp` claim passed through unchanged — seconds since
+        // epoch, not millis. Logging minutes-to-expiry (never the token) is what proved the
+        // original failure was a ~9h-stale cached token rather than a backend fault.
+        val minutesToExpiry = (tokenResult.expirationTimestamp - System.currentTimeMillis() / 1000) / 60
+        Log.d("OmniAuth", "OTP_SEND_TOKEN_EXP_IN_MIN=$minutesToExpiry")
 
         val request = Request.Builder()
             .url("$backendBaseUrl/otp/send")
@@ -188,6 +199,30 @@ class FirebaseAuthRepository(
                         // so this is the moment "code sent" becomes a true statement.
                         Log.d("OmniAuth", "OTP_SEND_SUCCESS")
                         true
+                    } else if (code == 401) {
+                        // The backend only says 401 when IT fails to verify the token. A cold
+                        // Render instance's first token check can fail for reasons on its side,
+                        // so retry once: force another refresh, then the same request.
+                        Log.w("OmniAuth", "OTP_SEND_RETRY_401 after 3s")
+                        delay(3000)
+                        idToken = runCatching { user.getIdToken(true).await().token }.getOrDefault(idToken)
+                        val retry = Request.Builder()
+                            .url("$backendBaseUrl/otp/send")
+                            .header("Authorization", "Bearer $idToken")
+                            .post("{}".toRequestBody("application/json".toMediaType()))
+                            .build()
+                        httpClient.newCall(retry).execute().use { r2 ->
+                            val c2 = r2.code
+                            Log.d("OmniAuth", "OTP_SEND_RETRY_HTTP_STATUS=$c2")
+                            if (r2.isSuccessful) {
+                                Log.d("OmniAuth", "OTP_SEND_SUCCESS")
+                                true
+                            } else {
+                                val body = r2.body?.string() ?: ""
+                                Log.e("OmniAuth", "OTP_SEND_FAILURE status=$c2 body=$body")
+                                false
+                            }
+                        }
                     } else {
                         val body = response.body?.string() ?: ""
                         Log.e("OmniAuth", "OTP_SEND_FAILURE status=$code body=$body")
@@ -205,7 +240,7 @@ class FirebaseAuthRepository(
 
     override suspend fun verifyOtpCode(code: String): Boolean {
         val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
-        val idToken = user.getIdToken(true).await()
+        val idToken = user.getIdToken(true).await().token
 
         val json = JSONObject().put("code", code)
         val request = Request.Builder()
