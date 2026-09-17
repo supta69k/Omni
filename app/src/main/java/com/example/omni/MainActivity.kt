@@ -353,9 +353,9 @@ private fun OmniApp() {
                     // created the account *and* the profile document has been written. Navigating on
                     // tap, as this used to, let a failed sign-up land on Home.
                     onCreateAccount = { name, email, password, confirm ->
-                        viewModel.signUp(name, email, password, confirm) { email ->
+                        viewModel.signUp(name, email, password, confirm) { email, initialCodeSent ->
                             verificationEmail = email
-                            initialCodeSentForVerification = true
+                            initialCodeSentForVerification = initialCodeSent
                             screen = AppScreen.VerifyEmail
                         }
                     },
@@ -409,13 +409,10 @@ private fun OmniApp() {
                             }
                         }
                     },
-                    // Resend 6-digit code
+                    // Resend 6-digit code — the one email trigger on this screen; the result
+                    // decides whether the button may call itself "Resend" afterwards.
                     onResendCodeClick = {
                         viewModel.resendCode()
-                    },
-                    // Resend verification email (Firebase link)
-                    onResendLinkClick = {
-                        viewModel.resendLink()
                     },
                     initialCodeSent = initialCodeSentForVerification,
                     onChangeEmailClick = {
@@ -436,13 +433,10 @@ private fun OmniApp() {
                     isVerifyingCode = state.isVerifyingCode,
                     isVerifyingLink = state.isVerifyingLink,
                     isResendingCode = state.isResendingCode,
-                    isResendingLink = state.isResendingLink,
                     codeError = state.codeError,
                     linkError = state.linkError,
                     resendCodeSuccess = state.resendCodeSuccess,
-                    resendLinkSuccess = state.resendLinkSuccess,
                     resendCodeCooldown = state.resendCodeCooldown,
-                    resendLinkCooldown = state.resendLinkCooldown,
                 )
             }
 

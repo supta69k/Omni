@@ -5,7 +5,7 @@ import admin from 'firebase-admin';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { z } from 'zod';
 import { config, validateConfig } from './config.js';
-import { initializeSendGrid, sendOtpEmail } from './sendgrid.js';
+import { initializeSendGrid, sendOtpEmail, isSendGridConfigured } from './sendgrid.js';
 import { generateOtp, hashOtp, generateEmailVerificationLink, formatOtpForDisplay, getRemainingSeconds, formatDuration } from './utils.js';
 import { generateOtpEmailHtml, generateOtpEmailText } from './email-template.js';
 import { SendOtpRequest, SendOtpResponse, VerifyOtpRequest, VerifyOtpResponse, HealthResponse, OtpDocument, RateLimitDocument } from './types.js';
@@ -60,6 +60,8 @@ async function authenticate(req: Request, res: Response, next: NextFunction): Pr
     const idToken = authHeader.split('Bearer ')[1];
     const decoded = await auth.verifyIdToken(idToken);
     (req as any).user = decoded;
+    // The token is never logged — the uid is enough to match a request against a user.
+    console.log('[AUTH_TOKEN_VALID] uid=' + decoded.uid);
     next();
   } catch (error) {
     res.status(401).json({ error: 'Invalid or expired token' });
@@ -81,13 +83,22 @@ const verifyRateLimiter = new FirestoreRateLimiter(db, 'otp_rate_limits', 'verif
 
 // POST /otp/send - Send 6-digit OTP to user's email
 app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: Request, res: Response) => {
+  const uid = (req as any).user?.uid; // hoisted so the catch branch below can report it
   try {
     const user = (req as any).user;
-    const uid = user.uid;
     const email = user.email;
+
+    console.log('[OTP_SEND_REQUEST_RECEIVED] uid=' + uid + ' email=' + email);
 
     if (!email) {
       return res.status(400).json({ error: 'User has no email address' });
+    }
+
+    // Fail closed before any rate-limit point is spent: if the mail provider is not configured
+    // there is nothing to send, and answering 200 anyway is how this feature failed silently.
+    if (!isSendGridConfigured()) {
+      console.error('[OTP_SEND_REJECTED] reason=sendgrid_not_configured uid=' + uid);
+      return res.status(503).json({ error: 'Verification email service is not available right now. Please try again later.' });
     }
 
     // Check rate limit
@@ -95,9 +106,9 @@ app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: 
 
     // Generate OTP
     const otp = generateOtp();
-    const codeHash = hashOtp(otp);
     const now = new Date();
     const expiresAt = new Date(now.getTime() + config.otp.expiryMinutes * 60 * 1000);
+    console.log('[OTP_GENERATED] uid=' + uid + ' expiresAt=' + expiresAt.toISOString());
 
     // Generate Firebase email verification link
     let verificationLink: string;
@@ -107,6 +118,8 @@ app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: 
       console.error('Error generating verification link:', linkError);
       return res.status(500).json({ error: 'Failed to generate verification link' });
     }
+    // The link embeds a time-limited Firebase token; log only that it exists, never the value.
+    console.log('[VERIFICATION_LINK_GENERATED] uid=' + uid);
 
     // Store OTP hash in Firestore (never plaintext)
     const otpDoc: OtpDocument = {
@@ -144,8 +157,15 @@ app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: 
     };
     res.json(response);
   } catch (error: any) {
-    if (error instanceof Error && error.message.includes('Rate limiter')) {
+    // The limiter throws `Rate limit exceeded` — `Rate limiter` was never thrown by it, so a
+    // throttled request fell through to the 500 branch and the app told the user to retry
+    // immediately, against a limit they were told to wait for.
+    if (error instanceof Error && error.message.includes('Rate limit')) {
       return res.status(429).json({ error: 'Too many requests. Please wait before resending.' });
+    }
+    if (error instanceof Error && error.message.startsWith('Failed to send verification email')) {
+      console.error('[OTP_SEND_FAILED] reason=email_send uid=' + uid, error.message);
+      return res.status(502).json({ error: 'The verification email could not be sent. Please try again.' });
     }
     console.error('OTP send error:', error);
     res.status(500).json({ error: 'Failed to send verification code' });
@@ -213,6 +233,7 @@ app.post('/otp/verify', authenticate, validateRequest(verifyOtpSchema), async (r
       console.error('Error updating Firebase Auth emailVerified:', authError);
       return res.status(500).json({ error: 'Verification succeeded but failed to update account' });
     }
+    console.log('[EMAIL_VERIFIED] uid=' + uid);
 
     // Clean up - optionally delete or keep for audit
     // await otpDocRef.delete();
@@ -224,7 +245,7 @@ app.post('/otp/verify', authenticate, validateRequest(verifyOtpSchema), async (r
     };
     res.json(response);
   } catch (error: any) {
-    if (error instanceof Error && error.message.includes('Rate limiter')) {
+    if (error instanceof Error && error.message.includes('Rate limit')) {
       return res.status(429).json({ error: 'Too many verification attempts. Please wait.' });
     }
     console.error('OTP verify error:', error);
@@ -235,9 +256,11 @@ app.post('/otp/verify', authenticate, validateRequest(verifyOtpSchema), async (r
 // GET /health - Health check
 app.get('/health', (_req: Request, res: Response) => {
   const response: HealthResponse = {
-    status: 'ok',
+    // `sendgrid` is what makes the check useful: an HTTP 200 with the mail provider unconfigured
+    // is exactly the state that looked healthy while every email silently went nowhere.
+    status: isSendGridConfigured() ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: '1.0.1',
   };
   res.json(response);
 });

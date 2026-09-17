@@ -78,16 +78,6 @@ interface AuthRepository {
     fun signOut()
 
     /**
-     * Sends Firebase's own verification link to the signed-in account's address.
-     *
-     * Firebase mints and checks the link; nothing about it is stored here or in Firestore. There is
-     * deliberately no "code" to hold, which is why this returns nothing — the only observable result
-     * is a message in the user's inbox, and the only way to learn it was acted on is
-     * [reloadCurrentUser] followed by [isEmailVerified].
-     */
-    suspend fun sendEmailVerification()
-
-    /**
      * Re-fetches the signed-in user from Firebase so [isEmailVerified] reflects the server.
      *
      * Required, not optional: `FirebaseUser` is a local snapshot taken at sign-in, and opening the

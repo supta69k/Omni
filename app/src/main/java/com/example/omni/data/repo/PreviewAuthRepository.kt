@@ -76,15 +76,6 @@ class PreviewAuthRepository : AuthRepository {
         _authState.value = AuthState.UNAUTHENTICATED
     }
 
-    /** Records the send so a test can assert it happened; there is no inbox to deliver to. */
-    var verificationEmailsSent: Int = 0
-        private set
-
-    override suspend fun sendEmailVerification() {
-        if (_sessionUid.value == null) throw AuthException("You're signed out. Sign in and try again.")
-        verificationEmailsSent++
-    }
-
     /**
      * Publishes whatever [nextReloadVerified] holds, standing in for the server having seen the link
      * opened. A test flips that field to model the user finishing in their browser; leaving it alone

@@ -26,7 +26,7 @@ class SignUpViewModel(
         email: String,
         password: String,
         confirmPassword: String,
-        onSuccess: (email: String) -> Unit = { _ -> },
+        onResult: (email: String, initialCodeSent: Boolean) -> Unit = { _, _ -> },
     ) {
         if (name.isBlank() || email.isBlank() || password.isBlank()) {
             _uiState.value = SignUpUiState(errorMessage = "Please fill in all fields.")
@@ -47,15 +47,14 @@ class SignUpViewModel(
             _uiState.value = SignUpUiState(isLoading = true)
             try {
                 authRepository.signUp(name.trim(), email.trim(), password)
-                // Send OTP code after successful signup (primary verification method)
-                val success = authRepository.sendOtpCode()
-                if (success) {
-                    _uiState.value = SignUpUiState(isLoading = false)
-                    // Navigate to email verification screen with the email
-                    onSuccess(email.trim())
-                } else {
-                    _uiState.value = SignUpUiState(isLoading = false, errorMessage = "Failed to send verification code. Please try again.")
-                }
+                // The account now exists, so the user has to reach the verification screen no
+                // matter what — refusing to navigate when the first send failed stranded them
+                // between "sign up" (EMAIL_ALREADY_IN_USE) and a verification screen they were
+                // never shown. On failure the button there still says "Send verification code".
+                val sent = authRepository.sendOtpCode()
+                _uiState.value = SignUpUiState(isLoading = false)
+                // Navigate to email verification screen with the email
+                onResult(email.trim(), sent)
             } catch (e: AuthException) {
                 _uiState.value = SignUpUiState(isLoading = false, errorMessage = e.message)
             } catch (e: Exception) {

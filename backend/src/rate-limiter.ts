@@ -59,7 +59,7 @@ export class FirestoreRateLimiter {
       // Check if currently blocked
       if (data.blockedUntil && data.blockedUntil > now) {
         const msBeforeNext = data.blockedUntil - now;
-        const error = new Error('Rate limit exceeded') as Error & { msBeforeNext: number };
+        const error = new Error('Rate limit exceeded (blocked)') as Error & { msBeforeNext: number };
         error.msBeforeNext = msBeforeNext;
         throw error;
       }
@@ -67,24 +67,24 @@ export class FirestoreRateLimiter {
       // Filter points within current window
       const recentPoints = data.points.filter(ts => ts > windowStart);
       const consumedPoints = recentPoints.length + points;
+      const newPoints = [...recentPoints];
+      for (let i = 0; i < points; i++) {
+        newPoints.push(now);
+      }
 
       if (consumedPoints > this.config.points) {
         // Block for blockDurationSeconds
         const blockedUntil = now + this.config.blockDurationSeconds * 1000;
         const error = new Error('Rate limit exceeded') as Error & { msBeforeNext: number };
         error.msBeforeNext = this.config.blockDurationSeconds * 1000;
-        
+
+        // Keep the just-consumed point in the history too: wiping it would erase the very
+        // evidence that caused the block, so the block re-unlocks a whole window early.
         await transaction.set(docRef, {
-          points: recentPoints,
+          points: newPoints,
           blockedUntil,
         });
         throw error;
-      }
-
-      // Add current request points
-      const newPoints = [...recentPoints];
-      for (let i = 0; i < points; i++) {
-        newPoints.push(now);
       }
 
       await transaction.set(docRef, {

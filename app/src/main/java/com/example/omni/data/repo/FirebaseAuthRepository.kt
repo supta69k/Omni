@@ -1,5 +1,6 @@
 package com.example.omni.data.repo
 
+import android.util.Log
 import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.UserRole
 import com.google.firebase.auth.EmailAuthProvider
@@ -41,7 +42,10 @@ class FirebaseAuthRepository(
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        // 60s, not 15: Render's free tier sleeps between requests and a cold start takes ~25-30s
+        // before the first byte. A 15s read timeout made the very first request of a session fail
+        // with a raw IOException long before the backend had finished waking up.
+        .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
@@ -148,18 +152,6 @@ class FirebaseAuthRepository(
         auth.signOut()
     }
 
-    override suspend fun sendEmailVerification() {
-        val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
-        try {
-            user.sendEmailVerification().await()
-        } catch (e: Exception) {
-            // Through `mapped` like every other call here, so the rate limit Firebase enforces on
-            // this endpoint surfaces as ERROR_TOO_MANY_REQUESTS' own sentence instead of a raw
-            // FirebaseException. Resending is the one action a frustrated user repeats on purpose.
-            throw mapped(e)
-        }
-    }
-
     override suspend fun reloadCurrentUser() {
         val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
         try {
@@ -174,7 +166,11 @@ class FirebaseAuthRepository(
 
     override suspend fun sendOtpCode(): Boolean {
         val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
-        val idToken = user.getIdToken(false).await()
+        Log.d("OmniAuth", "OTP_SEND_START")
+        // Force-refresh, not cache: an ID token is valid for an hour, and `false` hands back the
+        // cached one when the session has sat idle longer than that — which the backend then
+        // rejects as "Invalid or expired token" and the send dies with no email and no retry.
+        val idToken = user.getIdToken(true).await()
 
         val request = Request.Builder()
             .url("$backendBaseUrl/otp/send")
@@ -182,21 +178,34 @@ class FirebaseAuthRepository(
             .post("{}".toRequestBody("application/json".toMediaType()))
             .build()
 
-        return withContext(Dispatchers.IO) {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
-                    false
-                } else {
-                    true
+        return try {
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val code = response.code
+                    Log.d("OmniAuth", "OTP_SEND_HTTP_STATUS=$code")
+                    if (response.isSuccessful) {
+                        // The backend only answers 2xx after SendGrid has accepted the email,
+                        // so this is the moment "code sent" becomes a true statement.
+                        Log.d("OmniAuth", "OTP_SEND_SUCCESS")
+                        true
+                    } else {
+                        val body = response.body?.string() ?: ""
+                        Log.e("OmniAuth", "OTP_SEND_FAILURE status=$code body=$body")
+                        false
+                    }
                 }
             }
+        } catch (e: Exception) {
+            // Timeout, refused connection, cold Render that never woke up — all of them look the
+            // same from here, and all of them mean no email left the building.
+            Log.e("OmniAuth", "OTP_SEND_FAILURE ${e.javaClass.simpleName}: ${e.message}")
+            false
         }
     }
 
     override suspend fun verifyOtpCode(code: String): Boolean {
         val user = auth.currentUser ?: throw AuthException("You're signed out. Sign in and try again.")
-        val idToken = user.getIdToken(false).await()
+        val idToken = user.getIdToken(true).await()
 
         val json = JSONObject().put("code", code)
         val request = Request.Builder()
