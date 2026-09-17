@@ -269,7 +269,7 @@ app.get('/health', (_req: Request, res: Response) => {
     // is exactly the state that looked healthy while every email silently went nowhere.
     status: isSendGridConfigured() ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
-    version: '1.0.1',
+    version: '1.0.2',
   };
   res.json(response);
 });
