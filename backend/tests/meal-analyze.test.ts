@@ -1,0 +1,260 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { Request, Response } from 'express';
+import {
+  analyzeMealSchema,
+  parseGeminiJson,
+  validateAnalysis,
+  computeTotals,
+  createMealAnalyzeHandler,
+  InvalidAnalysisError,
+  type DailyLimiter,
+} from '../src/meal-analyze.js';
+import { GeminiClient, GeminiRateLimitError, GeminiUnavailableError } from '../src/gemini.js';
+
+// A model that returns whatever canned text the test hands it — the whole point is to never call
+// the real Gemini API (and never spend free-tier quota) from a unit test.
+function fakeGemini(text: string): GeminiClient {
+  return { analyzeMeal: vi.fn(async () => text) };
+}
+function throwingGemini(error: Error): GeminiClient {
+  return { analyzeMeal: vi.fn(async () => { throw error; }) };
+}
+
+// A limiter that always allows, unless constructed to throw (over daily budget).
+const allowLimiter: DailyLimiter = { consume: vi.fn(async () => undefined) };
+const blockedLimiter: DailyLimiter = { consume: vi.fn(async () => { throw new Error('Rate limit exceeded'); }) };
+
+/** Minimal Express req/res doubles capturing status + json. */
+function mockReqRes(body: unknown, uid: string | undefined) {
+  const req = { body, user: uid ? { uid } : undefined } as unknown as Request;
+  const captured: { status: number; json: any } = { status: 200, json: undefined };
+  const res = {
+    status(code: number) { captured.status = code; return this; },
+    json(payload: any) { captured.json = payload; return this; },
+  } as unknown as Response;
+  return { req, res, captured };
+}
+
+const goodJson = JSON.stringify({
+  mealName: 'Eggs, bread and peanut butter',
+  items: [
+    { name: 'Egg', quantity: 2, unit: 'large', calories: 144, proteinGrams: 12.6, carbsGrams: 0.8, fatGrams: 9.6 },
+    { name: 'Bread', quantity: 2, unit: 'slice', calories: 160, proteinGrams: 6, carbsGrams: 30, fatGrams: 2 },
+    { name: 'Peanut butter', quantity: 1, unit: 'tbsp', calories: 190, proteinGrams: 8, carbsGrams: 6, fatGrams: 16 },
+  ],
+  totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 },
+  estimated: true,
+  needsClarification: false,
+  clarificationQuestion: null,
+});
+
+describe('analyzeMealSchema (1: request validation)', () => {
+  const schema = analyzeMealSchema(500);
+
+  it('accepts a normal meal description', () => {
+    expect(schema.safeParse({ mealText: '2 eggs and toast' }).success).toBe(true);
+  });
+
+  it('rejects empty / whitespace-only text', () => {
+    expect(schema.safeParse({ mealText: '   ' }).success).toBe(false);
+    expect(schema.safeParse({ mealText: '' }).success).toBe(false);
+  });
+
+  it('rejects text longer than the configured cap (21: request size limit)', () => {
+    expect(schema.safeParse({ mealText: 'x'.repeat(501) }).success).toBe(false);
+  });
+
+  it('rejects a missing / non-string field', () => {
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.safeParse({ mealText: 123 }).success).toBe(false);
+  });
+});
+
+describe('parseGeminiJson (3, 4: structured parsing & invalid JSON)', () => {
+  it('parses clean JSON', () => {
+    expect(parseGeminiJson('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it('tolerates an accidental ```json fence', () => {
+    expect(parseGeminiJson('```json\n{"a":1}\n```')).toEqual({ a: 1 });
+  });
+
+  it('throws InvalidAnalysisError on non-JSON', () => {
+    expect(() => parseGeminiJson('sorry, I cannot help with that')).toThrow(InvalidAnalysisError);
+  });
+});
+
+describe('validateAnalysis', () => {
+  it('(3) accepts a well-formed analysis and marks it estimated', () => {
+    const result = validateAnalysis(JSON.parse(goodJson));
+    expect(result.estimated).toBe(true);
+    expect(result.needsClarification).toBe(false);
+    expect(result.items).toHaveLength(3);
+    expect(result.mealName).toBe('Eggs, bread and peanut butter');
+  });
+
+  it('(7, 8) recomputes totals from items, ignoring the model’s own totals', () => {
+    const result = validateAnalysis(JSON.parse(goodJson));
+    expect(result.totals.calories).toBe(144 + 160 + 190); // 494
+    expect(result.totals.proteinGrams).toBeCloseTo(12.6 + 6 + 8, 5); // 26.6
+    expect(result.totals.carbsGrams).toBeCloseTo(0.8 + 30 + 6, 5); // 36.8
+    expect(result.totals.fatGrams).toBeCloseTo(9.6 + 2 + 16, 5); // 27.6
+  });
+
+  it('(5) rejects negative calories', () => {
+    const bad = { ...JSON.parse(goodJson), items: [{ name: 'X', quantity: 1, unit: 'x', calories: -5, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 }] };
+    expect(() => validateAnalysis(bad)).toThrow(InvalidAnalysisError);
+  });
+
+  it('(5) rejects negative macros', () => {
+    const bad = { ...JSON.parse(goodJson), items: [{ name: 'X', quantity: 1, unit: 'x', calories: 10, proteinGrams: -1, carbsGrams: 0, fatGrams: 0 }] };
+    expect(() => validateAnalysis(bad)).toThrow(InvalidAnalysisError);
+  });
+
+  it('(6) rejects an item with a missing name', () => {
+    const bad = { ...JSON.parse(goodJson), items: [{ name: '  ', quantity: 1, unit: 'x', calories: 10, proteinGrams: 1, carbsGrams: 1, fatGrams: 1 }] };
+    expect(() => validateAnalysis(bad)).toThrow(/missing a name/i);
+  });
+
+  it('rejects a missing meal name', () => {
+    const bad = { ...JSON.parse(goodJson), mealName: '' };
+    expect(() => validateAnalysis(bad)).toThrow(/meal name/i);
+  });
+
+  it('(8) rejects an unreasonable quantity', () => {
+    const bad = { ...JSON.parse(goodJson), items: [{ name: 'Rice', quantity: 9999, unit: 'cup', calories: 200, proteinGrams: 4, carbsGrams: 45, fatGrams: 0 }] };
+    expect(() => validateAnalysis(bad)).toThrow(/quantity/i);
+  });
+
+  it('rejects an empty item list on a non-clarification result', () => {
+    const bad = { ...JSON.parse(goodJson), items: [] };
+    expect(() => validateAnalysis(bad)).toThrow(InvalidAnalysisError);
+  });
+
+  it('(9) passes a clarification result through with empty totals', () => {
+    const clar = validateAnalysis({
+      mealName: 'Rice and fish',
+      items: [],
+      totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 },
+      estimated: true,
+      needsClarification: true,
+      clarificationQuestion: 'Approximately how much rice and fish did you eat?',
+    });
+    expect(clar.needsClarification).toBe(true);
+    expect(clar.clarificationQuestion).toMatch(/how much/i);
+    expect(clar.totals.calories).toBe(0);
+    expect(clar.items).toHaveLength(0);
+  });
+});
+
+describe('computeTotals', () => {
+  it('sums and rounds item nutrition', () => {
+    const totals = computeTotals([
+      { name: 'a', quantity: 1, unit: 'x', calories: 100, proteinGrams: 1.25, carbsGrams: 2.35, fatGrams: 0.15 },
+      { name: 'b', quantity: 1, unit: 'x', calories: 50, proteinGrams: 0.15, carbsGrams: 0.15, fatGrams: 0.15 },
+    ]);
+    expect(totals.calories).toBe(150);
+    expect(totals.proteinGrams).toBe(1.4);
+  });
+});
+
+describe('createMealAnalyzeHandler (end to end with fakes)', () => {
+  const deps = (gemini: GeminiClient, limiter: DailyLimiter = allowLimiter) =>
+    createMealAnalyzeHandler({ gemini, limiter, maxTextLength: 500 });
+
+  it('(2) returns 401 when no verified uid is present', async () => {
+    const handler = deps(fakeGemini(goodJson));
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, undefined);
+    await handler(req, res);
+    expect(captured.status).toBe(401);
+    expect(captured.json.code).toBe('AUTH_REQUIRED');
+  });
+
+  it('(1) returns 400 on invalid input without calling Gemini', async () => {
+    const gemini = fakeGemini(goodJson);
+    const handler = deps(gemini);
+    const { req, res, captured } = mockReqRes({ mealText: '   ' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(400);
+    expect(gemini.analyzeMeal).not.toHaveBeenCalled();
+  });
+
+  it('returns a validated result on the happy path', async () => {
+    const handler = deps(fakeGemini(goodJson));
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs, 2 slices of bread and peanut butter' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(200);
+    expect(captured.json.success).toBe(true);
+    expect(captured.json.result.totals.calories).toBe(494);
+    expect(captured.json.result.estimated).toBe(true);
+  });
+
+  it('(10) returns AI_MEAL_LIMIT_REACHED and never calls Gemini when over the daily cap', async () => {
+    const gemini = fakeGemini(goodJson);
+    const handler = deps(gemini, blockedLimiter);
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(429);
+    expect(captured.json.code).toBe('AI_MEAL_LIMIT_REACHED');
+    expect(gemini.analyzeMeal).not.toHaveBeenCalled();
+  });
+
+  it('(4) returns AI_INVALID_RESPONSE when the model returns non-JSON', async () => {
+    const handler = deps(fakeGemini('I cannot help with that'));
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(422);
+    expect(captured.json.code).toBe('AI_INVALID_RESPONSE');
+  });
+
+  it('(5) returns AI_INVALID_RESPONSE when the model returns negative calories', async () => {
+    const negJson = JSON.stringify({
+      mealName: 'Bad', items: [{ name: 'X', quantity: 1, unit: 'x', calories: -100, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 }],
+      totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 }, estimated: true, needsClarification: false, clarificationQuestion: null,
+    });
+    const handler = deps(fakeGemini(negJson));
+    const { req, res, captured } = mockReqRes({ mealText: 'x' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(422);
+    expect(captured.json.code).toBe('AI_INVALID_RESPONSE');
+  });
+
+  it('surfaces Gemini quota (429) as AI_UNAVAILABLE (503)', async () => {
+    const handler = deps(throwingGemini(new GeminiRateLimitError()));
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(503);
+    expect(captured.json.code).toBe('AI_UNAVAILABLE');
+  });
+
+  it('surfaces a Gemini outage as AI_UNAVAILABLE (503)', async () => {
+    const handler = deps(throwingGemini(new GeminiUnavailableError()));
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(503);
+    expect(captured.json.code).toBe('AI_UNAVAILABLE');
+  });
+
+  it('(9) returns a clarification result to the client', async () => {
+    const clarJson = JSON.stringify({
+      mealName: 'Rice and fish', items: [], totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 },
+      estimated: true, needsClarification: true, clarificationQuestion: 'How much rice and fish did you eat?',
+    });
+    const handler = deps(fakeGemini(clarJson));
+    const { req, res, captured } = mockReqRes({ mealText: 'rice and fish' }, 'uid-a');
+    await handler(req, res);
+    expect(captured.status).toBe(200);
+    expect(captured.json.result.needsClarification).toBe(true);
+  });
+
+  it('(11) derives ownership from the token uid, ignoring any uid in the body', async () => {
+    // The handler must key the rate limit on the *verified* uid, never a client-supplied one.
+    const consume = vi.fn(async () => undefined);
+    const handler = createMealAnalyzeHandler({ gemini: fakeGemini(goodJson), limiter: { consume }, maxTextLength: 500 });
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs', uid: 'uid-attacker' }, 'uid-real');
+    await handler(req, res);
+    expect(captured.status).toBe(200);
+    expect(consume).toHaveBeenCalledWith('uid-real');
+    expect(consume).not.toHaveBeenCalledWith('uid-attacker');
+  });
+});
