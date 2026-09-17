@@ -84,6 +84,8 @@ import com.example.omni.ui.settings.SecurityViewModel
 import com.example.omni.ui.settings.SettingScreen
 import com.example.omni.ui.settings.VerificationScreen
 import com.example.omni.ui.settings.VerificationViewModel
+import com.example.omni.ui.sleep.SleepScreen
+import com.example.omni.ui.sleep.SleepViewModel
 import com.example.omni.ui.sos.SosScreen
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.ui.theme.OmniTheme
@@ -475,9 +477,44 @@ private fun OmniApp() {
                     cprPercent = state.cprPercent,
                     onAddGlass = { home.addGlass(waterGoal) },
                     onEnableStepTracking = stepPermission::openSystemSettings,
-                    onLogSleep = home::logSleep,
+                    // The sleep card leaves for the detailed diary rather than opening the old hours-only
+                    // sheet: the diary is the single writer of a night's record, and it keeps
+                    // `DailyMetrics.sleepHours` — which this card reads — in step on every save.
+                    onOpenSleep = { screen = AppScreen.Sleep },
                     onExploreFirstAid = { screen = AppScreen.FirstAid },
                     onNavigate = navigate,
+                )
+            }
+
+            // The detailed sleep diary — entered from Home's sleep card, back returns there. Its own
+            // ViewModel owns one night's record, the month around it, and the saves, edits and deletes
+            // the sheet triggers. The target it draws against lives on the account, so it is *told* the
+            // profile's `sleepGoal` here rather than opening a second listener for it (BACKEND_PLAN §4
+            // rule 3) — the same way Home is told its water goal just above.
+            AppScreen.Sleep -> {
+                val sleep: SleepViewModel = viewModel(factory = AppContainer.factory())
+                val state by sleep.uiState.collectAsStateWithLifecycle()
+
+                LaunchedEffect(user?.sleepGoal) {
+                    sleep.onGoalHours(user?.sleepGoal ?: DefaultSleepGoal)
+                }
+
+                SleepScreen(
+                    state = state,
+                    // Back returns to the tab the diary was opened from — Home's sleep card or the
+                    // Fitness sleep ring — the same one-slot back the header pages use, rather than a
+                    // hardcoded Home that would strand someone who arrived from Fitness.
+                    onBack = { screen = lastTab },
+                    onSelectDate = sleep::onSelectDate,
+                    onBrowseMonth = sleep::onBrowseMonth,
+                    onAddSleep = sleep::onAddSleep,
+                    onEditSleep = sleep::onEditSleep,
+                    onSaveSleep = sleep::onSaveSleep,
+                    onConfirmDelete = sleep::onConfirmDelete,
+                    onCancelDelete = sleep::onCancelDelete,
+                    onDeleteSleep = sleep::onDeleteSleep,
+                    onDismissSheet = sleep::onDismissSheet,
+                    onDismissError = sleep::onDismissError,
                 )
             }
 
@@ -787,6 +824,7 @@ private fun OmniApp() {
             AppScreen.Nutrition -> {
                 val nutrition: NutritionViewModel = viewModel(factory = AppContainer.factory())
                 val state by nutrition.uiState.collectAsStateWithLifecycle()
+                val aiMeal by nutrition.aiMeal.collectAsStateWithLifecycle()
 
                 // The day on screen follows the chip, so the goals passed here — which belong to the
                 // account — are what the rings and the gauge draw against, whatever day is selected.
@@ -812,10 +850,17 @@ private fun OmniApp() {
                     sleepGoal = user?.sleepGoal ?: DefaultSleepGoal,
                     calorieGoal = user?.calorieGoal ?: DefaultCalorieGoal,
                     onSelectDay = { nutrition.onSelectDay(it.date) },
+                    // The sleep ring opens the same diary the Home sleep card does — a second entry
+                    // point into the existing AppScreen.Sleep, not a new screen.
+                    onOpenSleep = { screen = AppScreen.Sleep },
                     onNavigate = navigate,
                     onAddMeal = nutrition::saveMeal,
                     onEditMeal = nutrition::saveMeal,
                     onDeleteMeal = nutrition::deleteMeal,
+                    aiMeal = aiMeal,
+                    onAnalyzeMeal = nutrition::analyzeMeal,
+                    onConfirmAiMeal = nutrition::confirmAiMeal,
+                    onDismissAiMeal = nutrition::dismissAiMeal,
                 )
             }
 
@@ -1457,6 +1502,8 @@ private enum class AppScreen {
     Setting, Messages, Notifications, FirstAid, ComposePost, SavedEmergencies, Goals, Verification,
     /** The two halves of Settings' "Account Details" group: the profile document, then the credentials. */
     PersonalInformation, Security,
+    /** The detailed sleep diary — entered from Home's sleep card, back returns there. */
+    Sleep,
     /** A public profile — the uid it shows travels beside [MainActivity]'s `profileUid`. */
     Profile,
     /** Email verification screen shown after signup until email is verified. */

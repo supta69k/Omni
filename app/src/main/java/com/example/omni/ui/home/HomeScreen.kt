@@ -18,10 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -62,6 +58,13 @@ import com.example.omni.ui.theme.OmniTheme
  *    below it keeps the design's own spacing, and [DesignFrame] is what makes the numbers literal
  *    rather than approximate — see its own note.
  *
+ * The sleep card no longer opens the dashboard's own hours-only sheet: tapping it now leaves for the
+ * detailed sleep diary ([com.example.omni.ui.sleep.SleepScreen]), which is the single writer of a night's
+ * record (adjustment #2). The card still *reads* [sleepHours] straight off `DailyMetrics`, which the diary
+ * keeps in step on every save — so the dashboard looks identical and only its tap target has moved. The
+ * old quick sheet ([SleepEntrySheet]) stays in the tree as the component the diary's own sheet is built
+ * from; it simply has no logger of its own to drive any more.
+ *
  * The redesign also retired the Wellness / Recommended / Activity segmented control: the section is
  * now the single title "Daily updates & Recomindation" — spelling Figma's own — followed straight by
  * the card stack.
@@ -69,8 +72,6 @@ import com.example.omni.ui.theme.OmniTheme
  * Every value parameter defaults to the number the design draws, so `@DevicePreviews` renders the frame
  * exactly as Figma has it and the running app simply passes real ones in (BACKEND_PLAN §4 rule 2).
  *
- * @param startSleepSheetOpen previews only, the same trick `SosScreen` uses for its hospitals sheet: the
- *   sheet's open state is this screen's own, so a preview needs a way in.
  */
 @Composable
 fun HomeScreen(
@@ -85,15 +86,12 @@ fun HomeScreen(
     sleepHours: Float = 6.5f,
     sleepGoal: Float = DefaultSleepGoal,
     cprPercent: Int = 0,
-    startSleepSheetOpen: Boolean = false,
     onExploreFirstAid: () -> Unit = {},
     onAddGlass: () -> Unit = {},
     onEnableStepTracking: () -> Unit = {},
-    onLogSleep: (Float) -> Unit = {},
+    onOpenSleep: () -> Unit = {},
     onNavigate: (OmniNavItem) -> Unit = {},
 ) {
-    var sleepSheetOpen by remember { mutableStateOf(startSleepSheetOpen) }
-
     DesignFrame {
         OmniTabScaffold(
             selected = OmniNavItem.Home,
@@ -164,7 +162,7 @@ fun HomeScreen(
                                 SleepCard(
                                     hours = sleepHours,
                                     goalHours = sleepGoal,
-                                    onLog = { sleepSheetOpen = true },
+                                    onLog = onOpenSleep,
                                 )
                             }
                             else -> CprCard(percent = cprPercent)
@@ -182,17 +180,6 @@ fun HomeScreen(
                 )
             }
         }
-
-        // Sheet is sibling of scaffold so it overlays bar/rail (KDoc rule 11)
-        SleepEntrySheet(
-            visible = sleepSheetOpen,
-            hours = sleepHours,
-            onDismiss = { sleepSheetOpen = false },
-            onSave = { hours ->
-                sleepSheetOpen = false
-                onLogSleep(hours)
-            },
-        )
     }
 }
 
@@ -266,10 +253,4 @@ private const val StepsCardWeight = 207f
 @Composable
 private fun HomeScreenPreview() {
     OmniTheme { HomeScreen() }
-}
-
-@DevicePreviews
-@Composable
-private fun HomeScreenSleepSheetPreview() {
-    OmniTheme { HomeScreen(startSleepSheetOpen = true) }
 }

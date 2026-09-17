@@ -6,10 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.DailyMetrics
 import com.example.omni.data.model.DayNutrition
 import com.example.omni.data.model.Meal
+import com.example.omni.data.model.MealAnalysis
+import com.example.omni.data.model.MealAnalysisError
+import com.example.omni.data.model.MealAnalysisResult
 import com.example.omni.data.model.todayKeyFlow
 import com.example.omni.data.model.toDayNutrition
 import com.example.omni.data.model.weekEndingOn
 import com.example.omni.data.repo.AuthRepository
+import com.example.omni.data.repo.MealAnalysisRepository
 import com.example.omni.data.repo.MealRepository
 import com.example.omni.data.repo.MetricsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -75,6 +79,32 @@ data class NutritionUiState(
 )
 
 /**
+ * The AI meal-logging flow's state — a small state machine the log sheet drives (Phase 7).
+ *
+ * Kept out of [NutritionUiState] on purpose: the food log renders whether or not the AI sheet is open,
+ * and folding an ephemeral, one-sheet-at-a-time flow into the day's steady state would make every meal
+ * read re-emit when the user is only typing into the AI box. The estimate here is *not* saved — it is
+ * what the user reviews; only [NutritionViewModel.confirmAiMeal] writes, through the ordinary food-log
+ * path, so there is one source of truth.
+ */
+sealed interface AiMealState {
+    /** No AI request in flight; the input sheet is either closed or waiting for text. */
+    data object Idle : AiMealState
+
+    /** Request sent — the sheet shows "Analyzing your meal…". */
+    data object Analyzing : AiMealState
+
+    /** An estimate came back and is ready to review, edit, and confirm. */
+    data class Review(val analysis: MealAnalysis) : AiMealState
+
+    /** The description was too vague; [question] is the single short prompt to show the user. */
+    data class NeedsClarification(val question: String) : AiMealState
+
+    /** Analysis failed; [error] carries the specific message, and manual logging is still offered. */
+    data class Failed(val error: MealAnalysisError) : AiMealState
+}
+
+/**
  * The month picker's three pieces of state, folded into one value.
  *
  * Together rather than as three flows because Kotlin's typed [combine] stops at five, and [uiState]
@@ -102,6 +132,7 @@ class NutritionViewModel(
     private val authRepository: AuthRepository,
     private val metricsRepository: MetricsRepository,
     private val mealRepository: MealRepository,
+    private val mealAnalysisRepository: MealAnalysisRepository,
 ) : ViewModel() {
 
     private val uid: StateFlow<String?> = authRepository.sessionUid
@@ -241,6 +272,65 @@ class NutritionViewModel(
             started = SharingStarted.WhileSubscribed(ListenerGraceMillis),
             initialValue = NutritionUiState(),
         )
+
+    /**
+     * The AI meal flow's state. Starts [AiMealState.Idle]; the sheet moves it through analyzing →
+     * review → confirmed (back to idle) or a typed failure. Held as its own flow, not in [uiState],
+     * for the reason [AiMealState]'s doc gives.
+     */
+    private val _aiMeal = MutableStateFlow<AiMealState>(AiMealState.Idle)
+    val aiMeal: StateFlow<AiMealState> = _aiMeal
+
+    /**
+     * Sends [text] to the backend for an estimate.
+     *
+     * Never writes anything: a successful estimate becomes [AiMealState.Review] (or
+     * [AiMealState.NeedsClarification]) for the user to confirm, and every failure becomes a typed
+     * [AiMealState.Failed] the sheet turns into one specific sentence — leaving manual logging intact.
+     * A second call while one is already [AiMealState.Analyzing] is ignored so a double-tap cannot
+     * spend two of the day's AI budget.
+     */
+    fun analyzeMeal(text: String) {
+        if (_aiMeal.value is AiMealState.Analyzing) return
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) {
+            _aiMeal.value = AiMealState.Failed(MealAnalysisError.InvalidInput)
+            return
+        }
+        _aiMeal.value = AiMealState.Analyzing
+        viewModelScope.launch {
+            _aiMeal.value = when (val result = mealAnalysisRepository.analyzeMeal(trimmed)) {
+                is MealAnalysisResult.Success -> {
+                    val analysis = result.analysis
+                    if (analysis.needsClarification) {
+                        AiMealState.NeedsClarification(
+                            analysis.clarificationQuestion
+                                ?: "Could you add a little more detail about what you ate?",
+                        )
+                    } else {
+                        AiMealState.Review(analysis)
+                    }
+                }
+                is MealAnalysisResult.Failure -> AiMealState.Failed(result.error)
+            }
+        }
+    }
+
+    /**
+     * Confirms the reviewed (possibly edited) estimate by saving it through the ordinary food-log path,
+     * then closes the AI flow. This is the *only* AI code that writes: it reuses [saveMeal] so the day
+     * roll-up, Firestore schema, and owner-only rules are exactly the manual path's — the confirmed
+     * meal's calories are added to the day, never replacing it.
+     */
+    fun confirmAiMeal(meal: Meal) {
+        saveMeal(meal)
+        _aiMeal.value = AiMealState.Idle
+    }
+
+    /** Closes the AI flow without saving — from the input sheet, an error, or a review the user backed out of. */
+    fun dismissAiMeal() {
+        _aiMeal.value = AiMealState.Idle
+    }
 
     /** Ignores a tap on a future chip rather than trusting the UI to have disabled it. */
     fun onSelectDay(date: LocalDate) {

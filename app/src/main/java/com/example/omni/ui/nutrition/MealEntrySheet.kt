@@ -219,7 +219,7 @@ private fun MealSheet(
 
 /** The four eating occasions as pills. A fixed set of four, so a row of chips beats a dropdown. */
 @Composable
-private fun SlotRow(selected: MealSlot, onSelect: (MealSlot) -> Unit) {
+internal fun SlotRow(selected: MealSlot, onSelect: (MealSlot) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(SlotGap),
@@ -249,7 +249,7 @@ private fun SlotRow(selected: MealSlot, onSelect: (MealSlot) -> Unit) {
 
 /** A caption over a numeric field, for the two that stand alone. */
 @Composable
-private fun LabelledField(
+internal fun LabelledField(
     label: String,
     value: String,
     unit: String,
@@ -264,7 +264,7 @@ private fun LabelledField(
 
 /** The same, sized to share a row with two siblings. */
 @Composable
-private fun MacroField(
+internal fun MacroField(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
@@ -290,7 +290,7 @@ private fun FieldLabel(text: String) {
  * a stray letter never reaches the parse — the parse still guards, since a paste can carry anything.
  */
 @Composable
-private fun SheetField(
+internal fun SheetField(
     value: String,
     onValueChange: (String) -> Unit,
     placeholder: String,
@@ -344,7 +344,7 @@ private fun isNumberChar(character: Char): Boolean = character.isDigit() || char
  * [String.toFloatOrNull] would read `"12,5"` as nothing at all. A blank field means 0 rather than an error,
  * because most meals will have fields nobody bothers to fill in — that is a real answer, not a mistake.
  */
-private fun numberOrZero(raw: String): Float {
+internal fun numberOrZero(raw: String): Float {
     val normalised = raw.replace(',', '.')
     return normalised.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f } ?: 0f
 }

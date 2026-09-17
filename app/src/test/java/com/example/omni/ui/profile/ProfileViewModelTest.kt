@@ -394,6 +394,12 @@ private class FakeAuthRepository(uid: String?) : AuthRepository {
     override val currentEmail: String? get() = session.value?.let { "$it@omni.test" }
     override suspend fun changeEmail(currentPassword: String, newEmail: String) = Unit
     override suspend fun changePassword(currentPassword: String, newPassword: String) = Unit
+
+    // Email-verification / OTP surface — part of the interface, not what this test drives.
+    override suspend fun reloadCurrentUser() = Unit
+    override val isEmailVerified: Boolean get() = true
+    override suspend fun sendOtpCode(): Boolean = true
+    override suspend fun verifyOtpCode(code: String): Boolean = true
 }
 
 /**

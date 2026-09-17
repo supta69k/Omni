@@ -10,6 +10,8 @@ import { generateOtp, hashOtp, generateEmailVerificationLink, formatOtpForDispla
 import { generateOtpEmailHtml, generateOtpEmailText } from './email-template.js';
 import { SendOtpRequest, SendOtpResponse, VerifyOtpRequest, VerifyOtpResponse, HealthResponse, OtpDocument, RateLimitDocument } from './types.js';
 import { FirestoreRateLimiter } from './rate-limiter.js';
+import { RestGeminiClient } from './gemini.js';
+import { createMealAnalyzeHandler } from './meal-analyze.js';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -79,6 +81,24 @@ const verifyRateLimiter = new FirestoreRateLimiter(db, 'otp_rate_limits', 'verif
   points: config.rateLimits.verify.points,
   durationSeconds: config.rateLimits.verify.durationMinutes * 60,
   blockDurationSeconds: config.rateLimits.verify.blockMinutes * 60,
+});
+
+// Per-user daily cap on AI meal analyses. A one-day window, blocked for the rest of the day once
+// spent, so a single account cannot drain the shared free-tier Gemini quota (§20).
+const aiMealRateLimiter = new FirestoreRateLimiter(db, 'ai_meal_rate_limits', 'analyze_', {
+  points: config.gemini.dailyLimit,
+  durationSeconds: 24 * 60 * 60,
+  blockDurationSeconds: 24 * 60 * 60,
+});
+
+// The Gemini client only works with a key configured; without one the endpoint answers a clean
+// "unavailable" (the client throws) and manual logging keeps working — the app never breaks.
+const geminiClient = new RestGeminiClient(config.gemini.apiKey ?? '', config.gemini.model);
+
+const analyzeMealHandler = createMealAnalyzeHandler({
+  gemini: geminiClient,
+  limiter: aiMealRateLimiter,
+  maxTextLength: config.gemini.maxTextLength,
 });
 
 // POST /otp/send - Send 6-digit OTP to user's email
@@ -262,6 +282,11 @@ app.post('/otp/verify', authenticate, validateRequest(verifyOtpSchema), async (r
   }
 });
 
+// POST /ai/meal/analyze - Estimate nutrition for a natural-language meal description (Phase 7).
+// Auth is enforced by `authenticate`; the UID is taken from the verified token, never the body.
+// The handler itself validates size, charges the daily limit, calls Gemini, and validates output.
+app.post('/ai/meal/analyze', authenticate, analyzeMealHandler);
+
 // GET /health - Health check
 app.get('/health', (_req: Request, res: Response) => {
   const response: HealthResponse = {
@@ -295,6 +320,7 @@ app.listen(PORT, () => {
   console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   OTP Send: POST /otp/send`);
   console.log(`   OTP Verify: POST /otp/verify`);
+  console.log(`   AI Meal Analyze: POST /ai/meal/analyze`);
 });
 
 export { app };

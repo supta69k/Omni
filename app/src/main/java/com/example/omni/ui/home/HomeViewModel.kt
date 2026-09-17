@@ -222,28 +222,6 @@ class HomeViewModel(
         }
     }
 
-    /**
-     * Records last night's sleep on today's document — the one number in the app the user states rather
-     * than the app observing (BACKEND_PLAN §3.5).
-     *
-     * Written to *today's* key, not yesterday's, even though the sleep happened overnight: that is what the
-     * card's own "6.5/h" beside today's water and steps means, and it keeps one day's document holding one
-     * day's numbers. The date is recomputed here for the same reason [addGlass] recomputes it.
-     *
-     * No debounce, because there is no bounce to catch: this arrives from a Save button behind a sheet, and
-     * a second save is a correction rather than a duplicate.
-     */
-    fun logSleep(hours: Float) {
-        val uid = authRepository.currentUid ?: return
-        viewModelScope.launch {
-            try {
-                metricsRepository.setSleepHours(uid, todayKey(), hours)
-            } catch (cause: Exception) {
-                Log.w("Omni", "Logging $hours hours of sleep failed", cause)
-            }
-        }
-    }
-
     private companion object {
         /** Outlives a rotation; a backgrounded app stops paying for a listener or the sensor. */
         const val ListenerGraceMillis = 5_000L

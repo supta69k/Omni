@@ -18,6 +18,7 @@ import com.example.omni.data.repo.FirestoreHospitalRepository
 import com.example.omni.data.repo.FirestoreMealRepository
 import com.example.omni.data.repo.FirestoreMetricsRepository
 import com.example.omni.data.repo.FirestoreNotificationRepository
+import com.example.omni.data.repo.FirestoreSleepRepository
 import com.example.omni.data.repo.FirestoreSosRepository
 import com.example.omni.data.repo.FirestoreUserRepository
 import com.example.omni.data.repo.FirestoreVerificationRepository
@@ -26,6 +27,7 @@ import com.example.omni.data.repo.BundledGuideRepository
 import com.example.omni.data.repo.GuideRepository
 import com.example.omni.data.repo.HospitalRepository
 import com.example.omni.data.repo.LocationRepository
+import com.example.omni.data.repo.MealAnalysisRepository
 import com.example.omni.data.repo.MealRepository
 import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.MessageRepository
@@ -33,6 +35,7 @@ import com.example.omni.data.repo.FirestoreMessageRepository
 import com.example.omni.data.repo.MetricsRepository
 import com.example.omni.data.repo.NotificationRepository
 import com.example.omni.data.repo.PreviewAuthRepository
+import com.example.omni.data.repo.PreviewMealAnalysisRepository
 import com.example.omni.data.repo.PreviewEmergencyContactRepository
 import com.example.omni.data.repo.PreviewFeedRepository
 import com.example.omni.data.repo.PreviewGuideProgressRepository
@@ -41,11 +44,14 @@ import com.example.omni.data.repo.PreviewMessageRepository
 import com.example.omni.data.repo.PreviewMetricsRepository
 import com.example.omni.data.repo.PreviewNotificationRepository
 import com.example.omni.data.repo.PreviewRoutingRepository
+import com.example.omni.data.repo.PreviewSleepRepository
 import com.example.omni.data.repo.PreviewStepsRepository
 import com.example.omni.data.repo.PreviewUserRepository
 import com.example.omni.data.repo.PreviewVerificationRepository
 import com.example.omni.data.repo.OsrmRoutingRepository
+import com.example.omni.data.repo.RenderMealAnalysisRepository
 import com.example.omni.data.repo.RoutingRepository
+import com.example.omni.data.repo.SleepRepository
 import com.example.omni.data.repo.StoryRepository
 import com.example.omni.data.repo.FirestoreFollowRepository
 import com.example.omni.data.repo.FirestoreStoryRepository
@@ -70,6 +76,7 @@ import com.example.omni.ui.settings.GoalsViewModel
 import com.example.omni.ui.settings.PersonalInformationViewModel
 import com.example.omni.ui.settings.SecurityViewModel
 import com.example.omni.ui.settings.VerificationViewModel
+import com.example.omni.ui.sleep.SleepViewModel
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
@@ -89,6 +96,8 @@ class AppContainer private constructor(
     val userRepository: UserRepository,
     val metricsRepository: MetricsRepository,
     val mealRepository: MealRepository,
+    val mealAnalysisRepository: MealAnalysisRepository,
+    val sleepRepository: SleepRepository,
     val guideProgressRepository: GuideProgressRepository,
     val feedRepository: FeedRepository,
     val emergencyContactRepository: EmergencyContactRepository,
@@ -150,14 +159,19 @@ class AppContainer private constructor(
         fun init(appContext: Context) {
             check(instance == null) { "AppContainer is already initialised" }
             val firestore = FirebaseFirestore.getInstance()
+            val metricsRepo = FirestoreMetricsRepository(firestore)
             instance = AppContainer(
                 authRepository = FirebaseAuthRepository(
                     auth = FirebaseAuth.getInstance(),
                     firestore = firestore,
                 ),
                 userRepository = FirestoreUserRepository(firestore),
-                metricsRepository = FirestoreMetricsRepository(firestore),
+                metricsRepository = metricsRepo,
                 mealRepository = FirestoreMealRepository(firestore),
+                // AI meal analysis speaks HTTPS to the Omni Render backend (the Gemini key lives there,
+                // never in the APK). Not lazy: it only builds an OkHttp client, same as the auth repo.
+                mealAnalysisRepository = RenderMealAnalysisRepository(FirebaseAuth.getInstance()),
+                sleepRepository = FirestoreSleepRepository(firestore, metricsRepo),
                 guideProgressRepository = FirestoreGuideProgressRepository(firestore),
                 feedRepository = FirestoreFeedRepository(firestore),
                 emergencyContactRepository = FirestoreEmergencyContactRepository(firestore),
@@ -199,6 +213,8 @@ class AppContainer private constructor(
                 userRepository = PreviewUserRepository(),
                 metricsRepository = PreviewMetricsRepository(),
                 mealRepository = PreviewMealRepository(),
+                mealAnalysisRepository = PreviewMealAnalysisRepository(),
+                sleepRepository = PreviewSleepRepository(),
                 guideProgressRepository = PreviewGuideProgressRepository(),
                 feedRepository = PreviewFeedRepository(),
                 emergencyContactRepository = PreviewEmergencyContactRepository(),
@@ -251,6 +267,7 @@ class AppContainer private constructor(
                         current.authRepository,
                         current.metricsRepository,
                         current.mealRepository,
+                        current.mealAnalysisRepository,
                     ) as T
                 GuidesViewModel::class.java ->
                     GuidesViewModel(
@@ -329,6 +346,11 @@ class AppContainer private constructor(
                         current.userRepository,
                         current.messageRepository,
                         current.followRepository,
+                    ) as T
+                SleepViewModel::class.java ->
+                    SleepViewModel(
+                        current.authRepository,
+                        current.sleepRepository,
                     ) as T
                 else -> throw IllegalArgumentException("No factory for ${modelClass.name} — add it here")
             }

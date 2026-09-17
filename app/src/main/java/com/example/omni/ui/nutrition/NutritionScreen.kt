@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -157,10 +158,17 @@ fun NutritionScreen(
     sleepGoal: Float = DefaultSleepGoal,
     calorieGoal: Int = DefaultCalorieGoal,
     onSelectDay: (DayChipState) -> Unit = {},
+    /** Opens the detailed sleep diary — the same `AppScreen.Sleep` the Home sleep card opens. */
+    onOpenSleep: () -> Unit = {},
     onNavigate: (OmniNavItem) -> Unit = {},
     onAddMeal: (Meal) -> Unit = {},
     onEditMeal: (Meal) -> Unit = {},
     onDeleteMeal: (String) -> Unit = {},
+    /** The AI meal flow's state (Phase 7); [AiMealState.Idle] until the AI sheet is opened. */
+    aiMeal: AiMealState = AiMealState.Idle,
+    onAnalyzeMeal: (String) -> Unit = {},
+    onConfirmAiMeal: (Meal) -> Unit = {},
+    onDismissAiMeal: () -> Unit = {},
 ) {
     // The log-food sheet is the one thing on this screen the design does not contain. Both the plus and a
     // tap on a row open it; the plus means "new" and the row means "edit". Whether the current open is
@@ -168,12 +176,22 @@ fun NutritionScreen(
     // that is all [MealEntrySheet] needs to tell the two apart.
     var isAdding by remember { mutableStateOf(false) }
     var editingMeal by remember { mutableStateOf<Meal?>(null) }
+    // The "+" now opens a small fork first (Use AI / Manual) rather than the manual sheet directly.
+    // `aiOpen` gates the AI flow's own sheet, whose *content* is driven by [aiMeal] from the ViewModel.
+    var logMethodOpen by remember { mutableStateOf(false) }
+    var aiOpen by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(pageCount = { 2 })
+    // Held apart from the remember key list so the ring pages are rebuilt only when a reading changes,
+    // not on every recomposition a fresh navigation lambda would otherwise trigger — the sleep ring's
+    // click stays wired to the latest callback regardless.
+    val onOpenSleepState = rememberUpdatedState(onOpenSleep)
     val ringPages = remember(meals, nutrition, steps, stepsGoal, glasses, waterGoal, sleepHours, sleepGoal) {
         listOf(
             macroRings(nutrition),
-            activityRings(steps, stepsGoal, glasses, waterGoal, sleepHours, sleepGoal),
+            activityRings(steps, stepsGoal, glasses, waterGoal, sleepHours, sleepGoal) {
+                onOpenSleepState.value()
+            },
         )
     }
 
@@ -253,7 +271,7 @@ fun NutritionScreen(
 
                             Spacer(Modifier.height(FoodLogGap))
 
-                            FoodLogHeader(onLog = { isAdding = true })
+                            FoodLogHeader(onLog = { logMethodOpen = true })
 
                             if (meals.isEmpty()) {
                                 Spacer(Modifier.height(EmptyGap))
@@ -327,6 +345,37 @@ fun NutritionScreen(
             onDismiss = onDismissMonthPicker,
             onBrowseMonth = onBrowseMonth,
             onSelectDate = onSelectDate,
+        )
+
+        // The "+" fork: pick a way to log. Manual falls through to the existing MealEntrySheet; AI opens
+        // the describe-your-meal flow. Only ever one sheet is up at a time.
+        LogMethodSheet(
+            visible = logMethodOpen,
+            onUseAi = {
+                logMethodOpen = false
+                // Clear any estimate left from a previous open so the flow starts on the input step.
+                onDismissAiMeal()
+                aiOpen = true
+            },
+            onManual = {
+                logMethodOpen = false
+                isAdding = true
+            },
+            onDismiss = { logMethodOpen = false },
+        )
+
+        AiMealSheet(
+            visible = aiOpen,
+            state = aiMeal,
+            onAnalyze = onAnalyzeMeal,
+            onConfirm = { meal ->
+                onConfirmAiMeal(meal)
+                aiOpen = false
+            },
+            onDismiss = {
+                aiOpen = false
+                onDismissAiMeal()
+            },
         )
     }
 }
@@ -666,8 +715,14 @@ private fun RingRow(rings: List<Ring>) {
 
 @Composable
 private fun RingGauge(ring: Ring) {
+    // A ring with a page behind it (only Sleep, today) makes its whole metric — the circle and its
+    // label — the tap target; a display-only ring stays inert. The ripple is Compose's default, the
+    // only visual the design gains and the one the brief allows.
+    val tap = ring.onClick
     Column(
-        modifier = Modifier.width(ring.width),
+        modifier = Modifier
+            .width(ring.width)
+            .then(if (tap != null) Modifier.clickable(onClick = tap) else Modifier),
         verticalArrangement = Arrangement.spacedBy(RingLabelGap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -872,6 +927,8 @@ private data class Ring(
     /** The lighter, larger unit trailing the value. Only the macro page has one. */
     val unit: String? = null,
     val label: String,
+    /** A tap target for the whole metric, or `null` for a display-only ring. Only Sleep sets one. */
+    val onClick: (() -> Unit)? = null,
 )
 
 /** The first page, driven by the selected day's meal macros. The ring assets do not fill; only the figures move. */
@@ -897,6 +954,7 @@ private fun activityRings(
     waterGoal: Int,
     sleepHours: Float,
     sleepGoal: Float,
+    onSleepClick: () -> Unit,
 ): List<Ring> = listOf(
     Ring(
         R.drawable.ic_nutri_ring_steps, 100.994.dp, 99.464.dp,
@@ -909,6 +967,8 @@ private fun activityRings(
     Ring(
         R.drawable.ic_nutri_ring_sleep, 100.868.dp, 99.647.dp,
         formatAmount(sleepHours) + "/" + formatAmount(sleepGoal) + "h", label = "Sleep",
+        // The sleep ring is the one activity metric with a page behind it — the detailed diary.
+        onClick = onSleepClick,
     ),
 )
 

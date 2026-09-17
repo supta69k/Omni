@@ -29,6 +29,21 @@ export const config = {
 
   // Firebase Hosting URL for email verification link
   firebaseHostingUrl: process.env.FIREBASE_HOSTING_URL || 'https://omni-2c987.firebaseapp.com',
+
+  // Gemini AI meal analysis (Phase 7). The key lives ONLY here, read from the Render
+  // environment — never shipped in the Android app. It is never logged or returned in a response.
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY,
+    // A stable, free-tier Gemini Flash-Lite model (verified against ai.google.dev pricing/models,
+    // Sep 2026): free of charge for input and output, supports structured JSON output. Overridable
+    // by env so a future free model can be swapped in without a code change.
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
+    // Conservative per-user daily cap so a single account cannot burn the shared free-tier quota.
+    // A day window is the whole point of the limit, so it is fixed here, not in `rateLimits` above.
+    dailyLimit: parseInt(process.env.AI_MEAL_DAILY_LIMIT || '10', 10),
+    // Guards Gemini (and the free-tier token budget) from an arbitrarily large prompt.
+    maxTextLength: 500,
+  },
 } as const;
 
 export function validateConfig(): void {
@@ -37,5 +52,8 @@ export function validateConfig(): void {
   }
   if (!config.sendGridApiKey) {
     console.warn('⚠️ SENDGRID_API_KEY not set - emails will not be sent');
+  }
+  if (!config.gemini.apiKey) {
+    console.warn('⚠️ GEMINI_API_KEY not set - AI meal analysis will be unavailable');
   }
 }

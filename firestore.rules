@@ -47,6 +47,7 @@ service cloud.firestore {
 
       match /days/{day}           { allow read, write: if isSelf(uid); }
       match /days/{day}/meals/{m} { allow read, write: if isSelf(uid); }
+      match /sleep/{date}         { allow read, write: if isSelf(uid); }
       match /guideProgress/{g}    { allow read, write: if isSelf(uid); }
       match /emergencyContacts/{c}{ allow read, write: if isSelf(uid); }
       match /following/{target}   { allow read: if signedIn(); allow write: if isSelf(uid); }

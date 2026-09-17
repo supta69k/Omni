@@ -52,6 +52,57 @@ export interface HealthResponse {
   fromDomain: string;
 }
 
+// ---- AI meal analysis (Phase 7) --------------------------------------------
+
+/** One food the model identified inside a meal description. */
+export interface MealItem {
+  name: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatGrams: number;
+}
+
+/** The summed nutrition across a meal's items. Always recomputed server-side from the items. */
+export interface MealTotals {
+  calories: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatGrams: number;
+}
+
+/** The raw shape Gemini is asked to return (before server-side validation). */
+export interface RawMealAnalysis {
+  mealName?: unknown;
+  items?: unknown;
+  totals?: unknown;
+  estimated?: unknown;
+  needsClarification?: unknown;
+  clarificationQuestion?: unknown;
+}
+
+/** The validated, sanitized result the endpoint returns to Android. */
+export interface MealAnalysisResult {
+  mealName: string;
+  items: MealItem[];
+  totals: MealTotals;
+  /** Always true for this phase — AI values are estimates, never exact measurements. */
+  estimated: boolean;
+  needsClarification: boolean;
+  clarificationQuestion: string | null;
+}
+
+export interface AnalyzeMealRequest {
+  mealText: string;
+}
+
+export interface AnalyzeMealResponse {
+  success: boolean;
+  result: MealAnalysisResult;
+}
+
 export interface SendGridEmailData {
   to: string;
   from: { email: string; name?: string };
