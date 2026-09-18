@@ -33,6 +33,7 @@ import com.example.omni.data.model.DefaultSleepGoal
 import com.example.omni.domain.formatAmount
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFieldSurface
@@ -171,6 +172,7 @@ private fun SleepSheet(
                 .height(ButtonHeight)
                 .clip(RoundedCornerShape(ButtonCorner))
                 .background(OmniInk)
+                .pressEffect()
                 .clickable { onSave(chosen) },
             contentAlignment = Alignment.Center,
         ) {
@@ -194,6 +196,7 @@ private fun StepButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
             .size(StepButtonSize)
             .clip(RoundedCornerShape(percent = 50))
             .background(OmniFieldSurface)
+            .pressEffect(enabled = enabled)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

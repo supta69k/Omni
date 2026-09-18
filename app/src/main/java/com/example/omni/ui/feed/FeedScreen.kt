@@ -56,6 +56,7 @@ import com.example.omni.data.model.compactCount
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.components.OmniHeader
 import com.example.omni.ui.components.OmniTabScaffold
@@ -306,6 +307,7 @@ fun FeedScreen(
                                         top = PostSpacing,
                                     )
                                     .fillMaxWidth()
+                                    .pressEffect()
                                     .clip(RoundedCornerShape(19.dp))
                                     .background(OmniFeedSurface)
                                     .clickable(onClick = onLoadMore)
@@ -487,6 +489,7 @@ private fun FeedHeader(
                 modifier = Modifier
                     .width(51.dp)
                     .height(50.dp)
+                    .pressEffect()
                     .clip(RoundedCornerShape(42.dp))
                     .background(OmniInk)
                     .clickable(onClick = onCompose),
@@ -577,6 +580,7 @@ private fun SearchResultRow(user: com.example.omni.data.model.User, onClick: () 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressEffect()
             .clickable(onClick = onClick)
             .padding(horizontal = SearchRowInset, vertical = SearchRowPadding),
         horizontalArrangement = Arrangement.spacedBy(11.dp),
@@ -834,7 +838,7 @@ private fun ShareMealTile(
                         }
                     }
                     .let { base ->
-                        if (hasStory) base.clickable(onClick = onOpenViewer) else base
+                        if (hasStory) base.pressEffect().clickable(onClick = onOpenViewer) else base
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -933,6 +937,7 @@ private fun SegmentTab(label: String, width: Dp, selected: Boolean, onClick: () 
     if (selected) {
         Box(
             modifier = base
+                .pressEffect()
                 // Figma's `0 0 6.6 2 rgba(190,190,190,.25)` is a spread glow, which Compose's
                 // single-elevation shadow cannot express; 3dp is the closest visual match — the
                 // same compromise the dashboard's tabs make.
@@ -952,7 +957,7 @@ private fun SegmentTab(label: String, width: Dp, selected: Boolean, onClick: () 
         }
     } else {
         Box(
-            modifier = base.clickable(onClick = onClick),
+            modifier = base.pressEffect().clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -1019,6 +1024,7 @@ private fun FeedPost(
                     Box(
                         modifier = Modifier
                             .size(49.dp)
+                            .pressEffect()
                             .clip(RoundedCornerShape(35.7.dp))
                             .background(OmniFeedSurface)
                             // The avatar is the author's page — the Facebook convention the brief
@@ -1183,6 +1189,7 @@ private fun FollowPill(following: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .width(FollowPillWidth)
             .height(FollowPillHeight)
+            .pressEffect()
             .clip(RoundedCornerShape(FollowPillHeight / 2))
             .background(fill)
             .clickable(onClick = onClick),
@@ -1250,6 +1257,7 @@ private fun ActionPill(
         modifier = Modifier
             .widthIn(min = ActionMinWidth)
             .height(ActionHeight)
+            .pressEffect()
             .clip(RoundedCornerShape(ActionHeight / 2))
             .background(fill)
             .clickable(onClick = onClick)

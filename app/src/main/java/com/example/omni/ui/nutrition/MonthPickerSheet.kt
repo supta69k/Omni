@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.NutritionType
 import com.example.omni.ui.theme.OmniNutriDayIdle
 import com.example.omni.ui.theme.OmniNutriDaySelected
@@ -263,6 +264,7 @@ private fun DayCell(
     Box(
         modifier = modifier
             .height(CellHeight)
+            .pressEffect(enabled = enabled)
             .clip(shape)
             .background(surface)
             .then(outline)

@@ -63,6 +63,7 @@ import com.example.omni.ui.theme.OmniSetToggleOff
 import com.example.omni.ui.theme.OmniSetTogglePush
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * Settings — Figma frame `iPhone 14 & 15 Pro - 36` (node 163:14), a 415 x 1113 artboard.
@@ -140,6 +141,7 @@ fun SettingScreen(
                     modifier = Modifier
                         .padding(start = PagePadding)
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -407,6 +409,7 @@ private fun ProfileRow(
             Box(
                 modifier = Modifier
                     .size(55.dp)
+                    .pressEffect(enabled = !uploading)
                     .clip(CircleShape)
                     .clickable(enabled = !uploading, onClick = onChangePhoto),
             ) {
@@ -463,6 +466,7 @@ private fun ProfileRow(
             contentDescription = "Change your profile photo",
             modifier = Modifier
                 .size(24.dp)
+                .pressEffect(enabled = !uploading)
                 .clickable(enabled = !uploading, onClick = onChangePhoto),
         )
     }
@@ -520,6 +524,7 @@ private fun SettingsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressEffect()
             .clickable(onClick = onClick),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -638,6 +643,7 @@ private fun HealthcareCard(onApply: () -> Unit) {
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 169.dp)
+                .pressEffect()
                 .clip(RoundedCornerShape(23.dp))
                 .background(OmniSetApply)
                 .clickable(onClick = onApply)
@@ -663,6 +669,7 @@ private fun LogOutButton(onClick: () -> Unit) {
             .padding(start = PagePadding)
             .width(383.dp)
             .height(46.dp)
+            .pressEffect()
             .clip(RoundedCornerShape(8.dp))
             .background(OmniSetLogOut)
             .clickable(onClick = onClick),

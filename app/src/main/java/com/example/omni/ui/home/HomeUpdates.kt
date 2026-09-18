@@ -41,6 +41,7 @@ import com.example.omni.domain.progressBarOf
 import com.example.omni.domain.progressOf
 import com.example.omni.domain.remainingTo
 import com.example.omni.domain.statusFor
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniCardSurface
@@ -393,7 +394,7 @@ internal fun SleepCard(
         // The whole card is the target, not a button inside it: there is no button in the design, and this
         // is the only card whose tap does something, so the tap has to be the card. Unlike `StepsCard` it is
         // always live — logging sleep is never a no-op (§2a rule 4 is about dead taps, not about state).
-        modifier = modifier.clickable(onClick = onLog),
+        modifier = modifier.pressEffect().clickable(onClick = onLog),
     ) {
         UpdateHeader(
             title = "Optimize Your Sleep",

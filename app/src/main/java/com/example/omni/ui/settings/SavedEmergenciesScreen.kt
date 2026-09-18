@@ -55,6 +55,7 @@ import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniSetRowTitle
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * Saved emergency contacts — the page behind Settings' "Saved Emergencies" row (BACKEND_PLAN §11
@@ -111,6 +112,7 @@ fun SavedEmergenciesScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -246,7 +248,9 @@ private fun ContactRow(
                 color = OmniSetRowTitle,
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.clickable(onClick = onCall),
+                modifier = Modifier
+                    .pressEffect()
+                    .clickable(onClick = onCall),
             )
             Text(
                 text = "Remove",
@@ -254,7 +258,9 @@ private fun ContactRow(
                 color = OmniAlertRed,
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.clickable(onClick = onDelete),
+                modifier = Modifier
+                    .pressEffect()
+                    .clickable(onClick = onDelete),
             )
         }
     }
@@ -308,6 +314,7 @@ private fun AddContactForm(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(ButtonHeight)
+                .pressEffect(enabled = canSave)
                 .clip(RoundedCornerShape(ButtonCorner))
                 .background(if (canSave) OmniInk else OmniFeedHint)
                 .clickable(enabled = canSave, onClick = onSave),
@@ -329,6 +336,7 @@ private fun AddContactForm(
             softWrap = false,
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
+                .pressEffect()
                 .clickable(onClick = onCancel),
         )
     }
@@ -415,6 +423,7 @@ private fun AddContactButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(AddButtonHeight)
+            .pressEffect()
             .clip(RoundedCornerShape(AddButtonCorner))
             .background(OmniInk)
             .clickable(onClick = onClick),

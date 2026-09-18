@@ -55,6 +55,7 @@ import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniSetRowTitle
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * The thread list — the Messages tab (BACKEND_PLAN §11 Phase 11).
@@ -110,6 +111,7 @@ fun MessagesScreen(
                     Box(
                         modifier = Modifier
                             .size(BackButtonSize)
+                            .pressEffect()
                             .clip(RoundedCornerShape(percent = 50))
                             .clickable(onClick = onBack),
                         contentAlignment = Alignment.Center,
@@ -142,7 +144,9 @@ fun MessagesScreen(
                         color = if (state.pickerOpen) OmniSetRowSubtitle else OmniSetRowTitle,
                         maxLines = 1,
                         softWrap = false,
-                        modifier = Modifier.clickable(onClick = onTogglePicker),
+                        modifier = Modifier
+                            .pressEffect()
+                            .clickable(onClick = onTogglePicker),
                     )
                 }
 
@@ -210,6 +214,7 @@ private fun ConversationRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressEffect()
             .clip(RoundedCornerShape(RowCorner))
             .background(if (unread) OmniSetCardSurface else OmniFeedSurface)
             .clickable(onClick = onClick)

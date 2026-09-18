@@ -55,6 +55,7 @@ import com.example.omni.ui.theme.OmniSetGroupLabel
 import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * Security — the page behind Settings' "Security" row, and the other half of [PersonalInformationScreen].
@@ -113,6 +114,7 @@ fun SecurityScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -323,6 +325,7 @@ private fun ActionButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(ButtonHeight)
+            .pressEffect(enabled = enabled)
             .clip(RoundedCornerShape(ButtonCorner))
             .background(if (enabled) OmniInk else OmniFeedHint)
             .clickable(enabled = enabled, onClick = onClick),

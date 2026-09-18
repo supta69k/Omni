@@ -46,6 +46,7 @@ import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniAuthError
@@ -262,6 +263,7 @@ private fun CommentsPanel(
             Box(
                 modifier = Modifier
                     .size(SendSize)
+                    .pressEffect(enabled = canSend)
                     .clip(CircleShape)
                     .background(if (canSend) OmniInk else OmniFeedHint)
                     .clickable(enabled = canSend) {
@@ -326,6 +328,7 @@ private fun CommentRowCard(comment: CommentRow, onOpenProfile: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(CommentAvatarSize)
+                .pressEffect()
                 .clip(CircleShape)
                 .background(ComposerSurface)
                 .clickable(onClick = onOpenProfile),

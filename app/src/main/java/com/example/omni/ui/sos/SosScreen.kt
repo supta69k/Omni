@@ -98,6 +98,7 @@ import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniMapSearchShadow
 import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniRouteButton
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.OmniSheetDetail
 import com.example.omni.ui.theme.OmniSheetShadow
 import com.example.omni.ui.theme.OmniSheetSubtitle
@@ -589,7 +590,9 @@ private fun NoticeBanner(notice: MapNotice, modifier: Modifier = Modifier) {
                 textDecoration = TextDecoration.Underline,
                 maxLines = 1,
                 softWrap = false,
-                modifier = Modifier.clickable(onClick = notice.onAction),
+                modifier = Modifier
+                    .pressEffect()
+                    .clickable(onClick = notice.onAction),
             )
         }
     }
@@ -683,6 +686,7 @@ private fun RecenterButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(RecenterSize)
+            .pressEffect()
             .shadow(3.dp, RoundedCornerShape(percent = 50), ambientColor = OmniMapSearchShadow, spotColor = OmniMapSearchShadow)
             .clip(RoundedCornerShape(percent = 50))
             .background(OmniSheetSurface)
@@ -872,6 +876,7 @@ private fun HospitalSheet(
                 .padding(top = GrabTop)
                 .width(59.dp)
                 .height(5.dp)
+                .pressEffect()
                 .clickable(onClick = onDismiss),
         )
 
@@ -982,6 +987,7 @@ private fun HospitalSheet(
                 .align(Alignment.TopEnd)
                 .padding(top = AlertButtonTop, end = AlertButtonEnd)
                 .size(AlertButtonSize)
+                .pressEffect()
                 .clip(RoundedCornerShape(percent = 50))
                 .clickable(onClick = onAlertContacts),
             contentAlignment = Alignment.Center,
@@ -1047,6 +1053,7 @@ private fun HospitalCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(114.dp)
+                .pressEffect()
                 .clip(RoundedCornerShape(8.dp))
                 .background(OmniHospitalCard)
                 // Tapping the card is the other way to choose a hospital: it moves the map's camera,
@@ -1232,6 +1239,7 @@ private fun HospitalAction(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .pressEffect(enabled = enabled)
             .clip(RoundedCornerShape(28.dp))
             .background(fill)
             .clickable(enabled = enabled, onClick = onClick)

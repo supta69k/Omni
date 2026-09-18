@@ -58,6 +58,7 @@ import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniSetRowTitle
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * Get Verified — the page behind Settings' "Apply for Verification" button (Phase 12).
@@ -123,6 +124,7 @@ fun VerificationScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -267,6 +269,7 @@ private fun ProfessionChip(
     Box(
         modifier = modifier
             .height(ChipHeight)
+            .pressEffect()
             .clip(RoundedCornerShape(ChipCorner))
             .background(if (selected) OmniSetApply else OmniSetCardSurface)
             .clickable(onClick = onClick),
@@ -354,6 +357,7 @@ private fun SubmitButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(ButtonHeight)
+            .pressEffect(enabled = state.canSubmit)
             .clip(RoundedCornerShape(ButtonCorner))
             .background(if (state.canSubmit) OmniInk else OmniFeedHint)
             .clickable(enabled = state.canSubmit, onClick = onSubmit),

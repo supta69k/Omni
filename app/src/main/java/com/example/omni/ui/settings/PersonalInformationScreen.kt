@@ -54,6 +54,7 @@ import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniSetRowTitle
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * Personal Information — the page behind the first row of Settings' "Account Details" group.
@@ -116,6 +117,7 @@ fun PersonalInformationScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -200,6 +202,7 @@ fun PersonalInformationScreen(
                         softWrap = false,
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
+                            .pressEffect()
                             .clickable(onClick = onDiscard),
                     )
                 }
@@ -328,6 +331,7 @@ private fun GenderChip(
     Box(
         modifier = modifier
             .height(ChipHeight)
+            .pressEffect()
             .clip(RoundedCornerShape(ChipCorner))
             .background(if (chosen) OmniInk else OmniSetCardSurface)
             .clickable(onClick = onClick),
@@ -361,6 +365,7 @@ private fun SaveButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(ButtonHeight)
+            .pressEffect(enabled = state.canSave)
             .clip(RoundedCornerShape(ButtonCorner))
             .background(if (state.canSave) OmniInk else OmniFeedHint)
             .clickable(enabled = state.canSave, onClick = onSave),

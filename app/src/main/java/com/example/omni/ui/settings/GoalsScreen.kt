@@ -46,6 +46,7 @@ import com.example.omni.ui.theme.OmniSetRowTitle
 import com.example.omni.ui.theme.OmniSetToggleKnob
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * Daily Goals — the page behind Settings' "Daily Goals" row.
@@ -101,6 +102,7 @@ fun GoalsScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -291,6 +293,7 @@ private fun StepButton(
     Box(
         modifier = Modifier
             .size(StepButtonSize)
+            .pressEffect(enabled = enabled)
             .clip(RoundedCornerShape(percent = 50))
             .background(if (enabled) OmniSetToggleKnob else OmniSetCardSurface)
             .clickable(enabled = enabled, onClickLabel = label, onClick = onClick),
@@ -324,6 +327,7 @@ private fun SaveButton(
         modifier = Modifier
             .fillMaxWidth()
             .height(ButtonHeight)
+            .pressEffect(enabled = canSave)
             .clip(RoundedCornerShape(ButtonCorner))
             .background(if (canSave) OmniInk else OmniFeedHint)
             .clickable(enabled = canSave, onClick = onSave),

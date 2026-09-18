@@ -1,5 +1,7 @@
 package com.example.omni.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -18,8 +20,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -32,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.data.model.DefaultStepsGoal
 import com.example.omni.data.model.DefaultWaterGoal
+import com.example.omni.ui.motion.OmniMotion
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniHeroInk
@@ -81,8 +91,19 @@ internal fun FirstAidCard(
     onExplore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = OmniMotion.fadeInEnter(),
+        modifier = modifier,
+    ) {
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .height(HeroHeight)
             .clip(RoundedCornerShape(16.5596.dp)),
@@ -151,6 +172,7 @@ internal fun FirstAidCard(
                 modifier = Modifier
                     .width(92.dp)
                     .height(34.dp)
+                    .pressEffect()
                     .clip(RoundedCornerShape(6.dp))
                     .background(OmniHeroInk)
                     .clickable(onClick = onExplore),
@@ -165,6 +187,7 @@ internal fun FirstAidCard(
                 )
             }
         }
+    }
     }
 }
 
@@ -221,8 +244,20 @@ internal fun WaterCard(
     // underneath has already switched to "goal reached, nice work", which is the page saying why.
     val atGoal = glasses >= goal
 
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(OmniMotion.StaggerDelayMillis.toLong())
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = OmniMotion.fadeInEnter(),
+        modifier = modifier,
+    ) {
     Box(
-        modifier = modifier
+        modifier = Modifier
             .height(StatCardHeight)
             .clip(RoundedCornerShape(9.399.dp))
             .background(OmniWaterTeal),
@@ -293,8 +328,10 @@ internal fun WaterCard(
             modifier = Modifier
                 .offset(x = 140.dp, y = 3.dp)
                 .size(24.dp)
+                .pressEffect(enabled = !atGoal)
                 .clickable(enabled = !atGoal, onClick = onAdd),
         )
+    }
     }
 }
 
@@ -326,13 +363,22 @@ private fun waterHint(glasses: Int, goal: Int) = buildAnnotatedString {
 private fun WaterGlassRow(filled: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         repeat(GlassesPerRow) { index ->
+            val isFilled = index < filled
+            val alpha by animateFloatAsState(
+                targetValue = if (isFilled) 1f else 1f,
+                animationSpec = OmniMotion.fast(),
+                label = "glassAlpha_$index"
+            )
+
             Image(
                 painter = painterResource(
-                    if (index < filled) R.drawable.ic_home_water_glass_fill
+                    if (isFilled) R.drawable.ic_home_water_glass_fill
                     else R.drawable.ic_home_water_glass,
                 ),
                 contentDescription = null,
-                modifier = Modifier.size(26.dp),
+                modifier = Modifier
+                    .size(26.dp)
+                    .alpha(alpha),
             )
         }
     }
@@ -391,8 +437,20 @@ internal fun StepsCard(
     onEnableTracking: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay((OmniMotion.StaggerDelayMillis * 2).toLong())
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = OmniMotion.fadeInEnter(),
+        modifier = modifier,
+    ) {
     Box(
-        modifier = modifier
+        modifier = Modifier
             .height(StatCardHeight)
             .clip(RoundedCornerShape(9.377.dp))
             .background(OmniStepsCream)
@@ -400,7 +458,7 @@ internal fun StepsCard(
             // hint text: at 11sp the words are far too small to aim at, and there is nothing else on the
             // card to hit by accident.
             .then(
-                if (permissionNeeded) Modifier.clickable(onClick = onEnableTracking) else Modifier,
+                if (permissionNeeded) Modifier.pressEffect().clickable(onClick = onEnableTracking) else Modifier,
             ),
     ) {
         Image(
@@ -473,6 +531,7 @@ internal fun StepsCard(
                 modifier = Modifier.width(StepsHintWidth),
             )
         }
+    }
     }
 }
 

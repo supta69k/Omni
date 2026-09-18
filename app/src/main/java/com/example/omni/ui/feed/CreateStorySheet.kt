@@ -40,6 +40,7 @@ import androidx.compose.foundation.Image
 import com.example.omni.R
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniFieldSurface
@@ -156,6 +157,7 @@ private fun StoryPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(PhotoHeight)
+                    .pressEffect()
                     .clip(RoundedCornerShape(14.dp))
                     .background(OmniFeedSurface)
                     .border(1.dp, OmniFeedHint.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
@@ -277,13 +279,15 @@ private fun StoryPanel(
 
         Spacer(Modifier.height(PublishTop))
 
+        val canPublish = image != null && !isPublishing
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
+                .pressEffect(enabled = canPublish)
                 .clip(RoundedCornerShape(20.dp))
-                .background(if (image != null && !isPublishing) OmniInk else OmniFeedHint)
-                .clickable(enabled = image != null && !isPublishing) { onPublish(caption) },
+                .background(if (canPublish) OmniInk else OmniFeedHint)
+                .clickable(enabled = canPublish) { onPublish(caption) },
             contentAlignment = Alignment.Center,
         ) {
             Text(

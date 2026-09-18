@@ -56,6 +56,7 @@ import com.example.omni.ui.theme.OmniPlaceholder
 import com.example.omni.ui.theme.OmniSetCardSurface
 import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniTheme
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * One conversation (BACKEND_PLAN §11 Phase 11).
@@ -125,6 +126,7 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -310,6 +312,7 @@ private fun ChatInput(
         Box(
             modifier = Modifier
                 .size(SendButtonSize)
+                .pressEffect(enabled = canSend)
                 .clip(RoundedCornerShape(percent = 50))
                 .background(if (canSend) OmniInk else OmniFeedHint)
                 .clickable(enabled = canSend, onClick = onSend),

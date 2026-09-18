@@ -1,5 +1,7 @@
 package com.example.omni.ui.nutrition
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -27,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +61,8 @@ import com.example.omni.data.model.DefaultCalorieGoal
 import com.example.omni.data.model.DefaultSleepGoal
 import com.example.omni.data.model.DefaultStepsGoal
 import com.example.omni.data.model.DefaultWaterGoal
+import com.example.omni.ui.motion.OmniMotion
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.data.model.Meal
 import com.example.omni.domain.formatAmount
 import com.example.omni.domain.progressOf
@@ -233,6 +238,7 @@ fun NutritionScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = ScreenPadding)
+                                    .pressEffect()
                                     .clickable(onClick = onOpenMonthPicker),
                                 horizontalArrangement = Arrangement.Center,
                             ) {
@@ -352,9 +358,8 @@ fun NutritionScreen(
         LogMethodSheet(
             visible = logMethodOpen,
             onUseAi = {
-                logMethodOpen = false
-                // Clear any estimate left from a previous open so the flow starts on the input step.
                 onDismissAiMeal()
+                logMethodOpen = false
                 aiOpen = true
             },
             onManual = {
@@ -432,7 +437,7 @@ private fun DayChip(day: DayChipState, selected: Boolean, enabled: Boolean, onCl
     }
 
     Box(
-        modifier = surface.clickable(enabled = enabled, onClick = onClick),
+        modifier = surface.pressEffect(enabled = enabled).clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         val ink = when {
@@ -578,9 +583,17 @@ private fun Measurement(value: String, unit: String, modifier: Modifier = Modifi
  *
  * The sweep is drawn `180°..360°` (left to right across the top), which is where the mirrored export
  * landed its gradient's lavender end — the render, not the export's own coordinate system.
+ *
+ * Now animates when [progress] changes.
  */
 @Composable
 private fun ArcGauge(progress: Float, modifier: Modifier = Modifier) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = OmniMotion.progress(),
+        label = "arcProgress"
+    )
+
     Canvas(modifier = modifier) {
         val stroke = Stroke(width = ArcStrokeWidth.toPx(), cap = StrokeCap.Round)
 
@@ -600,7 +613,7 @@ private fun ArcGauge(progress: Float, modifier: Modifier = Modifier) {
             style = stroke,
         )
 
-        if (progress > 0f) {
+        if (animatedProgress > 0f) {
             drawArc(
                 brush = Brush.linearGradient(
                     colors = ArcGradientColors,
@@ -608,7 +621,7 @@ private fun ArcGauge(progress: Float, modifier: Modifier = Modifier) {
                     end = Offset(size.width - inset, size.height / 2f),
                 ),
                 startAngle = ArcSweepStart,
-                sweepAngle = ArcSweepTotal * progress.coerceIn(0f, 1f),
+                sweepAngle = ArcSweepTotal * animatedProgress.coerceIn(0f, 1f),
                 useCenter = false,
                 topLeft = topLeft,
                 size = arcBox,
@@ -722,7 +735,7 @@ private fun RingGauge(ring: Ring) {
     Column(
         modifier = Modifier
             .width(ring.width)
-            .then(if (tap != null) Modifier.clickable(onClick = tap) else Modifier),
+            .then(if (tap != null) Modifier.pressEffect().clickable(onClick = tap) else Modifier),
         verticalArrangement = Arrangement.spacedBy(RingLabelGap),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -821,6 +834,7 @@ private fun FoodLogHeader(onLog: () -> Unit) {
             contentDescription = "Log a meal",
             modifier = Modifier
                 .size(PlusSize)
+                .pressEffect()
                 .clickable(onClick = onLog),
         )
     }
@@ -834,59 +848,74 @@ private fun FoodLogHeader(onLog: () -> Unit) {
  * A row is now a real [Meal] rather than a mock, so it is tappable — but only to *open the edit sheet*,
  * which is the one thing a tap can do (`UI_ARCHITECTURE.md` §6 rule 10). The sheet is what owns edit
  * and delete; this row asks the screen for nothing beyond showing it.
+ *
+ * Now animates when added to the list.
  */
 @Composable
 private fun FoodLogEntry(meal: Meal, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = ScreenPadding, end = EntryEndPadding)
-            .height(EntryHeight)
-            .clickable(onClick = onClick),
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(meal.id) {
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = OmniMotion.slideUpEnter(),
+        exit = OmniMotion.slideDownExit()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = ScreenPadding, end = EntryEndPadding)
+                .height(EntryHeight)
+                .pressEffect()
+                .clickable(onClick = onClick),
         ) {
-            Text(
-                text = meal.name,
-                style = NutritionType.FoodName,
-                color = OmniNutriFoodName,
-                maxLines = 1,
-                softWrap = false,
-                // A name can outgrow the box now that it is user-typed, so this is where the clamp
-                // lives rather than inside the entry sheet.
-                modifier = Modifier.weight(1f, fill = false),
-            )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(CaloriesGap),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "${meal.calories}cal",
-                    style = NutritionType.FoodCalories,
-                    color = OmniNutriUnit,
+                    text = meal.name,
+                    style = NutritionType.FoodName,
+                    color = OmniNutriFoodName,
                     maxLines = 1,
                     softWrap = false,
+                    // A name can outgrow the box now that it is user-typed, so this is where the clamp
+                    // lives rather than inside the entry sheet.
+                    modifier = Modifier.weight(1f, fill = false),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(ChipGap)) {
-                    MacroChip(amount = grams(meal.protein), fill = OmniNutriChipProtein)
-                    MacroChip(amount = grams(meal.carbs), fill = OmniNutriChipCarbs)
-                    MacroChip(amount = grams(meal.fat), fill = OmniNutriChipFat)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(CaloriesGap),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${meal.calories}cal",
+                        style = NutritionType.FoodCalories,
+                        color = OmniNutriUnit,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(ChipGap)) {
+                        MacroChip(amount = grams(meal.protein), fill = OmniNutriChipProtein)
+                        MacroChip(amount = grams(meal.carbs), fill = OmniNutriChipCarbs)
+                        MacroChip(amount = grams(meal.fat), fill = OmniNutriChipFat)
+                    }
                 }
             }
-        }
 
-        Image(
-            painter = painterResource(R.drawable.ic_nutri_divider),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .height(EntryRuleHeight),
-        )
+            Image(
+                painter = painterResource(R.drawable.ic_nutri_divider),
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(EntryRuleHeight),
+            )
+        }
     }
 }
 

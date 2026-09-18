@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.LocalDesignWindow
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniBackground
@@ -162,6 +163,7 @@ fun OmniHeader(
                 modifier = Modifier
                     .size(AvatarSize)
                     .clip(CircleShape)
+                    .pressEffect()
                     .clickable(onClick = onProfileClick),
             )
             // A live display name is not the mock's tidy two words. Bounded and ellipsised so a long
@@ -232,6 +234,7 @@ private fun HeaderAction(
     Box(
         modifier = Modifier
             .size(HeaderActionSize)
+            .pressEffect()
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -544,6 +547,7 @@ private fun NavCell(
     Row(
         modifier = Modifier
             .height(NavPillHeight)
+            .pressEffect()
             .clip(RoundedCornerShape(percent = 50))
             .background(pillColor)
             .clickable(

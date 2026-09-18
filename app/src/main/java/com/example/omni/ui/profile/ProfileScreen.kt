@@ -53,6 +53,7 @@ import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.data.model.relativeTimeOf
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
  * One user's public page — the Facebook shape: their posts under a profile header, a follow
@@ -108,6 +109,7 @@ fun ProfileScreen(
                 Box(
                     modifier = Modifier
                         .size(BackButtonSize)
+                        .pressEffect()
                         .clip(RoundedCornerShape(percent = 50))
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
@@ -226,6 +228,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .weight(1f)
                             .height(46.dp)
+                            .pressEffect()
                             .clip(RoundedCornerShape(23.dp))
                             .background(if (state.iFollowThem) OmniNutriChipCarbs else OmniInk)
                             .clickable(onClick = onFollowToggle),
@@ -244,6 +247,7 @@ fun ProfileScreen(
                         modifier = Modifier
                             .weight(1f)
                             .height(46.dp)
+                            .pressEffect()
                             .clip(RoundedCornerShape(23.dp))
                             .background(OmniNutriChipCarbs.copy(alpha = 0.3f))
                             .clickable(onClick = onMessage),
@@ -313,6 +317,7 @@ private fun ProfilePostCard(post: Post, onOpen: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .pressEffect()
             .clip(RoundedCornerShape(8.dp))
             .background(OmniFeedTimestamp.copy(alpha = 0.06f))
             .clickable(onClick = onOpen)

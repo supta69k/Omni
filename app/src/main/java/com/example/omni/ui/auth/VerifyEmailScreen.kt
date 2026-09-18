@@ -8,8 +8,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,15 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,7 +62,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.min
 
 /**
  * Email verification screen — shown after signup until the user verifies their email.
@@ -97,8 +90,6 @@ fun VerifyEmailScreen(
 ) {
     // OTP input state - 6 separate fields
     val codeDigits = remember { mutableStateOf(List(6) { "" }) }
-    val focusRequesters = remember { (0..5).map { FocusRequester() } }
-    val currentFocusIndex = remember { mutableStateOf(0) }
     val isSubmitting = remember { mutableStateOf(false) }
     val showSuccess = remember { mutableStateOf(false) }
     // "Sent" is true only while the backend's success message is on screen, so the button can
@@ -119,63 +110,9 @@ fun VerifyEmailScreen(
         }
     }
 
-    // Handle digit input and auto-advance
-    fun onDigitChange(index: Int, newValue: String) {
-        if (isSubmitting.value || showSuccess.value) return
-
-        val digits = codeDigits.value.toMutableList()
-        digits[index] = newValue.take(1).filter { it.isDigit() }
-        codeDigits.value = digits
-
-        // Auto-advance focus
-        if (newValue.isNotBlank() && index < 5) {
-            currentFocusIndex.value = index + 1
-            focusRequesters[index + 1].requestFocus()
-        } else if (newValue.isBlank() && index > 0) {
-            // Backspace handling - move to previous if empty
-            currentFocusIndex.value = index - 1
-            focusRequesters[index - 1].requestFocus()
-        }
-
-        // Auto-submit when 6th digit entered
-        if (index == 5 && newValue.isNotBlank() && digits.all { it.isNotBlank() }) {
-            val fullCode = digits.joinToString("")
-            isSubmitting.value = true
-            onVerifyCode(fullCode)
-        }
-    }
-
-    // Handle paste of 6-digit code
-    fun onPaste(index: Int, pastedText: String) {
-        if (isSubmitting.value || showSuccess.value) return
-
-        val digitsOnly = pastedText.filter { it.isDigit() }.take(6)
-        if (digitsOnly.length == 6) {
-            val digits = digitsOnly.map { it.toString() }
-            codeDigits.value = digits
-            currentFocusIndex.value = 5
-            focusRequesters[5].requestFocus()
-
-            // Auto-submit pasted code
-            isSubmitting.value = true
-            onVerifyCode(digitsOnly)
-        } else if (digitsOnly.isNotEmpty()) {
-            // Partial paste - fill what we can
-            val digits = codeDigits.value.toMutableList()
-            for (i in digitsOnly.indices) {
-                if (i < 6) digits[i] = digitsOnly[i].toString()
-            }
-            codeDigits.value = digits
-            currentFocusIndex.value = min(digitsOnly.length, 5)
-            focusRequesters[min(digitsOnly.length, 5)].requestFocus()
-        }
-    }
-
     // Clear code on error
     fun clearCode() {
         codeDigits.value = List(6) { "" }
-        currentFocusIndex.value = 0
-        focusRequesters[0].requestFocus()
         isSubmitting.value = false
     }
 
@@ -250,80 +187,95 @@ fun VerifyEmailScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // OTP Input Fields - using BasicTextField like AuthField for proper keyboard support
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    codeDigits.value.forEachIndexed { index, digit ->
-                        val isFocused = currentFocusIndex.value == index
-                        val hasError = codeError != null && index == 5 && isSubmitting.value
-                        val isSuccessState = showSuccess.value
+                // Single text field with visual OTP boxes as decoration
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    BasicTextField(
+                        value = codeDigits.value.joinToString(""),
+                        onValueChange = { newValue ->
+                            if (isSubmitting.value || showSuccess.value) return@BasicTextField
 
-                        val boxColor = animateColorAsState(
-                            targetValue = when {
-                                isSuccessState -> Color(0xFF4CAF50) // Green for success
-                                hasError -> Color(0xFFB00020)        // Red for error
-                                isFocused -> Color(0xFF1E1E1E)       // Dark for focus
-                                else -> Color(0xFFE0E0E0)            // Grey default
-                            },
-                            animationSpec = tween(150),
-                        )
+                            val digitsOnly = newValue.filter { it.isDigit() }.take(6)
+                            val newDigits = mutableListOf<String>()
+                            for (i in 0 until 6) {
+                                newDigits.add(if (i < digitsOnly.length) digitsOnly[i].toString() else "")
+                            }
+                            codeDigits.value = newDigits
 
-                        val borderWidth = if (isFocused || isSuccessState || hasError) 2.dp else 1.dp
-                        val backgroundAlpha = if (isSuccessState || hasError) 0.15f else 0.1f
+                            // Auto-submit when 6 digits entered
+                            if (newDigits.all { it.isNotBlank() }) {
+                                val fullCode = newDigits.joinToString("")
+                                isSubmitting.value = true
+                                onVerifyCode(fullCode)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        textStyle = MaterialTheme.typography.headlineMedium.copy(
+                            color = Color.Transparent,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        decorationBox = { innerTextField ->
+                            // Visual OTP boxes
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                codeDigits.value.forEachIndexed { index, digit ->
+                                    val hasError = codeError != null && index == 5 && isSubmitting.value
+                                    val isSuccessState = showSuccess.value
+                                    val isFocused = codeDigits.value.take(index + 1).any { it.isNotBlank() }
 
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(
-                                    color = boxColor.value.copy(alpha = backgroundAlpha),
-                                    shape = RoundedCornerShape(12.dp),
-                                )
-                                .border(
-                                    width = borderWidth,
-                                    color = boxColor.value,
-                                    shape = RoundedCornerShape(12.dp),
-                                )
-                                .clickable { currentFocusIndex.value = index; focusRequesters[index].requestFocus() }
-                                .padding(bottom = 8.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            BasicTextField(
-                                value = digit,
-                                onValueChange = { onDigitChange(index, it) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    .focusRequester(focusRequesters[index]),
-                                textStyle = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSuccessState) Color(0xFF4CAF50) else if (hasError) Color(0xFFB00020) else Color(0xFF1E1E1E)
-                                ),
-                                singleLine = true,
-                                cursorBrush = SolidColor(
-                                    if (isSuccessState) Color(0xFF4CAF50) else if (hasError) Color(0xFFB00020) else Color(0xFF1E1E1E)
-                                ),
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Number,
-                                    imeAction = if (index == 5) ImeAction.Done else ImeAction.Next
-                                ),
-                                decorationBox = { innerTextField ->
-                                    Box {
-                                        if (digit.isEmpty()) {
-                                            Text(
-                                                text = " ",
-                                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = Color.Transparent,
+                                    val boxColor by animateColorAsState(
+                                        targetValue = when {
+                                            isSuccessState -> Color(0xFF4CAF50)
+                                            hasError -> Color(0xFFB00020)
+                                            isFocused -> Color(0xFF1E1E1E)
+                                            else -> Color(0xFFE0E0E0)
+                                        },
+                                        animationSpec = tween(150),
+                                        label = "boxColor"
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(56.dp)
+                                            .background(
+                                                color = boxColor.copy(alpha = 0.1f),
+                                                shape = RoundedCornerShape(12.dp),
                                             )
-                                        }
-                                        innerTextField()
+                                            .border(
+                                                width = if (hasError || isSuccessState || isFocused) 2.dp else 1.dp,
+                                                color = boxColor,
+                                                shape = RoundedCornerShape(12.dp),
+                                            ),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = digit,
+                                            style = MaterialTheme.typography.headlineMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            color = if (isSuccessState) Color(0xFF4CAF50) else if (hasError) Color(0xFFB00020) else Color(0xFF1E1E1E),
+                                        )
                                     }
-                                },
-                            )
+                                }
+                            }
+                            // Invisible text field on top for input capture
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                            ) {
+                                innerTextField()
+                            }
                         }
-                    }
+                    )
                 }
 
                 // Error message for code

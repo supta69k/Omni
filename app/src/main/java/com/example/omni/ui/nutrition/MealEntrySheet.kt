@@ -38,6 +38,7 @@ import com.example.omni.data.model.Meal
 import com.example.omni.data.model.MealSlot
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.NutritionType
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniCardInk
@@ -172,6 +173,7 @@ private fun MealSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(ButtonHeight)
+                .pressEffect(enabled = name.isNotBlank())
                 .clip(RoundedCornerShape(ButtonCorner))
                 .background(OmniInk)
                 // A meal with no name is not a log entry, so the button is inert until there is one. Every

@@ -21,6 +21,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -483,6 +485,8 @@ private fun OmniApp() {
                     onOpenSleep = { screen = AppScreen.Sleep },
                     onExploreFirstAid = { screen = AppScreen.FirstAid },
                     onNavigate = navigate,
+                    onRefresh = { home.refresh() },
+                    isRefreshing = state.isRefreshing,
                 )
             }
 

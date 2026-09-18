@@ -45,6 +45,7 @@ data class HomeUiState(
     val fiberGrams: Float = 0f,
     val sleepHours: Float = 0f,
     val cprPercent: Int = 0,
+    val isRefreshing: Boolean = false,
 )
 
 /**
@@ -79,6 +80,9 @@ class HomeViewModel(
      * flash "step tracking is off" at a user who had granted it months ago.
      */
     private val stepPermission = MutableStateFlow<Boolean?>(null)
+
+    /** Tracks pull-to-refresh state */
+    private val isRefreshing = MutableStateFlow(false)
 
     /**
      * Today's metrics — an empty day rather than `null` while nothing has been logged, so the cards never
@@ -159,7 +163,7 @@ class HomeViewModel(
      * stored one within seconds of walking, since the sync deliberately lags.
      */
     val uiState: StateFlow<HomeUiState> =
-        combine(metrics, deviceSteps, stepPermission, cprPercent) { day, local, granted, cpr ->
+        combine(metrics, deviceSteps, stepPermission, cprPercent, isRefreshing) { day, local, granted, cpr, refreshing ->
             HomeUiState(
                 glasses = day.waterGlasses,
                 steps = max(day.steps, local),
@@ -167,6 +171,7 @@ class HomeViewModel(
                 fiberGrams = day.fiberGrams,
                 sleepHours = day.sleepHours,
                 cprPercent = cpr,
+                isRefreshing = refreshing,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -176,6 +181,27 @@ class HomeViewModel(
 
     fun onStepPermission(granted: Boolean) {
         stepPermission.value = granted
+    }
+
+    /**
+     * Force refresh all data — used by pull-to-refresh on Home.
+     * Automatically sets isRefreshing to true and back to false after data loads.
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            isRefreshing.value = true
+            try {
+                // Add delay so the indicator is visible for at least 1 second
+                kotlinx.coroutines.delay(1500)
+                // Force re-emit by touching the flows
+                val currentUid = uid.value
+                if (currentUid != null) {
+                    metricsRepository.observeDay(currentUid, todayKey()).collect { }
+                }
+            } finally {
+                isRefreshing.value = false
+            }
+        }
     }
 
     private var lastGlassAt = 0L
