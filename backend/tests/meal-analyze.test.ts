@@ -9,7 +9,6 @@ import {
   InvalidAnalysisError,
   normalizeUnit,
   maxQuantityForUnit,
-  type DailyLimiter,
 } from '../src/meal-analyze.js';
 import { GeminiClient, GeminiRateLimitError, GeminiUnavailableError } from '../src/gemini.js';
 
@@ -22,9 +21,6 @@ function throwingGemini(error: Error): GeminiClient {
   return { analyzeMeal: vi.fn(async () => { throw error; }) };
 }
 
-// A limiter that always allows, unless constructed to throw (over daily budget).
-const allowLimiter: DailyLimiter = { consume: vi.fn(async () => undefined) };
-const blockedLimiter: DailyLimiter = { consume: vi.fn(async () => { throw new Error('Rate limit exceeded'); }) };
 
 /** Minimal Express req/res doubles capturing status + json. */
 function mockReqRes(body: unknown, uid: string | undefined) {
@@ -251,8 +247,8 @@ describe('computeTotals', () => {
 });
 
 describe('createMealAnalyzeHandler (end to end with fakes)', () => {
-  const deps = (gemini: GeminiClient, limiter: DailyLimiter = allowLimiter) =>
-    createMealAnalyzeHandler({ gemini, limiter, maxTextLength: 500 });
+  const deps = (gemini: GeminiClient) =>
+    createMealAnalyzeHandler({ gemini, maxTextLength: 500 });
 
   it('(2) returns 401 when no verified uid is present', async () => {
     const handler = deps(fakeGemini(goodJson));
@@ -281,14 +277,17 @@ describe('createMealAnalyzeHandler (end to end with fakes)', () => {
     expect(captured.json.result.estimated).toBe(true);
   });
 
-  it('(10) returns AI_MEAL_LIMIT_REACHED and never calls Gemini when over the daily cap', async () => {
+  it('allows many AI meal analyses without an application-level quota', async () => {
+    // Users were hitting the old 10/day limit. Prove the limit is gone: 20 analyses succeed.
     const gemini = fakeGemini(goodJson);
-    const handler = deps(gemini, blockedLimiter);
-    const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, 'uid-a');
-    await handler(req, res);
-    expect(captured.status).toBe(429);
-    expect(captured.json.code).toBe('AI_MEAL_LIMIT_REACHED');
-    expect(gemini.analyzeMeal).not.toHaveBeenCalled();
+    const handler = deps(gemini);
+    for (let i = 0; i < 20; i++) {
+      const { req, res, captured } = mockReqRes({ mealText: '2 eggs' }, 'uid-a');
+      await handler(req, res);
+      expect(captured.status).toBe(200);
+      expect(captured.json.success).toBe(true);
+    }
+    expect(gemini.analyzeMeal).toHaveBeenCalledTimes(20);
   });
 
   it('(4) returns AI_INVALID_RESPONSE when the model returns non-JSON', async () => {
@@ -339,14 +338,21 @@ describe('createMealAnalyzeHandler (end to end with fakes)', () => {
     expect(captured.json.result.needsClarification).toBe(true);
   });
 
-  it('(11) derives ownership from the token uid, ignoring any uid in the body', async () => {
-    // The handler must key the rate limit on the *verified* uid, never a client-supplied one.
-    const consume = vi.fn(async () => undefined);
-    const handler = createMealAnalyzeHandler({ gemini: fakeGemini(goodJson), limiter: { consume }, maxTextLength: 500 });
+  it('(11) processes under the token uid and rejects when only a body uid is present', async () => {
+    // Account isolation: ownership comes from the verified token, never a client-supplied body uid.
+    // With no verified uid, a body uid must NOT be accepted as a stand-in — the request is 401.
+    const handler = deps(fakeGemini(goodJson));
+    const { req, res, captured } = mockReqRes({ mealText: '2 eggs', uid: 'uid-attacker' }, undefined);
+    await handler(req, res);
+    expect(captured.status).toBe(401);
+    expect(captured.json.code).toBe('AUTH_REQUIRED');
+  });
+
+  it('processes under the verified token uid, ignoring a spoofed body uid', async () => {
+    const handler = deps(fakeGemini(goodJson));
     const { req, res, captured } = mockReqRes({ mealText: '2 eggs', uid: 'uid-attacker' }, 'uid-real');
     await handler(req, res);
     expect(captured.status).toBe(200);
-    expect(consume).toHaveBeenCalledWith('uid-real');
-    expect(consume).not.toHaveBeenCalledWith('uid-attacker');
+    expect(captured.json.success).toBe(true);
   });
 });

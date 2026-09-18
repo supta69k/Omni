@@ -38,9 +38,6 @@ export const config = {
     // Sep 2026): free of charge for input and output, supports structured JSON output. Overridable
     // by env so a future free model can be swapped in without a code change.
     model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite',
-    // Conservative per-user daily cap so a single account cannot burn the shared free-tier quota.
-    // A day window is the whole point of the limit, so it is fixed here, not in `rateLimits` above.
-    dailyLimit: parseInt(process.env.AI_MEAL_DAILY_LIMIT || '10', 10),
     // Guards Gemini (and the free-tier token budget) from an arbitrarily large prompt.
     maxTextLength: 500,
   },

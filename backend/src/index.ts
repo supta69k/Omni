@@ -83,21 +83,14 @@ const verifyRateLimiter = new FirestoreRateLimiter(db, 'otp_rate_limits', 'verif
   blockDurationSeconds: config.rateLimits.verify.blockMinutes * 60,
 });
 
-// Per-user daily cap on AI meal analyses. A one-day window, blocked for the rest of the day once
-// spent, so a single account cannot drain the shared free-tier Gemini quota (§20).
-const aiMealRateLimiter = new FirestoreRateLimiter(db, 'ai_meal_rate_limits', 'analyze_', {
-  points: config.gemini.dailyLimit,
-  durationSeconds: 24 * 60 * 60,
-  blockDurationSeconds: 24 * 60 * 60,
-});
-
 // The Gemini client only works with a key configured; without one the endpoint answers a clean
 // "unavailable" (the client throws) and manual logging keeps working — the app never breaks.
 const geminiClient = new RestGeminiClient(config.gemini.apiKey ?? '', config.gemini.model);
 
+// No application-layer per-user usage cap: a user may analyze as many meals as Google's own Gemini
+// quota allows. A genuine Gemini quota exhaustion is surfaced as AI_UNAVAILABLE, not an Omni limit.
 const analyzeMealHandler = createMealAnalyzeHandler({
   gemini: geminiClient,
-  limiter: aiMealRateLimiter,
   maxTextLength: config.gemini.maxTextLength,
 });
 

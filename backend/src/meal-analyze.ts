@@ -17,15 +17,9 @@ import {
 } from './gemini.js';
 import { MealAnalysisResult, MealItem, MealTotals } from './types.js';
 
-/** A dependency shaped like FirestoreRateLimiter, narrowed to what this handler calls. */
-export interface DailyLimiter {
-  consume(key: string): Promise<unknown>;
-}
-
 /** What `index.ts` injects; also the seam every unit test fills with fakes. */
 export interface MealAnalyzeDeps {
   gemini: GeminiClient;
-  limiter: DailyLimiter;
   maxTextLength: number;
 }
 
@@ -300,8 +294,9 @@ export function computeTotals(items: MealItem[]): MealTotals {
 
 /**
  * Builds the Express handler. Assumes `authenticate` ran first, so `req.user.uid` is a verified UID
- * — ownership is never taken from the request body (§6). The per-user daily limit is charged before
- * Gemini so a throttled account never reaches the model (§20).
+ * — ownership is never taken from the request body (§6). There is no application-layer per-user
+ * usage cap: a user may analyze as many meals as Google's own Gemini quota allows. A genuine Gemini
+ * quota exhaustion (429 RESOURCE_EXHAUSTED) is surfaced as AI_UNAVAILABLE, never as an Omni limit.
  */
 export function createMealAnalyzeHandler(deps: MealAnalyzeDeps) {
   const schema = analyzeMealSchema(deps.maxTextLength);
@@ -317,18 +312,6 @@ export function createMealAnalyzeHandler(deps: MealAnalyzeDeps) {
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Please describe your meal with a little more detail.', code: 'INVALID_INPUT' });
-      return;
-    }
-
-    // Daily cap first. The limiter throws when the account is over budget for the day.
-    try {
-      await deps.limiter.consume(uid);
-    } catch {
-      console.log('[AI_MEAL_LIMIT_REACHED] uid=' + uid);
-      res.status(429).json({
-        error: 'Daily AI limit reached. Please try again later or log this meal manually.',
-        code: 'AI_MEAL_LIMIT_REACHED',
-      });
       return;
     }
 
