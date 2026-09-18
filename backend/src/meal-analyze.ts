@@ -33,10 +33,105 @@ export interface MealAnalyzeDeps {
 // five-figure single item or a hundred servings. Kept in step with the Android Meal caps
 // (MaxCalories = 99_999, MaxGrams = 2_000f) so a value that passes here also survives the client.
 const MAX_ITEMS = 30;
-const MAX_ITEM_QUANTITY = 100;
 const MAX_ITEM_CALORIES = 20_000;
 const MAX_TOTAL_CALORIES = 99_999;
 const MAX_MACRO_GRAMS = 2_000;
+
+/**
+ * The upper bound on an item's `quantity` DEPENDS ON ITS UNIT, because the number means completely
+ * different things per unit: "200" is absurd as pieces of chicken but ordinary as grams of rice.
+ * A single numeric cap across all units rejected "200 grams of rice" as though the user had claimed
+ * 200 servings, which is the bug this table fixes.
+ *
+ * Each bound is the largest amount one person could plausibly eat in one meal, with headroom — the
+ * job here is to catch a hallucinating model, not to second-guess a large portion. Anything above
+ * the bound is treated as model error rather than a real meal.
+ */
+const QUANTITY_BOUNDS = {
+  /** Countable things: servings, pieces, slices, whole items. 50 pieces is already a stretch. */
+  count: 50,
+  /** Grams. 5 kg of one food in a single meal is far beyond any real portion. */
+  gram: 5_000,
+  /** Kilograms. Same ceiling as grams, expressed in kg. */
+  kilogram: 5,
+  /** Ounces (~5 kg). */
+  ounce: 180,
+  /** Pounds (~5 kg). */
+  pound: 11,
+  /** Millilitres. 5 L of one drink/food in a meal is beyond real. */
+  millilitre: 5_000,
+  /** Litres. Same ceiling expressed in L. */
+  litre: 5,
+  /** Cups (~5 L). */
+  cup: 20,
+  /** Tablespoons. Generous for a condiment, absurd at 200. */
+  tablespoon: 50,
+  /** Teaspoons — three to a tablespoon, so a correspondingly higher cap. */
+  teaspoon: 150,
+  /** Fluid ounces (~5 L). */
+  fluidOunce: 170,
+} as const;
+
+type QuantityKind = keyof typeof QUANTITY_BOUNDS;
+
+/**
+ * Maps the unit strings a model actually emits onto a bound category. The model is asked for natural
+ * units, not a controlled vocabulary, so the same unit arrives as "g" / "gram" / "grams"; all of them
+ * must be read as weight. Lookup is on a lowercased, punctuation-stripped form of the unit.
+ */
+const UNIT_ALIASES: Record<string, QuantityKind> = {
+  // Count / portion
+  serving: 'count', servings: 'count',
+  piece: 'count', pieces: 'count', pc: 'count', pcs: 'count',
+  item: 'count', items: 'count',
+  whole: 'count', unit: 'count', units: 'count',
+  slice: 'count', slices: 'count',
+  large: 'count', medium: 'count', small: 'count',
+  bowl: 'count', bowls: 'count',
+  plate: 'count', plates: 'count',
+  glass: 'count', glasses: 'count',
+  handful: 'count', handfuls: 'count',
+  scoop: 'count', scoops: 'count',
+  // A model sometimes answers with the food itself as the unit ("2 eggs" -> unit "eggs").
+  egg: 'count', eggs: 'count',
+  // Weight. British "gramme"/"kilogramme" spellings included — the model is not held to one locale.
+  g: 'gram', gm: 'gram', gms: 'gram', gr: 'gram', gram: 'gram', grams: 'gram',
+  gramme: 'gram', grammes: 'gram',
+  kg: 'kilogram', kgs: 'kilogram', kilo: 'kilogram', kilos: 'kilogram',
+  kilogram: 'kilogram', kilograms: 'kilogram',
+  kilogramme: 'kilogram', kilogrammes: 'kilogram',
+  oz: 'ounce', ounce: 'ounce', ounces: 'ounce',
+  lb: 'pound', lbs: 'pound', pound: 'pound', pounds: 'pound',
+  // Volume
+  ml: 'millilitre', milliliter: 'millilitre', milliliters: 'millilitre',
+  millilitre: 'millilitre', millilitres: 'millilitre', cc: 'millilitre',
+  l: 'litre', liter: 'litre', liters: 'litre', litre: 'litre', litres: 'litre',
+  cup: 'cup', cups: 'cup',
+  tbsp: 'tablespoon', tbs: 'tablespoon', tablespoon: 'tablespoon', tablespoons: 'tablespoon',
+  tsp: 'teaspoon', teaspoon: 'teaspoon', teaspoons: 'teaspoon',
+  floz: 'fluidOunce', fluidounce: 'fluidOunce', fluidounces: 'fluidOunce',
+};
+
+/**
+ * Resolves a model-supplied unit string to its bound category. Everything that is not a letter is
+ * stripped before lookup, which collapses case, surrounding and repeated whitespace, and the
+ * punctuation a model attaches to an abbreviation ("g.", "(g)", "fluid-ounce") onto the same key.
+ * Only the LOOKUP is normalized — the item's own `unit` is returned to the client as the model wrote
+ * it, and the numeric quantity is never touched.
+ *
+ * An unrecognised unit (e.g. "ruti", "roti") resolves to COUNT: it is the strictest bound, so an
+ * unknown unit can never smuggle an absurd number past validation, while still allowing the
+ * everyday 1-50 range a real portion lives in.
+ */
+export function normalizeUnit(unit: string): QuantityKind {
+  const normalized = unit.toLowerCase().replace(/[^a-z]/g, '');
+  return UNIT_ALIASES[normalized] ?? 'count';
+}
+
+/** The quantity ceiling for a unit, via [normalizeUnit]. */
+export function maxQuantityForUnit(unit: string): number {
+  return QUANTITY_BOUNDS[normalizeUnit(unit)];
+}
 
 /** Thrown when the model's output is unusable — surfaced to the client as AI_INVALID_RESPONSE. */
 export class InvalidAnalysisError extends Error {
@@ -134,8 +229,13 @@ export function validateAnalysis(raw: unknown): MealAnalysisResult {
       throw new InvalidAnalysisError(`Item ${index} is missing a name`);
     }
 
+    // The unit is resolved BEFORE the quantity, because it decides what counts as reasonable:
+    // 200 is absurd for "pieces" and ordinary for "grams".
+    const unit =
+      typeof it.unit === 'string' && it.unit.trim().length > 0 ? it.unit.trim() : 'serving';
+
     const quantity = finiteNonNegative(it.quantity);
-    if (quantity === null || quantity === 0 || quantity > MAX_ITEM_QUANTITY) {
+    if (quantity === null || quantity === 0 || quantity > maxQuantityForUnit(unit)) {
       throw new InvalidAnalysisError(`Item "${name}" has an unreasonable quantity`);
     }
 
@@ -156,7 +256,7 @@ export function validateAnalysis(raw: unknown): MealAnalysisResult {
     return {
       name,
       quantity: round(quantity, 2),
-      unit: typeof it.unit === 'string' && it.unit.trim().length > 0 ? it.unit.trim() : 'serving',
+      unit,
       calories: Math.round(calories),
       proteinGrams: round(proteinGrams),
       carbsGrams: round(carbsGrams),

@@ -7,6 +7,8 @@ import {
   computeTotals,
   createMealAnalyzeHandler,
   InvalidAnalysisError,
+  normalizeUnit,
+  maxQuantityForUnit,
   type DailyLimiter,
 } from '../src/meal-analyze.js';
 import { GeminiClient, GeminiRateLimitError, GeminiUnavailableError } from '../src/gemini.js';
@@ -124,6 +126,96 @@ describe('validateAnalysis', () => {
   it('(8) rejects an unreasonable quantity', () => {
     const bad = { ...JSON.parse(goodJson), items: [{ name: 'Rice', quantity: 9999, unit: 'cup', calories: 200, proteinGrams: 4, carbsGrams: 45, fatGrams: 0 }] };
     expect(() => validateAnalysis(bad)).toThrow(/quantity/i);
+  });
+
+  describe('unit normalization (alias resolution)', () => {
+    // Every variant a model has been seen to emit must land on the right bound. "grams" resolving
+    // anywhere but `gram` is what rejected a real 200 g rice portion.
+    const cases: Array<[string, string, number]> = [
+      // Weight
+      ['g', 'gram', 5_000], ['gram', 'gram', 5_000], ['grams', 'gram', 5_000],
+      ['gramme', 'gram', 5_000], ['grammes', 'gram', 5_000],
+      ['kg', 'kilogram', 5], ['kilogram', 'kilogram', 5], ['kilograms', 'kilogram', 5],
+      ['kilogramme', 'kilogram', 5], ['kilogrammes', 'kilogram', 5],
+      ['oz', 'ounce', 180], ['ounce', 'ounce', 180], ['ounces', 'ounce', 180],
+      ['lb', 'pound', 11], ['lbs', 'pound', 11], ['pound', 'pound', 11], ['pounds', 'pound', 11],
+      // Count
+      ['piece', 'count', 50], ['pieces', 'count', 50], ['pc', 'count', 50], ['pcs', 'count', 50],
+      ['whole', 'count', 50], ['egg', 'count', 50], ['eggs', 'count', 50],
+      // Volume
+      ['ml', 'millilitre', 5_000],
+      ['millilitre', 'millilitre', 5_000], ['millilitres', 'millilitre', 5_000],
+      ['milliliter', 'millilitre', 5_000], ['milliliters', 'millilitre', 5_000],
+      ['l', 'litre', 5], ['litre', 'litre', 5], ['litres', 'litre', 5],
+      ['liter', 'litre', 5], ['liters', 'litre', 5],
+      // Food-serving
+      ['slice', 'count', 50], ['slices', 'count', 50],
+      ['cup', 'cup', 20], ['cups', 'cup', 20],
+      ['tbsp', 'tablespoon', 50], ['tablespoon', 'tablespoon', 50], ['tablespoons', 'tablespoon', 50],
+      ['tsp', 'teaspoon', 150], ['teaspoon', 'teaspoon', 150], ['teaspoons', 'teaspoon', 150],
+    ];
+
+    it.each(cases)('normalizes %s to %s (bound %i)', (input, kind, bound) => {
+      expect(normalizeUnit(input)).toBe(kind);
+      expect(maxQuantityForUnit(input)).toBe(bound);
+    });
+
+    it('normalizes case, surrounding and repeated whitespace, and punctuation', () => {
+      expect(normalizeUnit('  GRAMS  ')).toBe('gram');
+      expect(normalizeUnit('Grams')).toBe('gram');
+      expect(normalizeUnit('g.')).toBe('gram');
+      expect(normalizeUnit('fluid  ounce')).toBe('fluidOunce');
+      expect(normalizeUnit('fluid-ounce')).toBe('fluidOunce');
+    });
+
+    it('falls back to the strictest (count) bound for an unknown unit', () => {
+      expect(normalizeUnit('ruti')).toBe('count');
+      expect(maxQuantityForUnit('roti')).toBe(50);
+    });
+  });
+
+  describe('unit-aware quantity validation', () => {
+    /** Builds a one-item analysis so a single quantity/unit pair can be asserted in isolation. */
+    const withItem = (quantity: number, unit: string) => ({
+      ...JSON.parse(goodJson),
+      items: [{ name: 'Rice', quantity, unit, calories: 260, proteinGrams: 5, carbsGrams: 58, fatGrams: 0.5 }],
+    });
+
+    it.each([
+      [100, 'grams'], [200, 'grams'], [500, 'grams'], [5_000, 'grams'],
+      [200, 'g'], [500, 'gram'],
+      [1, 'kg'], [5, 'kg'],
+      [2, 'pieces'], [3, 'pieces'], [3, 'piece'],
+      [2, 'tablespoons'], [2, 'tbsp'],
+    ])('accepts %i %s', (quantity, unit) => {
+      expect(validateAnalysis(withItem(quantity, unit)).items[0].quantity).toBe(quantity);
+    });
+
+    it.each([
+      [5_001, 'grams'], [6, 'kg'], [10, 'kg'],
+      [200, 'pieces'], [200, 'tablespoons'], [200, 'tablespoon'],
+    ])('rejects %i %s', (quantity, unit) => {
+      expect(() => validateAnalysis(withItem(quantity, unit))).toThrow(/quantity/i);
+    });
+
+    it('accepts the exact item Gemini returned for "200 grams of rice"', () => {
+      // Verbatim from the live diagnostic's CASE C, which this validation used to reject.
+      const result = validateAnalysis({
+        ...JSON.parse(goodJson),
+        items: [
+          { name: 'Egg', quantity: 1, unit: 'whole', calories: 72, proteinGrams: 6.3, carbsGrams: 0.4, fatGrams: 4.8 },
+          { name: 'Chicken', quantity: 3, unit: 'pieces', calories: 220, proteinGrams: 35, carbsGrams: 0, fatGrams: 7.5 },
+          { name: 'Rice', quantity: 200, unit: 'grams', calories: 260, proteinGrams: 5.4, carbsGrams: 57.2, fatGrams: 0.6 },
+        ],
+      });
+      expect(result.items).toHaveLength(3);
+      expect(result.items[2]).toMatchObject({ name: 'Rice', quantity: 200, unit: 'grams' });
+      expect(result.totals.calories).toBe(72 + 220 + 260);
+    });
+
+    it('returns the unit as the model wrote it, normalizing only the lookup', () => {
+      expect(validateAnalysis(withItem(200, 'Grams')).items[0].unit).toBe('Grams');
+    });
   });
 
   it('rejects an empty item list on a non-clarification result', () => {
