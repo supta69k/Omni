@@ -156,16 +156,21 @@ private fun OmniApp() {
      * design, and showing the mock's "Sayed Mahir" to a real signed-in user would be a lie for as long
      * as it lasted.
      */
-    val header = remember(user, unreadNotifications) {
+    // Two separate remembers: user fields change only on auth events; unreadNotifications changes
+    // via Firestore real-time updates which can be very frequent — recreating the whole object on
+    // every count change is wasteful. Splitting them means user changes invalidate both, but count
+    // changes invalidate only the count field.
+    val headerUser = remember(user) {
         user?.let {
             OmniHeaderState(
                 userName = it.name,
                 photoUrl = it.photoUrl,
                 unreadMessages = it.unreadMessages,
-                unreadNotifications = unreadNotifications,
+                unreadNotifications = 0,
             )
         } ?: OmniHeaderState(userName = "")
     }
+    val header = headerUser.copy(unreadNotifications = unreadNotifications)
 
     // rememberSaveable, not remember: configChanges already keeps this across a rotation, but a
     // low-memory process kill recreates the Activity from a bundle, and a router that came back on
@@ -326,10 +331,10 @@ private fun OmniApp() {
     // morph-in-place animation — one screen flew sideways while the pill stayed put — so it is gone.
     // A quiet fade lets the eye stay on the navbar, which is where the motion now lives.
     Crossfade(
-        targetState = screen,
-        animationSpec = tween(PageFadeMillis),
-        label = "omniScreen",
-    ) { current ->
+            targetState = screen,
+            animationSpec = tween(PageFadeMillis),
+            label = "omniScreen",
+        ) { current ->
         when (current) {
             AppScreen.Splash -> SplashScreen()
 
@@ -618,6 +623,8 @@ private fun OmniApp() {
                             onSearchQueryChange = feed::onSearchQueryChange,
                             onSearchDismiss = feed::clearSearch,
                             onNavigate = navigate,
+                            isRefreshing = feedState.isRefreshing,
+                            onRefresh = feed::refresh,
                         )
 
                         // "Add to your story" — the share tile's own picker, the composer's reason
@@ -865,6 +872,8 @@ private fun OmniApp() {
                     onAnalyzeMeal = nutrition::analyzeMeal,
                     onConfirmAiMeal = nutrition::confirmAiMeal,
                     onDismissAiMeal = nutrition::dismissAiMeal,
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = nutrition::refresh,
                 )
             }
 

@@ -27,6 +27,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -174,6 +176,8 @@ fun NutritionScreen(
     onAnalyzeMeal: (String) -> Unit = {},
     onConfirmAiMeal: (Meal) -> Unit = {},
     onDismissAiMeal: () -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     // The log-food sheet is the one thing on this screen the design does not contain. Both the plus and a
     // tap on a row open it; the plus means "new" and the row means "edit". Whether the current open is
@@ -205,7 +209,9 @@ fun NutritionScreen(
             selected = OmniNavItem.Fitness,
             onNavigate = onNavigate,
         ) {
-            Box(
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { onRefresh() },
                 modifier = Modifier
                     .fillMaxSize()
                     .background(OmniBackground),

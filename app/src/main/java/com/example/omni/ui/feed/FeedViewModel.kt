@@ -79,6 +79,7 @@ data class FeedUiState(
     val comments: List<CommentRow> = emptyList(),
     val myUid: String? = null,
     val following: Set<String> = emptySet(),
+    val isRefreshing: Boolean = false,
 )
 
 /**
@@ -112,6 +113,18 @@ data class FeedSearchState(
     val isTooShort: Boolean get() = query.trim().length < MinSearchQuery
 }
 
+/** Intermediate result of combining the first five flows before adding [isRefreshing]. */
+private data class Quint(
+    val seg: FeedSegment,
+    val posts: List<Post>,
+    val canLoadMore: Boolean,
+    val openId: String?,
+    val rows: List<CommentRow>,
+    val me: String?,
+    val follows: Set<String>,
+    val people: Map<String, com.example.omni.data.model.User>,
+)
+
 /**
  * The feed's reads and writes: the live first page, one-shot further pages, the like toggle with its
  * optimistic flip, and the comments sheet.
@@ -131,6 +144,9 @@ class FeedViewModel(
     private val uid: StateFlow<String?> = authRepository.sessionUid
 
     private val segment = MutableStateFlow(FeedSegment.Discover)
+
+    /** Tracks pull-to-refresh state. */
+    private val isRefreshing = MutableStateFlow(false)
 
     /** Further pages beyond the listener's first, appended in load order. */
     private val olderPages = MutableStateFlow<List<Post>>(emptyList())
@@ -356,34 +372,43 @@ class FeedViewModel(
         combine(uid, segment, following) { me, seg, follows -> Triple(me, seg, follows) }
 
     val uiState: StateFlow<FeedUiState> =
-        combine(loaded, view, exhausted, sheet, authors) { (pageSeg, pages), (me, seg, follows), done, (openId, rows), people ->
-            // Whether the page in hand was read for the tab that is up. On the frame a tab is tapped
-            // it is not: `view` has the new segment and the page is still the old tab's. Drawing it
-            // would show unrelated users' posts under "Following", which is the one thing §5 forbids
-            // — so the list is empty for that frame and fills when the new query answers, which off
-            // the local cache is the very next one.
-            val forThisTab = pageSeg == seg
-            val resolved = if (forThisTab) pages.map { it.withAuthor(people[it.authorId]) } else emptyList()
+        combine(
+            combine(loaded, view, exhausted, sheet, authors) { (pageSeg, pages), (me, seg, follows), done, (openId, rows), people ->
+                // Whether the page in hand was read for the tab that is up. On the frame a tab is tapped
+                // it is not: `view` has the new segment and the page is still the old tab's. Drawing it
+                // would show unrelated users' posts under "Following", which is the one thing §5 forbids
+                // — so the list is empty for that frame and fills when the new query answers, which off
+                // the local cache is the very next one.
+                val forThisTab = pageSeg == seg
+                val resolved = if (forThisTab) pages.map { it.withAuthor(people[it.authorId]) } else emptyList()
+                Quint(
+                    seg = seg,
+                    posts = resolved,
+                    canLoadMore = forThisTab && !done && resolved.isNotEmpty() && firstPageWasFull &&
+                        seg == FeedSegment.Discover,
+                    openId = openId,
+                    rows = rows,
+                    me = me,
+                    follows = follows,
+                    people = people,
+                )
+            },
+            isRefreshing,
+        ) { base, refreshing ->
             FeedUiState(
-                segment = seg,
-                // Following's filter happens at the query layer (the listener is over `authorId in
-                // follows ∪ me`, not over the global feed), so this is just the loaded pages with
-                // their identities resolved.
-                posts = resolved,
-                // "Load more" is a Discover-only affordance. Following is a single query over a
-                // capped authors set; "more" would mean a different query, and the screen has no
-                // cursor over the people I follow.
-                canLoadMore = forThisTab && !done && resolved.isNotEmpty() && firstPageWasFull &&
-                    seg == FeedSegment.Discover,
-                commentsOpenId = openId,
-                comments = rows.map { row ->
+                segment = base.seg,
+                posts = base.posts,
+                canLoadMore = base.canLoadMore,
+                commentsOpenId = base.openId,
+                comments = base.rows.map { row ->
                     row.copy(
-                        authorName = people[row.authorId]?.name?.ifBlank { null } ?: row.authorName,
-                        authorPhotoUrl = people[row.authorId]?.photoUrl ?: row.authorPhotoUrl,
+                        authorName = base.people[row.authorId]?.name?.ifBlank { null } ?: row.authorName,
+                        authorPhotoUrl = base.people[row.authorId]?.photoUrl ?: row.authorPhotoUrl,
                     )
                 },
-                myUid = me,
-                following = follows,
+                myUid = base.me,
+                following = base.follows,
+                isRefreshing = refreshing,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -664,6 +689,21 @@ class FeedViewModel(
                 Log.w("Omni", "Loading an older page failed", cause)
             } finally {
                 loading = false
+            }
+        }
+    }
+
+    /**
+     * Force refresh — shows the pull-to-refresh indicator for 1.2s then dismisses.
+     * The feed is already live via Firestore listeners, so this only needs to drive the indicator.
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            isRefreshing.value = true
+            try {
+                kotlinx.coroutines.delay(1200)
+            } finally {
+                isRefreshing.value = false
             }
         }
     }

@@ -76,6 +76,16 @@ data class NutritionUiState(
     val steps: Int = 0,
     val glasses: Int = 0,
     val sleepHours: Float = 0f,
+    val isRefreshing: Boolean = false,
+)
+
+/** Intermediate result of combining the first five flows before adding [isRefreshing]. */
+private data class Quad(
+    val days: List<DayChipState>,
+    val date: LocalDate,
+    val log: List<Meal>,
+    val day: DailyMetrics,
+    val month: MonthView,
 )
 
 /**
@@ -156,6 +166,9 @@ class NutritionViewModel(
      * user opening the page is looking at today.
      */
     private val selected = MutableStateFlow<LocalDate?>(null)
+
+    /** Tracks pull-to-refresh state. */
+    private val isRefreshing = MutableStateFlow(false)
 
     /**
      * The day actually being read: the selection, or today when there is none.
@@ -253,19 +266,25 @@ class NutritionViewModel(
         }
 
     val uiState: StateFlow<NutritionUiState> =
-        combine(week, activeDate, meals, metrics, monthView) { days, date, log, day, month ->
+        combine(
+            combine(week, activeDate, meals, metrics, monthView) { days, date, log, day, month ->
+                Quad(days, date, log, day, month)
+            },
+            isRefreshing,
+        ) { base, refreshing ->
             NutritionUiState(
-                week = days,
-                selectedIndex = days.indexOfFirst { it.date == date }.coerceAtLeast(0),
-                selectedMonth = YearMonth.from(date),
-                monthPickerOpen = month.open,
-                pickerMonth = month.month,
-                monthCalories = month.calories,
-                meals = log,
-                nutrition = log.toDayNutrition(),
-                steps = day.steps,
-                glasses = day.waterGlasses,
-                sleepHours = day.sleepHours,
+                week = base.days,
+                selectedIndex = base.days.indexOfFirst { it.date == base.date }.coerceAtLeast(0),
+                selectedMonth = YearMonth.from(base.date),
+                monthPickerOpen = base.month.open,
+                pickerMonth = base.month.month,
+                monthCalories = base.month.calories,
+                meals = base.log,
+                nutrition = base.log.toDayNutrition(),
+                steps = base.day.steps,
+                glasses = base.day.waterGlasses,
+                sleepHours = base.day.sleepHours,
+                isRefreshing = refreshing,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -395,6 +414,21 @@ class NutritionViewModel(
                 mealRepository.deleteMeal(uid, date, mealId)
             } catch (cause: Exception) {
                 Log.w("Omni", "Deleting $mealId from $date failed", cause)
+            }
+        }
+    }
+
+    /**
+     * Force refresh — shows the pull-to-refresh indicator for 1.2s then dismisses.
+     * The data is already live via Firestore listeners, so this only needs to drive the indicator.
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            isRefreshing.value = true
+            try {
+                kotlinx.coroutines.delay(1200)
+            } finally {
+                isRefreshing.value = false
             }
         }
     }

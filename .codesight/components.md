@@ -16,12 +16,20 @@
 - **TermsRow** [client] — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
 - **SignUpScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
 - **SignUpScreenErrorPreview** [client] — `app\src\main\java\com\example\omni\ui\auth\SignUpScreen.kt`
+- **VerifyEmailScreen** [client] — props: email, code — `app\src\main\java\com\example\omni\ui\auth\VerifyEmailScreen.kt`
+- **VerifyEmailScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\auth\VerifyEmailScreen.kt`
+- **VerifyEmailScreenCodeErrorPreview** [client] — `app\src\main\java\com\example\omni\ui\auth\VerifyEmailScreen.kt`
+- **VerifyEmailScreenSuccessPreview** [client] — `app\src\main\java\com\example\omni\ui\auth\VerifyEmailScreen.kt`
 - **ComingSoonScreen** [client] — props: title, detail, tab, onNavigate — `app\src\main\java\com\example\omni\ui\ComingSoonScreen.kt`
 - **ComingSoonScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\ComingSoonScreen.kt`
+- **AdaptiveRow** [client] — props: horizontalSpacing, columnIndex, columnCount — `app\src\main\java\com\example\omni\ui\components\AdaptiveGrid.kt`
 - **OmniHeader** [client] — props: state — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **HeaderAction** [client] — props: icon, contentDescription, unread, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniBottomNav** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **NavCell** [client] — props: item, selected, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **OmniTabScaffold** [client] — props: selected, onNavigate — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **OmniNavRail** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **OmniSheetScaffold** [client] — props: visible, onDismiss — `app\src\main\java\com\example\omni\ui\components\OmniSheetScaffold.kt`
 - **DesignFrame** [client] — `app\src\main\java\com\example\omni\ui\DesignFrame.kt`
 - **CommentsSheet** [client] — props: visible, comments, onDismiss — `app\src\main\java\com\example\omni\ui\feed\CommentsSheet.kt`
 - **CommentsPanel** [client] — props: comments, onDismiss — `app\src\main\java\com\example\omni\ui\feed\CommentsSheet.kt`
@@ -39,7 +47,7 @@
 - **SearchResultRow** [client] — props: user, onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
 - **StoryStrip** [client] — props: tiles, myUid, myPhotoUrl, onOpenViewer — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
 - **StoryTile** [client] — props: tile, onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
-- **ShareMealTile** [client] — props: hasStory, photoUrl, onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
+- **ShareMealTile** [client] — props: hasStory, photoUrl, onOpenViewer — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
 - **FeedSegments** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
 - **SegmentTab** [client] — props: label, width, selected, onClick — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
 - **FeedPost** [client] — props: post, avatarUrl, onLike — `app\src\main\java\com\example\omni\ui\feed\FeedScreen.kt`
@@ -66,10 +74,10 @@
 - **HomeScreen** [client] — props: header — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
 - **HomeGreeting** [client] — props: name — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
 - **HomeScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
-- **HomeScreenSleepSheetPreview** [client] — `app\src\main\java\com\example\omni\ui\home\HomeScreen.kt`
 - **UpdateCard** [client] — props: verticalPadding, innerGap — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
 - **UpdateHeader** [client] — props: title, value, glyph, glyphWidth — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
 - **UpdateProgress** [client] — props: trackHeight, lead, fill, tail — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
+- **AnimatedUpdateProgress** [client] — props: trackHeight, progress — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
 - **StatusChip** [client] — props: status — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
 - **UpdateAxis** [client] — props: height, endLabel, marker, endInset, startLabel — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
 - **FiberCard** [client] — props: grams, goalGrams — `app\src\main\java\com\example\omni\ui\home\HomeUpdates.kt`
@@ -85,15 +93,26 @@
 - **ChatScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\ChatScreen.kt`
 - **MessagesScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **ConversationRow** [client] — props: conversation, onClick — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
-- **ProfessionalPicker** [client] — props: professionals, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **NewMessagePicker** [client] — props: people, professionals, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **PickerGroup** [client] — props: label, rows, empty, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **Avatar** [client] — props: name, photoUrl, size — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPickerPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **MessagesScreenPickerEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **NotificationsScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationRow** [client] — props: item, onClick — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationsScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationsScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
+- **AiMealSheet** [client] — props: visible, state, onAnalyze — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **LogMethodSheet** [client] — props: visible, onUseAi — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **InputContent** [client] — props: note, noteIsError, onAnalyze — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **AnalyzingContent** [client] — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **ReviewContent** [client] — props: analysis, onConfirm — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **ItemBreakdownRow** [client] — props: item, index — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **PrimaryButton** [client] — props: label, enabled, onClick — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **FieldLabel** [client] — props: text — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
+- **DescriptionField** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\nutrition\AiMealSheet.kt`
 - **MealEntrySheet** [client] — props: visible, editing, onDismiss — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
 - **MealSheet** [client] — props: editing, onDismiss — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
 - **SlotRow** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
@@ -101,6 +120,10 @@
 - **MacroField** [client] — props: label, value, onValueChange — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
 - **FieldLabel** [client] — props: text — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
 - **SheetField** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\nutrition\MealEntrySheet.kt`
+- **MonthPickerSheet** [client] — props: visible, month, selected, calories, onDismiss — `app\src\main\java\com\example\omni\ui\nutrition\MonthPickerSheet.kt`
+- **MonthSheet** [client] — props: month, selected, calories, onDismiss — `app\src\main\java\com\example\omni\ui\nutrition\MonthPickerSheet.kt`
+- **DayCell** [client] — props: date, calories, selected, today, enabled, onClick — `app\src\main\java\com\example\omni\ui\nutrition\MonthPickerSheet.kt`
+- **MonthArrow** [client] — props: forward, enabled, description, onClick — `app\src\main\java\com\example\omni\ui\nutrition\MonthPickerSheet.kt`
 - **NutritionScreen** [client] — props: header — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **DayRow** [client] — props: week, selected, onSelect — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **DayChip** [client] — props: day, selected, enabled, onClick — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
@@ -108,6 +131,7 @@
 - **Measurement** [client] — props: value, unit — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **ArcGauge** [client] — props: progress — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **RingPager** [client] — props: state, pages — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **RingRow** [client] — props: rings — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **RingGauge** [client] — props: ring — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **PageDots** [client] — props: current, count — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **FoodLogHeader** [client] — props: onLog — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
@@ -129,6 +153,16 @@
 - **SaveButton** [client] — props: state, onSave — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
 - **GoalsScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
 - **GoalsScreenDirtyPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\GoalsScreen.kt`
+- **PersonalInformationScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **BirthdayRow** [client] — props: state, onDayChange — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **GenderRow** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **GenderChip** [client] — props: label, chosen, onClick — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **SaveButton** [client] — props: state, onSave — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **AccountField** [client] — props: label, value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **DateBox** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **FieldBox** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **PersonalInformationScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
+- **PersonalInformationScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\PersonalInformationScreen.kt`
 - **SavedEmergenciesScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
 - **ContactRow** [client] — props: contact, onCall — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
 - **AddContactForm** [client] — props: state, onNameChange — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
@@ -137,9 +171,18 @@
 - **SavedEmergenciesScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
 - **SavedEmergenciesScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
 - **SavedEmergenciesScreenFormPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SavedEmergenciesScreen.kt`
-- **SettingScreen** [client] — props: userName, userEmail, photoUrl, photoUploading, photoError, pushNotifications, offlineCache, onNavigate — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **SecurityScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\settings\SecurityScreen.kt`
+- **Notice** [client] — props: error, notice — `app\src\main\java\com\example\omni\ui\settings\SecurityScreen.kt`
+- **ActionButton** [client] — props: label, busyLabel, enabled, busy, onClick — `app\src\main\java\com\example\omni\ui\settings\SecurityScreen.kt`
+- **SecurityField** [client] — props: label, value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\SecurityScreen.kt`
+- **SecurityScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SecurityScreen.kt`
+- **SecurityScreenNoticePreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SecurityScreen.kt`
+- **SettingScreen** [client] — props: userName, userEmail, photoUrl, photoUploading, photoError, pushNotifications, offlineCache, onBack — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **AccountDetailsGroup** [client] — props: onPersonalInformation — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **EmergencyGroup** [client] — props: onSavedEmergencies — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **PreferencesGroup** [client] — props: onDailyGoals — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **ProfileRow** [client] — props: name, email, photoUrl, uploading, error, onChangePhoto — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
-- **SettingsGroup** [client] — props: label, width — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **SettingsGroup** [client] — props: label — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **SettingsRow** [client] — props: title, subtitle, textWidth, onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **PreferenceSwitch** [client] — props: checked, trackOn, onCheckedChange — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **HealthcareCard** [client] — props: onApply — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
@@ -155,13 +198,31 @@
 - **VerificationScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **VerificationScreenFilledPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **VerificationScreenPendingPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
+- **SleepConfirmSheet** [client] — props: date, onConfirm — `app\src\main\java\com\example\omni\ui\sleep\SleepConfirmSheet.kt`
+- **SleepLogSheet** [client] — props: visible, editing, onDismiss — `app\src\main\java\com\example\omni\ui\sleep\SleepLogSheet.kt`
+- **SleepSheetBody** [client] — props: editing, onDismiss — `app\src\main\java\com\example\omni\ui\sleep\SleepLogSheet.kt`
+- **TimeStepper** [client] — props: label, display, onDown — `app\src\main\java\com\example\omni\ui\sleep\SleepLogSheet.kt`
+- **StepButton** [client] — props: glyph, onClick — `app\src\main\java\com\example\omni\ui\sleep\SleepLogSheet.kt`
+- **QualityChip** [client] — props: quality, selected, onClick — `app\src\main\java\com\example\omni\ui\sleep\SleepLogSheet.kt`
+- **SleepScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **BackRow** [client] — props: onBack — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **NightCard** [client] — props: selectedDate, record, onPrevDay — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **InsightsCard** [client] — props: weeklyAverageMinutes, record, goalMinutes — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **HistorySection** [client] — props: visibleMonth, records, selectedDate, onPrevMonth — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **HistoryRow** [client] — props: record, selected, onClick — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **DeleteConfirmSheet** [client] — props: date, onConfirm — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **PagerArrow** [client] — props: glyph, enabled, onClick — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **PrimaryButton** [client] — props: label, onClick — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **ErrorBanner** [client] — props: message, onDismiss — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **SleepScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
+- **SleepScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\sleep\SleepScreen.kt`
 - **OmniMap** [client] — props: hospitals, selectedId, nearestId, userLocation, route, recenterTick, onSelectHospital — `app\src\main\java\com\example\omni\ui\sos\OmniMap.kt`
 - **SosScreen** [client] — props: header — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **MapSearchField** [client] — props: query, onQueryChange — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **NoticeBanner** [client] — props: notice — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **RecenterButton** [client] — props: onClick — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **SosSwipeTrack** [client] — props: onActivate — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
-- **HospitalSheet** [client] — props: hospitals, selectedId, nearestId, hasLocation, routeStatus, query, directorySize, contactCount, onDismiss — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
+- **HospitalSheet** [client] — props: hospitals, selectedId, nearestId, hasLocation, routeStatus, query, directorySize, contactCount, sheetHeight, onDismiss — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **EmptyRail** [client] — props: message, icon, label, fill, onClick — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **HospitalCard** [client] — props: hospital, isNearest, routeStatus, onSelect — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`
 - **HospitalAction** [client] — props: icon, label, fill, labelColor, labelStart, enabled, onClick — `app\src\main\java\com\example\omni\ui\sos\SosScreen.kt`

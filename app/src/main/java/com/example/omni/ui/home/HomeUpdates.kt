@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -21,10 +22,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -41,6 +44,7 @@ import com.example.omni.domain.progressBarOf
 import com.example.omni.domain.progressOf
 import com.example.omni.domain.remainingTo
 import com.example.omni.domain.statusFor
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniCardInk
@@ -160,6 +164,9 @@ private fun UpdateHeader(
  * [lead], [fill] and [tail] are the Figma widths in the 354-wide track, passed as weights so their
  * ratio survives any screen width. The gradient is the same four stops on all three cards; Figma
  * angles it at 89.587° (89.648° on the CPR card), which is horizontal to within half a degree.
+ *
+ * **Phase 16 motion:** the fill width is animated via [animateFloatAsState] using the measured track
+ * width from [BoxWithConstraints], so progress changes glide smoothly rather than jumping.
  */
 @Composable
 private fun UpdateProgress(
@@ -168,24 +175,72 @@ private fun UpdateProgress(
     fill: Float,
     tail: Float,
 ) {
-    Row(
+    val density = LocalDensity.current
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(trackHeight)
             .clip(RoundedCornerShape(6.dp))
             .background(OmniProgressTrack),
     ) {
-        if (lead > 0f) Spacer(Modifier.weight(lead))
+        val trackPx = with(density) { maxWidth.toPx() }
+        val puckPx = trackPx * fill / (lead + fill + tail)
+        val leadPx = trackPx * lead / (lead + fill + tail)
+        val fillWidthPx = leadPx + puckPx
+
         Box(
             modifier = Modifier
-                .weight(fill)
+                .fillMaxWidth(fillWidthPx / trackPx)
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(6.dp))
                 .background(Brush.horizontalGradient(colorStops = OmniProgressStops.toTypedArray())),
         )
-        if (tail > 0f) Spacer(Modifier.weight(tail))
     }
 }
+
+/**
+ * Same bar as [UpdateProgress] but with smooth progress animation.
+ *
+ * Pass [progress] as a float in 0..1. The fill glides to its new position whenever the value changes,
+ * using [OmniMotion.progress] timing (600ms, standard easing).
+ */
+@Composable
+private fun AnimatedUpdateProgress(
+    trackHeight: Dp,
+    progress: Float,
+) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = OmniMotion.progress(),
+        label = "updateProgress",
+    )
+    val density = LocalDensity.current
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(trackHeight)
+            .clip(RoundedCornerShape(6.dp))
+            .background(OmniProgressTrack),
+    ) {
+        val trackPx = with(density) { maxWidth.toPx() }
+        val puckPx = TrackPx * PuckRatio
+        val travelPx = trackPx - puckPx
+        val leadPx = animatedProgress * travelPx
+        val fillWidthPx = leadPx + puckPx
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(fillWidthPx / trackPx)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(6.dp))
+                .background(Brush.horizontalGradient(colorStops = OmniProgressStops.toTypedArray())),
+        )
+    }
+}
+
+/** Design constants for the animated progress bar. */
+private const val TrackPx = 354f
+private const val PuckRatio = 72.6416f / 354f
 
 /**
  * The 8dp dot and its word — Figma's only indication of how each metric is doing.
@@ -328,7 +383,7 @@ internal fun FiberCard(
             glyph = "🍃",
         )
 
-        UpdateProgress(trackHeight = 9.083.dp, lead = bar.lead, fill = bar.fill, tail = bar.tail)
+        AnimatedUpdateProgress(trackHeight = 9.083.dp, progress = progress)
 
         UpdateAxis(
             height = 19.464.dp,
@@ -403,7 +458,7 @@ internal fun SleepCard(
             glyphWidth = 16.dp,
         )
 
-        UpdateProgress(trackHeight = 9.083.dp, lead = bar.lead, fill = bar.fill, tail = bar.tail)
+        AnimatedUpdateProgress(trackHeight = 9.083.dp, progress = progress)
 
         UpdateAxis(
             height = 20.464.dp,
@@ -458,7 +513,7 @@ internal fun CprCard(percent: Int = 0, modifier: Modifier = Modifier) {
     UpdateCard(verticalPadding = 5.dp, innerGap = 5.dp, modifier = modifier) {
         UpdateHeader(title = "Learn Basic CPR Today", value = "$clamped%", glyph = null)
 
-        UpdateProgress(trackHeight = 10.667.dp, lead = bar.lead, fill = bar.fill, tail = bar.tail)
+        AnimatedUpdateProgress(trackHeight = 10.667.dp, progress = clamped / 100f)
 
         UpdateAxis(height = 19.464.dp, endLabel = "100%")
 

@@ -3,7 +3,6 @@ package com.example.omni.ui.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
@@ -38,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -639,15 +639,13 @@ private val NavShapeSpring = spring(
  * differs: the incoming label overshoots a little (this is the bounce), the outgoing one must not,
  * because an undershooting [shrinkHorizontally] would hand a negative size to layout.
  */
-private val NavLabelEnterSpring = spring(
+private val NavLabelEnterSpring = spring<IntSize>(
     dampingRatio = Spring.DampingRatioLowBouncy,
     stiffness = Spring.StiffnessLow,
-    visibilityThreshold = IntSize.VisibilityThreshold,
 )
-private val NavLabelExitSpring = spring(
+private val NavLabelExitSpring = spring<IntSize>(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessLow,
-    visibilityThreshold = IntSize.VisibilityThreshold,
 )
 
 /**

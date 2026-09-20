@@ -107,25 +107,20 @@ fun HomeScreen(
             selected = OmniNavItem.Home,
             onNavigate = onNavigate,
         ) {
-            Box(
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { onRefresh() },
                 modifier = Modifier
                     .fillMaxSize()
                     .background(OmniBackground),
             ) {
-                PullToRefreshBox(
-                    isRefreshing = isRefreshing,
-                    onRefresh = {
-                        onRefresh()
-                    },
-                    modifier = Modifier.fillMaxSize(),
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .statusBarsPadding()
+                        .padding(horizontal = ScreenPadding),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .statusBarsPadding()
-                            .padding(horizontal = ScreenPadding),
-                    ) {
                     Spacer(Modifier.height(HeaderHeight + GreetingGap))
                     HomeGreeting(name = header.greetingName)
 
@@ -164,12 +159,6 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(DashboardGap))
 
-                    // The three cards stack in portrait — `AdaptiveRow` collapses to one column when
-                    // the design window says portrait, so this branch is the only place the layout
-                    // differs. Landscape splits the dashboard into two columns: the day's two
-                    // goal readings (fiber, sleep) on the left, the percentile card (cpr) on the
-                    // right. The hero block above keeps its portrait shape because it is one tall
-                    // card sitting above the day-stat row, not a peer of the cards below.
                     AdaptiveRow(
                         horizontalSpacing = DashboardStackGap,
                     ) { columnIndex, _ ->
@@ -187,7 +176,6 @@ fun HomeScreen(
                     }
 
                     Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
-                }
                 }
 
                 OmniHeader(

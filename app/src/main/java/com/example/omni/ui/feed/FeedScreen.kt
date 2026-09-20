@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -143,6 +145,8 @@ fun FeedScreen(
     onSearchQueryChange: (String) -> Unit = {},
     onSearchDismiss: () -> Unit = {},
     onNavigate: (OmniNavItem) -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
@@ -153,7 +157,9 @@ fun FeedScreen(
             selected = OmniNavItem.Feed,
             onNavigate = onNavigate,
         ) {
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { onRefresh() },
             modifier = Modifier
                 .fillMaxSize()
                 .background(OmniBackground),

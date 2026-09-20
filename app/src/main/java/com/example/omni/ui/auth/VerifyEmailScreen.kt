@@ -1,13 +1,11 @@
 package com.example.omni.ui.auth
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,23 +19,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,20 +44,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniBackground
-import com.example.omni.ui.theme.OmniInk
-import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniTheme
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Email verification screen — shown after signup until the user verifies their email.
@@ -88,31 +75,17 @@ fun VerifyEmailScreen(
     resendCodeCooldown: Int = 0,                      // Code resend cooldown in seconds
     initialCodeSent: Boolean = false,                 // Whether initial code was already sent
 ) {
-    // OTP input state - 6 separate fields
-    val codeDigits = remember { mutableStateOf(List(6) { "" }) }
+    // OTP input state
+    var code by remember { mutableStateOf("") }
     val isSubmitting = remember { mutableStateOf(false) }
     val showSuccess = remember { mutableStateOf(false) }
     // "Sent" is true only while the backend's success message is on screen, so the button can
     // claim it after a confirmed send — never on the mere fact that it was tapped.
     val codeSentState = resendCodeSuccess != null
 
-    // Scope for cooldown timers
-    val scope = remember { CoroutineScope(Dispatchers.Main + Job()) }
-
-    // Start cooldown timers when values change
-    LaunchedEffect(resendCodeCooldown) {
-        if (resendCodeCooldown > 0) {
-            scope.launch {
-                while (resendCodeCooldown > 0) {
-                    delay(1000)
-                }
-            }
-        }
-    }
-
     // Clear code on error
     fun clearCode() {
-        codeDigits.value = List(6) { "" }
+        code = ""
         isSubmitting.value = false
     }
 
@@ -187,96 +160,89 @@ fun VerifyEmailScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Single text field with visual OTP boxes as decoration
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    BasicTextField(
-                        value = codeDigits.value.joinToString(""),
-                        onValueChange = { newValue ->
-                            if (isSubmitting.value || showSuccess.value) return@BasicTextField
+                // OTP input — one BasicTextField with visual boxes via decorationBox.
+                // Backspace, paste and all keyboard input work because the real text field
+                // sits on top of the visual boxes (invisible text + invisible cursor).
+                BasicTextField(
+                    value = code,
+                    onValueChange = { newValue ->
+                        // Allow backspace even when submitting (newValue shorter than current = backspace)
+                        if (showSuccess.value) return@BasicTextField
+                        val filtered = newValue.filter { it.isDigit() }.take(6)
+                        code = filtered
+                        if (filtered.length == 6 && !isSubmitting.value) {
+                            isSubmitting.value = true
+                            onVerifyCode(filtered)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(
+                        color = Color.Transparent,
+                    ),
+                    cursorBrush = SolidColor(Color.Transparent),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    decorationBox = { innerTextField ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            repeat(6) { index ->
+                                val digit = if (index < code.length) code[index].toString() else ""
+                                val filled = digit.isNotEmpty()
+                                val isCurrentSlot = index == code.length && !isSubmitting.value
+                                val hasError = codeError != null && isSubmitting.value
+                                val isSuccessState = showSuccess.value
 
-                            val digitsOnly = newValue.filter { it.isDigit() }.take(6)
-                            val newDigits = mutableListOf<String>()
-                            for (i in 0 until 6) {
-                                newDigits.add(if (i < digitsOnly.length) digitsOnly[i].toString() else "")
-                            }
-                            codeDigits.value = newDigits
+                                val boxColor by animateColorAsState(
+                                    targetValue = when {
+                                        isSuccessState -> Color(0xFF4CAF50)
+                                        hasError -> Color(0xFFB00020)
+                                        filled || isCurrentSlot -> Color(0xFF1E1E1E)
+                                        else -> Color(0xFFE0E0E0)
+                                    },
+                                    animationSpec = tween(150),
+                                    label = "otpBox$index",
+                                )
 
-                            // Auto-submit when 6 digits entered
-                            if (newDigits.all { it.isNotBlank() }) {
-                                val fullCode = newDigits.joinToString("")
-                                isSubmitting.value = true
-                                onVerifyCode(fullCode)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        textStyle = MaterialTheme.typography.headlineMedium.copy(
-                            color = Color.Transparent,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        decorationBox = { innerTextField ->
-                            // Visual OTP boxes
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                codeDigits.value.forEachIndexed { index, digit ->
-                                    val hasError = codeError != null && index == 5 && isSubmitting.value
-                                    val isSuccessState = showSuccess.value
-                                    val isFocused = codeDigits.value.take(index + 1).any { it.isNotBlank() }
-
-                                    val boxColor by animateColorAsState(
-                                        targetValue = when {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(56.dp)
+                                        .background(
+                                            color = if (filled || isCurrentSlot) boxColor.copy(alpha = 0.05f)
+                                                    else Color.Transparent,
+                                            shape = RoundedCornerShape(12.dp),
+                                        )
+                                        .border(
+                                            width = if (filled || isCurrentSlot || hasError || isSuccessState) 2.dp else 1.dp,
+                                            color = boxColor,
+                                            shape = RoundedCornerShape(12.dp),
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = digit,
+                                        style = MaterialTheme.typography.headlineMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                        ),
+                                        color = when {
                                             isSuccessState -> Color(0xFF4CAF50)
                                             hasError -> Color(0xFFB00020)
-                                            isFocused -> Color(0xFF1E1E1E)
-                                            else -> Color(0xFFE0E0E0)
+                                            else -> Color(0xFF1E1E1E)
                                         },
-                                        animationSpec = tween(150),
-                                        label = "boxColor"
                                     )
-
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(56.dp)
-                                            .background(
-                                                color = boxColor.copy(alpha = 0.1f),
-                                                shape = RoundedCornerShape(12.dp),
-                                            )
-                                            .border(
-                                                width = if (hasError || isSuccessState || isFocused) 2.dp else 1.dp,
-                                                color = boxColor,
-                                                shape = RoundedCornerShape(12.dp),
-                                            ),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(
-                                            text = digit,
-                                            style = MaterialTheme.typography.headlineMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                            ),
-                                            color = if (isSuccessState) Color(0xFF4CAF50) else if (hasError) Color(0xFFB00020) else Color(0xFF1E1E1E),
-                                        )
-                                    }
                                 }
                             }
-                            // Invisible text field on top for input capture
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                            ) {
-                                innerTextField()
-                            }
                         }
-                    )
-                }
+                        // The real input — invisible but captures all keyboard, backspace and
+                        // paste events.
+                        Box(Modifier.fillMaxSize()) { innerTextField() }
+                    },
+                )
 
                 // Error message for code
                 if (codeError != null) {
@@ -383,9 +349,9 @@ fun VerifyEmailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    androidx.compose.foundation.layout.Box(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .height(1.dp)
                             .background(Color(0xFFE0E0E0)),
                     )
@@ -396,9 +362,9 @@ fun VerifyEmailScreen(
                         color = Color(0xFF9E9E9E),
                     )
                     Spacer(modifier = Modifier.width(16.dp))
-                    androidx.compose.foundation.layout.Box(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .weight(1f)
                             .height(1.dp)
                             .background(Color(0xFFE0E0E0)),
                     )

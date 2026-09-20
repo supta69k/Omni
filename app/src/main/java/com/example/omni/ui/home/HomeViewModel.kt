@@ -191,13 +191,7 @@ class HomeViewModel(
         viewModelScope.launch {
             isRefreshing.value = true
             try {
-                // Add delay so the indicator is visible for at least 1 second
-                kotlinx.coroutines.delay(1500)
-                // Force re-emit by touching the flows
-                val currentUid = uid.value
-                if (currentUid != null) {
-                    metricsRepository.observeDay(currentUid, todayKey()).collect { }
-                }
+                kotlinx.coroutines.delay(1200)
             } finally {
                 isRefreshing.value = false
             }
