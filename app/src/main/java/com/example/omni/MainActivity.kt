@@ -20,6 +20,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -332,7 +333,7 @@ private fun OmniApp() {
     // A quiet fade lets the eye stay on the navbar, which is where the motion now lives.
     Crossfade(
             targetState = screen,
-            animationSpec = tween(PageFadeMillis),
+            animationSpec = tween(PageFadeMillis, easing = FastOutSlowInEasing),
             label = "omniScreen",
         ) { current ->
         when (current) {

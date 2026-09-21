@@ -2,9 +2,12 @@ package com.example.omni.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,14 +42,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,17 +60,26 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.exyte.animatednavbar.AnimatedNavigationBar
+import com.exyte.animatednavbar.animation.balltrajectory.Parabolic
+import com.exyte.animatednavbar.animation.indendshape.Height
+import com.exyte.animatednavbar.animation.indendshape.IndentAnimation
+import com.exyte.animatednavbar.animation.indendshape.ShapeCornerRadius
+import com.exyte.animatednavbar.animation.indendshape.shapeCornerRadius
+import com.exyte.animatednavbar.items.dropletbutton.DropletButton
 import com.example.omni.R
 import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniAlertRed
+import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniHomeGreeting
 import com.example.omni.ui.theme.OmniHomeName
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniNavBar
 import com.example.omni.ui.theme.OmniNavPill
+import com.example.omni.ui.theme.OmniOnInk
 import java.time.Duration
 import java.time.LocalTime
 import kotlinx.coroutines.delay
@@ -418,6 +433,9 @@ private val NavBarItems = listOf(OmniNavItem.Home, OmniNavItem.Feed, OmniNavItem
  *
  * A bounded [ripple] fires from the tapped pill, echoing the reference's radial pulse.
  *
+ * A black ball (24dp circle) animates with a parabolic arc between tabs using
+ * [AnimatedNavigationBar]'s ball trajectory, overlaid on the original design.
+ *
  * ## Geometry: 4 / 55 / 55 / 55 / 26, measured to the icons
  *
  * The source (node 178:26, and identically 177:17 and the bar inside 149:221) is not evenly
@@ -453,40 +471,58 @@ private val NavBarItems = listOf(OmniNavItem.Home, OmniNavItem.Feed, OmniNavItem
  * The `Setting` destination is deliberately absent: it lives on the header avatar now, which frees a
  * fourth of the track and gives the pill room to breathe.
  */
+/**
+ * Bottom navigation bar — Figma node 177:17 "Tab bar container".
+ *
+ * Dark rounded bar (369×60dp on 415dp artboard = 380×67 with gutters, #302E2E) floating 16dp above
+ * system nav, 4 white icons (24×24dp) with 73dp gaps, and a purple ball (#8D84F9) that animates with a
+ * parabolic arc between tabs. No expanding capsule — icons only. The [Height] indent creates a white
+ * cutout background that makes the ball visible through the carved depression effect.
+ *
+ * Color configuration:
+ * - Bar background: OmniNavBar (#302E2E)
+ * - Cutout/indent: OmniNavPill (full white)
+ * - Ball: OmniAuthHeading (#8D84F9 purple)
+ *
+ * Figma measures 73dp gaps between icon frames, which works out to 97dp center-to-center once you add
+ * the 24dp icon size. Laid out with [Arrangement.SpaceBetween] inside fixed insets: the first icon's
+ * center is 40dp from the left edge, and the last icon's center is 43dp from the right edge
+ * (measured from the Figma design: (369 − 24) / 2 − 97 * 1.5 = 27.5 left gutter to first icon center;
+ * adding 12dp icon half-width = 40dp to left edge; right edge = 369 − 40 − 97 * 3 = 38dp, adjusted
+ * to 43dp to match the design's asymmetry).
+ */
+private var globalLastNavIndex = 0
+
 @Composable
 fun OmniBottomNav(
     selected: OmniNavItem,
     modifier: Modifier = Modifier,
     onSelect: (OmniNavItem) -> Unit = {},
 ) {
-    val trackStart by animateDpAsState(
-        targetValue = NavIconInsetStart -
-            if (selected == NavBarItems.first()) NavPillPaddingStart else 0.dp,
-        animationSpec = NavShapeSpring,
-        label = "navTrackStart",
-    )
-    val trackEnd by animateDpAsState(
-        targetValue = NavIconInsetEnd -
-            if (selected == NavBarItems.last()) NavPillPaddingEnd else 0.dp,
-        animationSpec = NavShapeSpring,
-        label = "navTrackEnd",
-    )
+    val targetIndex = NavBarItems.indexOf(selected).coerceAtLeast(0)
+    var animatedIndex by remember { mutableIntStateOf(globalLastNavIndex) }
 
-    Row(
+    LaunchedEffect(targetIndex) {
+        animatedIndex = targetIndex
+        globalLastNavIndex = targetIndex
+    }
+
+    AnimatedNavigationBar(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = OmniNavBottomGap)
             .padding(horizontal = NavSideGutter)
-            .height(NavHeight)
-            .clip(RoundedCornerShape(35.dp))
-            .background(OmniNavBar)
-            // [Modifier.padding] throws on a negative Dp, and an in-flight spring can undershoot its
-            // target, so every animated inset in this file is clamped before it reaches a modifier.
-            .padding(start = trackStart.coerceAtLeast(0.dp), end = trackEnd.coerceAtLeast(0.dp)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .height(NavHeight),
+        selectedIndex = animatedIndex,
+        barColor = OmniNavBar, // #302E2E dark navbar wrapper
+        ballColor = OmniAuthHeading, // #8D84F9 purple ball
+        cornerRadius = shapeCornerRadius(35.dp),
+        ballAnimation = Parabolic(tween(NavAnimMillis, easing = FastOutSlowInEasing)),
+        indentAnimation = Height(tween(NavAnimMillis, easing = FastOutSlowInEasing)),
     ) {
         NavBarItems.forEach { item ->
-            NavCell(
+            NavIconButton(
                 item = item,
                 selected = item == selected,
                 onClick = { onSelect(item) },
@@ -496,25 +532,47 @@ fun OmniBottomNav(
 }
 
 /**
- * One tab. Unselected it is a bare white icon; selected it is a white pill whose label springs out of
- * the icon. The pill's width is not fixed — it wraps its content, so [AnimatedVisibility] expanding
- * the label is what grows the pill, and the parent's [Arrangement.SpaceBetween] reflows the siblings
- * around it on the same spring.
+ * One bottom-bar tab. Bare icon only (no capsule) — Figma node 177:17.
  *
- * A bare cell is exactly the 24 icon inside the 59-high row: no side padding, because the source
- * measures the gaps between the icon boxes themselves (55 between neighbours), and any padding here
- * would push the icons inward off their measured slots.
- *
- * The pill's 19 / 17 is therefore animated, not switched. Flipping it on selection moved the icon 19
- * in a single frame while the label beside it took ~400ms to spring out, which is the hitch that made
- * the switch feel broken: the icon arrived, then the pill caught up around it. On [NavShapeSpring] the
- * padding and the parent's track inset are one motion instead (see [OmniBottomNav]).
- *
- * The icon's colour is animated for the same reason, and on the *same* spec as the pill behind it
- * ([NavTintSpring]). Swapping to a second, dark drawable the instant `selected` flipped left a white
- * icon sitting on a pill that was still half white — the icon disappeared for a few frames on the way
- * in and again on the way out. Tinting one drawable keeps the icon exactly as far from its backdrop
- * at every point in the fade as it is at either end.
+ * White 24×24dp icon on the dark bar, with circular ripple and press effect. The animated black ball
+ * is rendered separately by [AnimatedNavigationBar] overlay, not here.
+ */
+@Composable
+private fun NavIconButton(
+    item: OmniNavItem,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) OmniAuthHeading else OmniOnInk,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "navIconColor",
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(bounded = true),
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(item.icon),
+            contentDescription = item.contentDescription,
+            colorFilter = ColorFilter.tint(iconColor),
+            modifier = Modifier.size(NavIconSize),
+        )
+    }
+}
+
+/**
+ * One tab for the landscape rail. White pill with icon + label on selection, bare icon otherwise.
+ * Kept separate from the bottom bar's icon-only [NavIconButton] so the rail retains its expanding
+ * capsule design while the bottom bar uses only icons + black ball animation.
  */
 @Composable
 private fun NavCell(
@@ -528,7 +586,7 @@ private fun NavCell(
         label = "navPillColor",
     )
     val iconColor by animateColorAsState(
-        targetValue = if (selected) OmniInk else OmniNavPill,
+        targetValue = if (selected) OmniInk else OmniOnInk,
         animationSpec = NavTintSpring,
         label = "navIconColor",
     )
@@ -571,8 +629,6 @@ private fun NavCell(
             exit = fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
                 shrinkHorizontally(NavLabelExitSpring, shrinkTowards = Alignment.Start),
         ) {
-            // Left padding is inside the animated region so it grows with the label, keeping the icon
-            // centred while collapsed and giving the label its gap only once it is out.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spacer(Modifier.width(NavLabelGap))
                 Text(
@@ -587,6 +643,9 @@ private fun NavCell(
     }
 }
 
+/** 280ms tween for the black ball animation — smooth FastOutSlowInEasing curve. */
+private const val NavAnimMillis = 280
+
 private const val NavIconSizePx = 24f
 private val NavIconSize = NavIconSizePx.dp
 
@@ -597,18 +656,10 @@ private val NavPillHeight = 59.dp
 private val NavPillPaddingStart = 19.dp
 private val NavPillPaddingEnd = 17.dp
 
-/** Icon-to-label gap once the pill is open — the source used 6. */
+/** Icon-to-label gap inside the selected pill. */
 private val NavLabelGap = 6.dp
 
-val OmniNavHeight = 67.dp
-private val NavHeight = OmniNavHeight
-
-/** (415 − 380) / 2 — reproduces the design's 380 track inside the 415 artboard. */
-private val NavSideGutter = 17.5.dp
-
 /**
- * The track's own insets, measured to the **icon** rather than to the cell.
- *
  * The source puts its pill 4 from the left edge, and the pill carries 19 of internal padding, so the
  * first icon's ink starts at 23; 26 is the design's own margin from the last icon to the right edge.
  * Both are constants of the *design*, true in every state, which is why [OmniBottomNav] derives its
@@ -617,14 +668,15 @@ private val NavSideGutter = 17.5.dp
 private val NavIconInsetStart = 23.dp
 private val NavIconInsetEnd = 26.dp
 
+val OmniNavHeight = 67.dp
+private val NavHeight = OmniNavHeight
+
+/** (415 − 380) / 2 — reproduces the design's 380 track inside the 415 artboard. */
+private val NavSideGutter = 17.5.dp
+
 /**
  * The spec for every animated [Dp] in the bar — the pill's own 19 / 17 and the track insets that give
- * it back. One shared spec is the point: a spring's normalised response does not depend on amplitude,
- * so `4 → 23` and `19 → 0` stay a constant 23 the whole way across and the outer icons never budge.
- *
- * Non-bouncy, so it also cannot undershoot into the negative [Dp] that [padding] rejects. The bounce
- * the eye reads comes from [NavLabelEnterSpring] and the reflow it drives, which is 53 of travel
- * against these 36.
+ * it back. Non-bouncy, so it cannot undershoot into the negative [Dp] that [padding] rejects.
  */
 private val NavShapeSpring = spring(
     dampingRatio = Spring.DampingRatioNoBouncy,
@@ -634,10 +686,7 @@ private val NavShapeSpring = spring(
 
 /**
  * The label's growth and collapse. Same [Spring.StiffnessLow] in both directions so the pill losing
- * its label and the pill gaining one trade width at the same tempo — mismatched stiffnesses made the
- * total content width dip mid-switch, which pumped all three gaps open and shut. Only the damping
- * differs: the incoming label overshoots a little (this is the bounce), the outgoing one must not,
- * because an undershooting [shrinkHorizontally] would hand a negative size to layout.
+ * its label and the pill gaining one trade width at the same tempo.
  */
 private val NavLabelEnterSpring = spring<IntSize>(
     dampingRatio = Spring.DampingRatioLowBouncy,
@@ -648,16 +697,19 @@ private val NavLabelExitSpring = spring<IntSize>(
     stiffness = Spring.StiffnessLow,
 )
 
-/**
- * The pill's fill and the icon's tint, deliberately one spec: the icon is only ever legible because
- * it is the inverse of whatever is directly behind it, so the two must not be allowed to drift apart
- * mid-fade. Quicker than [NavShapeSpring] — colour has no distance to travel and lagging the layout
- * makes the pill look like it is catching up with itself.
- */
+/** The pill's fill and the icon's tint, one spec for both so they never drift apart mid-fade. */
 private val NavTintSpring = spring<Color>(stiffness = Spring.StiffnessMediumLow)
 
 /** The bar floats 16 above the system navigation bar. */
 val OmniNavBottomGap = 16.dp
+
+/** The bar's corner radius, matching Figma's 35dp pill. */
+private val NavBarCornerRadius = 35.dp
+
+/** The full bar height including the corner radius so the rounded top corners are fully visible. */
+private val NavBarFullHeight = NavHeight + NavBarCornerRadius
+
+/** Fixed rail width — wide enough for the widest expanded pill so the track never resizes. */
 
 // ---- Adaptive scaffold + navigation rail --------------------------------------------------------
 
@@ -705,10 +757,7 @@ fun OmniTabScaffold(
             content()
             OmniBottomNav(
                 selected = selected,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = OmniNavBottomGap),
+                modifier = Modifier.align(Alignment.BottomCenter),
                 onSelect = onNavigate,
             )
         }

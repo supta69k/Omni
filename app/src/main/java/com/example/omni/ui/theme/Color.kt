@@ -92,7 +92,7 @@ val OmniProgressStops = listOf(
 
 // Bottom navigation
 val OmniNavBar = OmniInk                  // #302E2E
-val OmniNavPill = Color(0xFFFFFFFF)
+val OmniNavPill = Color(0xFFFFFFFF)       // #FFFFFF
 
 // ---- Community feed (Figma `iPhone 14 & 15 Pro - 28`) ----
 

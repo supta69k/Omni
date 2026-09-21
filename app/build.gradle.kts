@@ -128,6 +128,7 @@ dependencies {
     // OSRM routing calls. OkHttp is already on the classpath transitively through Coil (4.12.0);
     // declaring it directly so the routing repository does not depend on a transitive version.
     implementation(libs.okhttp)
+    implementation(libs.exyte.navbar)
     testImplementation(libs.junit)
     // `runTest` and the virtual clock, for the ViewModel tests: the profile's state machine is a
     // combine over five flows, and the bug it is guarding against is a timing one — what the page

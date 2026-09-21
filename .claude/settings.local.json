@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:help.figma.com)",
       "Bash(./gradlew.bat :app:compileDebugKotlin)",
-      "Bash(./gradlew.bat :app:testDebugUnitTest --tests \"com.example.omni.ui.DesignFrameTest\" --tests \"com.example.omni.data.local.StepStateTest\")"
+      "Bash(./gradlew.bat :app:testDebugUnitTest --tests \"com.example.omni.ui.DesignFrameTest\" --tests \"com.example.omni.data.local.StepStateTest\")",
+      "WebFetch(domain:www.figma.com)"
     ]
   }
 }
