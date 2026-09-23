@@ -2,9 +2,11 @@ package com.example.omni.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -65,6 +67,12 @@ import com.example.omni.ui.theme.OmniHomeName
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniNavBar
 import com.example.omni.ui.theme.OmniNavPill
+import com.example.omni.ui.theme.OmniOnInk
+import com.exyte.animatednavbar.AnimatedNavigationBar
+import com.exyte.animatednavbar.animation.balltrajectory.Parabolic
+import com.exyte.animatednavbar.animation.indendshape.Height
+import com.exyte.animatednavbar.animation.indendshape.shapeCornerRadius
+import androidx.compose.runtime.mutableIntStateOf
 import java.time.Duration
 import java.time.LocalTime
 import kotlinx.coroutines.delay
@@ -453,45 +461,75 @@ private val NavBarItems = listOf(OmniNavItem.Home, OmniNavItem.Feed, OmniNavItem
  * The `Setting` destination is deliberately absent: it lives on the header avatar now, which frees a
  * fourth of the track and gives the pill room to breathe.
  */
+private var globalLastNavIndex = 0
+
 @Composable
 fun OmniBottomNav(
     selected: OmniNavItem,
     modifier: Modifier = Modifier,
     onSelect: (OmniNavItem) -> Unit = {},
 ) {
-    val trackStart by animateDpAsState(
-        targetValue = NavIconInsetStart -
-            if (selected == NavBarItems.first()) NavPillPaddingStart else 0.dp,
-        animationSpec = NavShapeSpring,
-        label = "navTrackStart",
-    )
-    val trackEnd by animateDpAsState(
-        targetValue = NavIconInsetEnd -
-            if (selected == NavBarItems.last()) NavPillPaddingEnd else 0.dp,
-        animationSpec = NavShapeSpring,
-        label = "navTrackEnd",
-    )
+    val targetIndex = NavBarItems.indexOf(selected).coerceAtLeast(0)
+    var animatedIndex by remember { mutableIntStateOf(globalLastNavIndex) }
 
-    Row(
+    LaunchedEffect(targetIndex) {
+        animatedIndex = targetIndex
+        globalLastNavIndex = targetIndex
+    }
+
+    AnimatedNavigationBar(
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(bottom = OmniNavBottomGap)
             .padding(horizontal = NavSideGutter)
-            .height(NavHeight)
-            .clip(RoundedCornerShape(35.dp))
-            .background(OmniNavBar)
-            // [Modifier.padding] throws on a negative Dp, and an in-flight spring can undershoot its
-            // target, so every animated inset in this file is clamped before it reaches a modifier.
-            .padding(start = trackStart.coerceAtLeast(0.dp), end = trackEnd.coerceAtLeast(0.dp)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .height(NavHeight),
+        selectedIndex = animatedIndex,
+        barColor = OmniNavBar, // #302E2E dark navbar wrapper
+        ballColor = Color(0xFF302E2E), // #302E2E ball
+        cornerRadius = shapeCornerRadius(35.dp),
+        ballAnimation = Parabolic(tween(NavAnimMillis, easing = FastOutSlowInEasing)),
+        indentAnimation = Height(tween(NavAnimMillis, easing = FastOutSlowInEasing)),
     ) {
         NavBarItems.forEach { item ->
-            NavCell(
+            NavIconButton(
                 item = item,
                 selected = item == selected,
                 onClick = { onSelect(item) },
             )
         }
+    }
+}
+
+/**
+ * One bottom-bar tab. Bare icon only (no capsule) — Figma node 177:17.
+ *
+ * White 24×24dp icon on the dark bar, with circular ripple and press effect.
+ */
+@Composable
+private fun NavIconButton(
+    item: OmniNavItem,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(bounded = true),
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(item.icon),
+            contentDescription = item.contentDescription,
+            colorFilter = ColorFilter.tint(OmniOnInk),
+            modifier = Modifier.size(NavIconSize),
+        )
     }
 }
 
@@ -586,6 +624,8 @@ private fun NavCell(
         }
     }
 }
+
+private const val NavAnimMillis = 280
 
 private const val NavIconSizePx = 24f
 private val NavIconSize = NavIconSizePx.dp
