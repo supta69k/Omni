@@ -6,6 +6,7 @@ import com.example.omni.data.model.Post
 import com.example.omni.data.model.toComment
 import com.example.omni.data.model.toFirestoreMap
 import com.example.omni.data.model.toPost
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.AggregateSource
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FieldValue
@@ -25,6 +26,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 /**
  * [FeedRepository] over Firestore.
@@ -39,7 +47,16 @@ import kotlinx.coroutines.tasks.await
  */
 class FirestoreFeedRepository(
     private val firestore: FirebaseFirestore,
+    private val auth: FirebaseAuth,
 ) : FeedRepository {
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    private val backendBaseUrl = "https://omni-jx01.onrender.com"
 
     /**
      * The scope the snapshot listener's async join runs on. Supervised and IO-dispatched: one post's
@@ -196,11 +213,19 @@ class FirestoreFeedRepository(
      * many others had. One document per liker cannot drift: it is either there or it is not.
      */
     override suspend fun toggleLike(uid: String, postId: String) {
-        val likeRef = likeDocument(postId, uid)
-        if (likeRef.get().await().exists()) {
-            likeRef.delete().await()
-        } else {
-            likeRef.set(mapOf("createdAt" to FieldValue.serverTimestamp())).await()
+        val idToken = auth.currentUser?.getIdToken(false)?.await()?.token
+            ?: throw IllegalStateException("Not signed in")
+        val request = Request.Builder()
+            .url("$backendBaseUrl/posts/$postId/like")
+            .header("Authorization", "Bearer $idToken")
+            .post("{}".toRequestBody("application/json".toMediaType()))
+            .build()
+        withContext(Dispatchers.IO) {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("Like failed: ${response.code}")
+                }
+            }
         }
     }
 
@@ -222,17 +247,21 @@ class FirestoreFeedRepository(
     }
 
     override suspend fun addComment(uid: String, postId: String, authorName: String, body: String) {
-        val comment = Comment(id = "", authorId = uid, authorName = authorName, body = body.trim())
-        firestore.collection(Posts).document(postId).collection(Comments)
-            .add(
-                mapOf(
-                    "authorId" to comment.authorId,
-                    "authorName" to comment.authorName,
-                    "body" to comment.body,
-                    "createdAt" to FieldValue.serverTimestamp(),
-                ),
-            )
-            .await()
+        val idToken = auth.currentUser?.getIdToken(false)?.await()?.token
+            ?: throw IllegalStateException("Not signed in")
+        val json = JSONObject().put("body", body.trim())
+        val request = Request.Builder()
+            .url("$backendBaseUrl/posts/$postId/comments")
+            .header("Authorization", "Bearer $idToken")
+            .post(json.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        withContext(Dispatchers.IO) {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("Comment failed: ${response.code}")
+                }
+            }
+        }
     }
 
     override suspend fun createPost(uid: String, author: PostAuthor, body: String, imageUrl: String?) {

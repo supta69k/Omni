@@ -12,6 +12,11 @@ import { SendOtpRequest, SendOtpResponse, VerifyOtpRequest, VerifyOtpResponse, H
 import { FirestoreRateLimiter } from './rate-limiter.js';
 import { RestGeminiClient } from './gemini.js';
 import { createMealAnalyzeHandler } from './meal-analyze.js';
+import { FirestoreFcmService } from './fcm.js';
+import { createVerificationHandlers } from './verification.js';
+import { createLikeHandler } from './like.js';
+import { createCommentHandler } from './comment.js';
+import { createMessageHandler } from './message.js';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -93,6 +98,13 @@ const analyzeMealHandler = createMealAnalyzeHandler({
   gemini: geminiClient,
   maxTextLength: config.gemini.maxTextLength,
 });
+
+// Phase 12R: FCM service and endpoint handlers
+const fcmService = new FirestoreFcmService(db, admin.messaging());
+const verificationHandlers = createVerificationHandlers({ db, auth, fcm: fcmService });
+const likeHandler = createLikeHandler({ db, fcm: fcmService });
+const commentHandler = createCommentHandler({ db, fcm: fcmService });
+const messageHandler = createMessageHandler({ db, fcm: fcmService });
 
 // POST /otp/send - Send 6-digit OTP to user's email
 app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: Request, res: Response) => {
@@ -280,6 +292,44 @@ app.post('/otp/verify', authenticate, validateRequest(verifyOtpSchema), async (r
 // The handler itself validates size, charges the daily limit, calls Gemini, and validates output.
 app.post('/ai/meal/analyze', authenticate, analyzeMealHandler);
 
+// Phase 12R: verification, like, comment, message endpoints
+app.post('/verification/approve', authenticate, verificationHandlers.approve);
+app.post('/verification/reject', authenticate, verificationHandlers.reject);
+app.post('/posts/:postId/like', authenticate, likeHandler.toggleLike);
+app.post('/posts/:postId/comments', authenticate, commentHandler.addComment);
+app.post('/conversations/:conversationId/messages', authenticate, messageHandler.sendMessage);
+
+// Admin bootstrap — sets {admin: true} custom claim. Restricted to a hardcoded bootstrap uid.
+// Call once, then remove the ADMIN_BOOTSTRAP_UID env var to permanently disable.
+app.post('/admin/grant', authenticate, async (req: Request, res: Response) => {
+  const callerUid = (req as any).user?.uid;
+  const bootstrapUid = process.env.ADMIN_BOOTSTRAP_UID;
+
+  if (!bootstrapUid) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  if (callerUid !== bootstrapUid) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+
+  const { targetUid } = req.body ?? {};
+  if (!targetUid || typeof targetUid !== 'string') {
+    res.status(400).json({ error: 'targetUid required' });
+    return;
+  }
+
+  try {
+    await auth.setCustomUserClaims(targetUid, { admin: true });
+    console.log('[ADMIN_GRANT] by=' + callerUid + ' target=' + targetUid);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[ADMIN_GRANT_ERROR]', error);
+    res.status(500).json({ error: 'Failed to grant admin' });
+  }
+});
+
 // GET /health - Health check
 app.get('/health', (_req: Request, res: Response) => {
   const response: HealthResponse = {
@@ -309,11 +359,16 @@ app.use((_req: Request, res: Response) => {
 const PORT = config.port;
 app.listen(PORT, () => {
   validateConfig();
-  console.log(`🚀 OTP backend running on port ${PORT}`);
+  console.log(`🚀 Omni backend running on port ${PORT}`);
   console.log(`   Health: http://localhost:${PORT}/health`);
   console.log(`   OTP Send: POST /otp/send`);
   console.log(`   OTP Verify: POST /otp/verify`);
   console.log(`   AI Meal Analyze: POST /ai/meal/analyze`);
+  console.log(`   Verification: POST /verification/approve, /verification/reject`);
+  console.log(`   Like: POST /posts/:postId/like`);
+  console.log(`   Comment: POST /posts/:postId/comments`);
+  console.log(`   Message: POST /conversations/:conversationId/messages`);
+  console.log(`   Admin: POST /admin/grant`);
 });
 
 export { app };

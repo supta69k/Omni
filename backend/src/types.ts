@@ -118,3 +118,29 @@ export interface OtpEmailTemplateData {
   expiryMinutes: number;
   appName: string;
 }
+
+// ---- Phase 12R: Cloud Function → Render migration -------------------------
+
+export interface ToggleLikeResponse {
+  success: boolean;
+  liked: boolean;
+}
+
+export interface AddCommentResponse {
+  success: boolean;
+  commentId: string;
+}
+
+export interface SendMessageResponse {
+  success: boolean;
+  messageId: string;
+}
+
+export interface VerificationDecisionResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface GrantAdminResponse {
+  success: boolean;
+}

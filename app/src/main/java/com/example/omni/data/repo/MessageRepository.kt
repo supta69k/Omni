@@ -11,16 +11,25 @@ import com.example.omni.data.model.conversationIdentityMap
 import com.example.omni.data.model.newMessageMap
 import com.example.omni.data.model.toConversation
 import com.example.omni.data.model.toMessage
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 /**
  * Threads and messages (BACKEND_PLAN §11 Phase 11).
@@ -102,7 +111,16 @@ interface MessageRepository {
  */
 class FirestoreMessageRepository(
     private val firestore: FirebaseFirestore,
+    private val auth: FirebaseAuth,
 ) : MessageRepository {
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    private val backendBaseUrl = "https://omni-jx01.onrender.com"
 
     override fun observeConversations(uid: String): Flow<List<Conversation>> = callbackFlow {
         val registration = firestore.collection(Conversations)
@@ -188,22 +206,24 @@ class FirestoreMessageRepository(
         val body = text.trim().take(MaxMessageLength)
         if (body.isEmpty() && imageUrl == null) return
 
-        val batch = firestore.batch()
-        batch.set(messages(conversationId).document(), newMessageMap(senderId, body, imageUrl))
-        batch.set(
-            conversation(conversationId),
-            mapOf(
-                "lastMessage" to if (body.isNotEmpty()) body else "📷 Photo",
-                "lastMessageAt" to FieldValue.serverTimestamp(),
-                "lastSenderId" to senderId,
-                // A nested map, not the dotted path `update()` would take: in a `set` a dot is part of
-                // the field *name*. Nested merges recursively, so the sender's own count survives, and
-                // `increment` is honoured inside it (§4 rule 7 — never read-modify-write a counter).
-                "unread" to mapOf(recipientId to FieldValue.increment(1)),
-            ),
-            SetOptions.merge(),
-        )
-        batch.commit().await()
+        val idToken = auth.currentUser?.getIdToken(false)?.await()?.token
+            ?: throw IllegalStateException("Not signed in")
+        val json = JSONObject()
+            .put("recipientId", recipientId)
+            .put("text", body)
+        imageUrl?.let { json.put("imageUrl", it) }
+        val request = Request.Builder()
+            .url("$backendBaseUrl/conversations/$conversationId/messages")
+            .header("Authorization", "Bearer $idToken")
+            .post(json.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        withContext(Dispatchers.IO) {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("Message failed: ${response.code}")
+                }
+            }
+        }
     }
 
     override suspend fun markRead(conversationId: String, uid: String) {
