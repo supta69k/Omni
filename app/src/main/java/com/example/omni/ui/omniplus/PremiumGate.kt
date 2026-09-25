@@ -26,8 +26,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.data.revenuecat.EntitlementIds
+import com.example.omni.data.revenuecat.PreviewRevenueCatRepository
 import com.example.omni.data.revenuecat.RevenueCatRepository
 import com.example.omni.data.revenuecat.RevenueCatState
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.motion.OmniMotion.pressEffect
@@ -40,6 +43,7 @@ import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniSetCardBody
 import com.example.omni.ui.theme.OmniSetCardSurface
 import com.example.omni.ui.theme.OmniSetRowSubtitle
+import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.SettingsType
 
@@ -209,3 +213,35 @@ private val ActionTop = 20.dp
 private val PillCorner = 23.dp
 private val PillPaddingH = 28.dp
 private val PillPaddingV = 10.dp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+/** Active: the gate passes through — the gated content renders. */
+@DevicePreviews
+@Composable
+private fun PremiumGatePreview() {
+    OmniTheme {
+        PremiumGate(
+            revenueCatRepository = PreviewRevenueCatRepository(
+                RevenueCatState.Active(mapOf(EntitlementIds.OMNI_PLUS to true)),
+            ),
+            onNavigateToPaywall = {},
+        ) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Omni+ content renders here")
+            }
+        }
+    }
+}
+
+/** Inactive: the gate page itself — the healthcare-card idiom with the See Omni+ pill. */
+@DevicePreviews
+@Composable
+private fun PremiumGateInactivePreview() {
+    OmniTheme {
+        PremiumGate(
+            revenueCatRepository = PreviewRevenueCatRepository(),
+            onNavigateToPaywall = {},
+        ) { }
+    }
+}

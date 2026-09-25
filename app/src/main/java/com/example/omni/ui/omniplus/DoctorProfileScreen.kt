@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.data.model.Doctor
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.theme.HomeType
@@ -49,6 +50,7 @@ import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniSetCardBody
 import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniSetRowTitle
+import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 
@@ -371,3 +373,38 @@ private val CtaRadius = 23.dp
 private val CtaPaddingV = 10.dp
 private val SpacerBottom = 16.dp
 private val AvailabilityDotSize = 8.dp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewDoctor = Doctor(
+    uid = "dr_1",
+    name = "Ayesha Rahman",
+    specialty = "Cardiology",
+    bio = "Consultant cardiologist with twelve years of clinical practice. Focused on preventive " +
+        "heart care, hypertension management and lifestyle-first treatment plans.",
+    yearsExperience = 12,
+    rating = 4.9f,
+    reviewCount = 214,
+    languages = listOf("English", "Bangla", "Hindi"),
+    consultationFee = "৳500 / consultation",
+)
+
+@DevicePreviews
+@Composable
+private fun DoctorProfilePreview() {
+    OmniTheme {
+        DoctorProfileScreen(
+            state = DoctorProfileUiState(doctor = PreviewDoctor, isLoading = false),
+            onStartConsultation = {},
+            onBack = {},
+        )
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorProfileLoadingPreview() {
+    OmniTheme {
+        DoctorProfileScreen(state = DoctorProfileUiState(), onStartConsultation = {}, onBack = {})
+    }
+}

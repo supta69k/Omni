@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.data.model.Doctor
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.theme.FeedType
@@ -46,6 +47,7 @@ import com.example.omni.ui.theme.OmniLavender
 import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniSetRowTitle
+import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 
@@ -385,3 +387,76 @@ private val ChipGap = 8.dp
 private val ChipRadius = 19.dp
 private val ChipPaddingH = 14.dp
 private val ChipPaddingV = 8.dp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewDoctors = listOf(
+    Doctor(
+        uid = "dr_1",
+        name = "Ayesha Rahman",
+        specialty = "Cardiology",
+        bio = "Consultant cardiologist with a focus on preventive heart care and hypertension management.",
+        yearsExperience = 12,
+        rating = 4.9f,
+        reviewCount = 214,
+        languages = listOf("English", "Bangla"),
+        consultationFee = "৳500 / consultation",
+    ),
+    Doctor(
+        uid = "dr_2",
+        name = "Tanvir Hasan",
+        specialty = "Dermatology",
+        bio = "Skin, hair and nail health, from acne care to minor procedures.",
+        yearsExperience = 8,
+        rating = 4.7f,
+        reviewCount = 158,
+        languages = listOf("English", "Bangla"),
+        consultationFee = "৳400 / consultation",
+    ),
+    Doctor(
+        uid = "dr_3",
+        name = "Nusrat Jahan",
+        specialty = "Nutrition",
+        bio = "Clinical dietitian helping people build sustainable eating habits.",
+        yearsExperience = 6,
+        rating = 4.8f,
+        reviewCount = 96,
+        languages = listOf("English"),
+        consultationFee = "৳350 / consultation",
+        available = false,
+    ),
+)
+
+private val PreviewDirectoryState = DoctorDirectoryUiState(
+    doctors = PreviewDoctors,
+    isLoading = false,
+    specialties = PreviewDoctors.map { it.specialty }.distinct().sorted(),
+)
+
+@DevicePreviews
+@Composable
+private fun DoctorDirectoryPreview() {
+    OmniTheme {
+        DoctorDirectoryScreen(state = PreviewDirectoryState, onDoctorClick = {}, onBack = {})
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorDirectoryLoadingPreview() {
+    OmniTheme {
+        DoctorDirectoryScreen(state = DoctorDirectoryUiState(), onDoctorClick = {}, onBack = {})
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorDirectoryEmptyPreview() {
+    OmniTheme {
+        DoctorDirectoryScreen(
+            state = DoctorDirectoryUiState(isLoading = false),
+            onDoctorClick = {},
+            onBack = {},
+        )
+    }
+}

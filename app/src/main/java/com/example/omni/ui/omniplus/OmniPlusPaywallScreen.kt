@@ -29,7 +29,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
+import com.example.omni.data.revenuecat.EntitlementIds
 import com.example.omni.data.revenuecat.RevenueCatState
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.theme.FeedType
@@ -46,6 +48,7 @@ import com.example.omni.ui.theme.OmniSetCardBody
 import com.example.omni.ui.theme.OmniSetCardSurface
 import com.example.omni.ui.theme.OmniSetRowSubtitle
 import com.example.omni.ui.theme.OmniSetRowTitle
+import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 
@@ -393,3 +396,47 @@ private val PackagePaddingV = 14.dp
 private val RestoreTop = 16.dp
 private val LegalTop = 12.dp
 private val ContentBottomGap = 24.dp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewPackages = listOf(
+    PackageOption(id = "omni_plus_monthly", name = "Omni+ Monthly", price = "$4.99 / month"),
+    PackageOption(id = "omni_plus_yearly", name = "Omni+ Yearly", price = "$39.99 / year"),
+)
+
+private val PreviewPaywallState = OmniPlusUiState(
+    subscriptionState = RevenueCatState.Inactive,
+    availablePackages = PreviewPackages,
+)
+
+@DevicePreviews
+@Composable
+private fun OmniPlusPaywallPreview() {
+    OmniTheme {
+        OmniPlusPaywallScreen(
+            state = PreviewPaywallState,
+            onPurchase = {},
+            onRestore = {},
+            onBrowseDoctors = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/** The subscribed state: packages collapse to the success row and the Browse Doctors button. */
+@DevicePreviews
+@Composable
+private fun OmniPlusPaywallSubscribedPreview() {
+    OmniTheme {
+        OmniPlusPaywallScreen(
+            state = OmniPlusUiState(
+                subscriptionState = RevenueCatState.Active(mapOf(EntitlementIds.OMNI_PLUS to true)),
+                successMessage = "Welcome to Omni+!",
+            ),
+            onPurchase = {},
+            onRestore = {},
+            onBrowseDoctors = {},
+            onDismiss = {},
+        )
+    }
+}
