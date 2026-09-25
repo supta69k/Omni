@@ -24,6 +24,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,10 +38,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.ui.DesignFrame
@@ -119,6 +127,7 @@ fun SettingScreen(
     onPushNotificationsChange: (Boolean) -> Unit = {},
     onOfflineCacheChange: (Boolean) -> Unit = {},
     onApplyForVerification: () -> Unit = {},
+    onOmniPlus: () -> Unit = {},
     onLogOut: () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
@@ -230,6 +239,10 @@ fun SettingScreen(
                         onOfflineCacheChange = onOfflineCacheChange,
                     )
                 }
+
+                Spacer(Modifier.height(8.dp))
+
+                OmniPlusCard(onClick = onOmniPlus)
 
                 Spacer(Modifier.height(HealthcareCardGap))
 
@@ -657,6 +670,88 @@ private fun HealthcareCard(onApply: () -> Unit) {
                 maxLines = 1,
                 softWrap = false,
             )
+        }
+    }
+}
+
+/** "Omni+ Premium" card — entry point to the subscription and doctor directory. */
+@Composable
+private fun OmniPlusCard(onClick: () -> Unit) {
+    val premiumPurple = Color(0xFF8B5CF6)
+    val gradientBackground = Color(0xFF1A1A2E)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PagePadding, end = PagePadding)
+            .height(120.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(gradientBackground)
+            .pressEffect()
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Omni+",
+                        style = TextStyle(
+                            fontFamily = FontFamily.SansSerif,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                        ),
+                        color = premiumPurple,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(premiumPurple.copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = "PREMIUM",
+                            style = TextStyle(
+                                fontFamily = FontFamily.SansSerif,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp,
+                            ),
+                            color = premiumPurple,
+                        )
+                    }
+                }
+                Text(
+                    text = "Doctor consultations & more",
+                    style = TextStyle(
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 13.sp,
+                    ),
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(premiumPurple),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Open Omni+",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
     }
 }

@@ -89,6 +89,14 @@ import com.example.omni.ui.settings.VerificationScreen
 import com.example.omni.ui.settings.VerificationViewModel
 import com.example.omni.ui.sleep.SleepScreen
 import com.example.omni.ui.sleep.SleepViewModel
+import com.example.omni.ui.omniplus.DoctorConsultationScreen
+import com.example.omni.ui.omniplus.DoctorConsultationViewModel
+import com.example.omni.ui.omniplus.DoctorDirectoryScreen
+import com.example.omni.ui.omniplus.DoctorDirectoryViewModel
+import com.example.omni.ui.omniplus.DoctorProfileScreen
+import com.example.omni.ui.omniplus.DoctorProfileViewModel
+import com.example.omni.ui.omniplus.OmniPlusPaywallScreen
+import com.example.omni.ui.omniplus.OmniPlusViewModel
 import com.example.omni.ui.sos.SosScreen
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.ui.theme.OmniTheme
@@ -197,6 +205,12 @@ private fun OmniApp() {
      * Whether the initial verification code was sent (true for SignUp flow, false for SignIn flow).
      */
     var initialCodeSentForVerification by rememberSaveable { mutableStateOf(false) }
+
+    /**
+     * Doctor uid for DoctorProfile and DoctorConsultation screens.
+     */
+    var doctorUid by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentDoctorName by rememberSaveable { mutableStateOf<String?>(null) }
 
     /**
      * The last bottom-bar tab the user stood on — where the three header pages go back to.
@@ -447,6 +461,72 @@ private fun OmniApp() {
                     linkError = state.linkError,
                     resendCodeSuccess = state.resendCodeSuccess,
                     resendCodeCooldown = state.resendCodeCooldown,
+                )
+            }
+
+            AppScreen.OmniPlus -> {
+                val viewModel: OmniPlusViewModel = viewModel(factory = AppContainer.factory())
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                val activity = context as? Activity
+                OmniPlusPaywallScreen(
+                    state = state,
+                    onPurchase = { packageId ->
+                        if (activity != null) {
+                            viewModel.purchase(activity, packageId)
+                        }
+                    },
+                    onRestore = { viewModel.restore() },
+                    onBrowseDoctors = { screen = AppScreen.DoctorDirectory },
+                    onDismiss = { screen = AppScreen.Setting },
+                )
+            }
+
+            AppScreen.DoctorDirectory -> {
+                val viewModel: DoctorDirectoryViewModel = viewModel(factory = AppContainer.factory())
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                DoctorDirectoryScreen(
+                    state = state,
+                    onDoctorClick = { uid ->
+                        val doctor = state.doctors.find { it.uid == uid }
+                        doctorUid = uid
+                        currentDoctorName = doctor?.name ?: "Doctor"
+                        screen = AppScreen.DoctorProfile
+                    },
+                    onBack = { screen = AppScreen.OmniPlus },
+                )
+            }
+
+            AppScreen.DoctorProfile -> {
+                val viewModel: DoctorProfileViewModel = viewModel(
+                    factory = DoctorProfileViewModel.factory(
+                        container.doctorRepository,
+                        context as androidx.activity.ComponentActivity,
+                        doctorUid,
+                    ),
+                )
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                DoctorProfileScreen(
+                    state = state,
+                    onStartConsultation = { screen = AppScreen.DoctorConsultation },
+                    onBack = { screen = AppScreen.DoctorDirectory },
+                )
+            }
+
+            AppScreen.DoctorConsultation -> {
+                val viewModel: DoctorConsultationViewModel = viewModel(
+                    factory = DoctorConsultationViewModel.factory(
+                        container.messageRepository,
+                        container.authRepository,
+                        context as androidx.activity.ComponentActivity,
+                        doctorUid,
+                        currentDoctorName,
+                    ),
+                )
+                val state by viewModel.uiState.collectAsStateWithLifecycle()
+                DoctorConsultationScreen(
+                    state = state,
+                    onSend = { text -> viewModel.send(text) },
+                    onBack = { screen = AppScreen.DoctorDirectory },
                 )
             }
 
@@ -946,6 +1026,7 @@ private fun OmniApp() {
                     onSavedEmergencies = { screen = AppScreen.SavedEmergencies },
                     onDailyGoals = { screen = AppScreen.Goals },
                     onApplyForVerification = { screen = AppScreen.Verification },
+                    onOmniPlus = { screen = AppScreen.OmniPlus },
                     onPushNotificationsChange = { enabled ->
                         val uid = container.authRepository.currentUid ?: return@SettingScreen
                         scope.launch {
@@ -1522,4 +1603,12 @@ private enum class AppScreen {
     Profile,
     /** Email verification screen shown after signup until email is verified. */
     VerifyEmail,
+    /** Omni+ premium subscription paywall. */
+    OmniPlus,
+    /** Doctor directory for Omni+ subscribers. */
+    DoctorDirectory,
+    /** Doctor profile with consultation button. */
+    DoctorProfile,
+    /** Text-based doctor consultation chat. */
+    DoctorConsultation,
 }

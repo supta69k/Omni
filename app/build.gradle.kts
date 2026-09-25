@@ -60,6 +60,13 @@ android {
             "CLOUDINARY_UPLOAD_PRESET",
             (localProperties.getProperty("CLOUDINARY_UPLOAD_PRESET") ?: "").asBuildConfigString(),
         )
+        // RevenueCat public SDK key — not a secret (it's in the APK and safe to ship), but kept
+        // in local.properties so a second environment is a properties change, not a code change.
+        buildConfigField(
+            "String",
+            "REVENUECAT_API_KEY",
+            (localProperties.getProperty("REVENUECAT_API_KEY") ?: "").asBuildConfigString(),
+        )
     }
 
     buildTypes {
@@ -95,6 +102,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -128,6 +136,7 @@ dependencies {
     // OSRM routing calls. OkHttp is already on the classpath transitively through Coil (4.12.0);
     // declaring it directly so the routing repository does not depend on a transitive version.
     implementation(libs.okhttp)
+    implementation(libs.revenuecat)
     implementation(libs.exyte.navbar)
     testImplementation(libs.junit)
     // `runTest` and the virtual clock, for the ViewModel tests: the profile's state machine is a

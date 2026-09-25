@@ -1,5 +1,6 @@
 package com.example.omni.di
 
+import android.app.Application
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -7,10 +8,12 @@ import com.example.omni.data.local.PreferencesStore
 import com.example.omni.data.local.StepCounterSource
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.DeviceStepsRepository
+import com.example.omni.data.repo.DoctorRepository
 import com.example.omni.data.repo.EmergencyContactRepository
 import com.example.omni.data.repo.FirebaseAuthRepository
 import com.example.omni.data.repo.CloudinaryMediaRepository
 import com.example.omni.data.repo.FeedRepository
+import com.example.omni.data.repo.FirestoreDoctorRepository
 import com.example.omni.data.repo.FirestoreEmergencyContactRepository
 import com.example.omni.data.repo.FirestoreFeedRepository
 import com.example.omni.data.repo.FirestoreGuideProgressRepository
@@ -60,6 +63,9 @@ import com.example.omni.data.repo.SosRepository
 import com.example.omni.data.repo.StepsRepository
 import com.example.omni.data.repo.UserRepository
 import com.example.omni.data.repo.VerificationRepository
+import com.example.omni.data.revenuecat.PreviewRevenueCatRepository
+import com.example.omni.data.revenuecat.RevenueCatManager
+import com.example.omni.data.revenuecat.RevenueCatRepository
 import com.example.omni.ui.SessionViewModel
 import com.example.omni.ui.auth.SignInViewModel
 import com.example.omni.ui.auth.SignUpViewModel
@@ -78,6 +84,10 @@ import com.example.omni.ui.settings.SecurityViewModel
 import com.example.omni.ui.settings.VerificationViewModel
 import com.example.omni.ui.sleep.SleepViewModel
 import com.example.omni.ui.sos.SosViewModel
+import com.example.omni.ui.omniplus.DoctorConsultationViewModel
+import com.example.omni.ui.omniplus.DoctorDirectoryViewModel
+import com.example.omni.ui.omniplus.DoctorProfileViewModel
+import com.example.omni.ui.omniplus.OmniPlusViewModel
 import com.example.omni.BuildConfig
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -106,12 +116,14 @@ class AppContainer private constructor(
     val storyRepository: StoryRepository,
     val followRepository: FollowRepository,
     val verificationRepository: VerificationRepository,
+    val doctorRepository: DoctorRepository,
     private val hospitalRepositoryProvider: () -> HospitalRepository,
     private val sosRepositoryProvider: () -> SosRepository,
     private val locationRepositoryProvider: () -> LocationRepository,
     private val routingRepositoryProvider: () -> RoutingRepository,
     private val mediaRepositoryProvider: () -> MediaRepository,
     private val preferencesProvider: () -> PreferencesStore,
+    private val applicationProvider: () -> Application,
     private val stepsProvider: (AppContainer) -> StepsRepository,
 ) {
 
@@ -152,6 +164,19 @@ class AppContainer private constructor(
      */
     val hospitalRepository: HospitalRepository by lazy { hospitalRepositoryProvider() }
 
+    /**
+     * RevenueCat subscription state — lazy because it needs the Application context and must not
+     * be constructed in preview mode (where no Application exists). Initialized after
+     * [authRepository] so the Firebase UID is available for identity sync.
+     */
+    val revenueCatRepository: RevenueCatRepository by lazy {
+        RevenueCatManager(
+            application = applicationProvider(),
+            authRepository = authRepository,
+            apiKey = BuildConfig.REVENUECAT_API_KEY,
+        )
+    }
+
     companion object {
         @Volatile
         private var instance: AppContainer? = null
@@ -180,6 +205,7 @@ class AppContainer private constructor(
                 storyRepository = FirestoreStoryRepository(firestore),
                 followRepository = FirestoreFollowRepository(firestore),
                 verificationRepository = FirestoreVerificationRepository(firestore),
+                doctorRepository = FirestoreDoctorRepository(firestore),
                 hospitalRepositoryProvider = { FirestoreHospitalRepository(firestore) },
                 sosRepositoryProvider = { FirestoreSosRepository(firestore) },
                 locationRepositoryProvider = { LocationRepository(appContext) },
@@ -197,6 +223,7 @@ class AppContainer private constructor(
                     )
                 },
                 preferencesProvider = { PreferencesStore(appContext) },
+                applicationProvider = { appContext.applicationContext as Application },
                 stepsProvider = { container ->
                     DeviceStepsRepository(
                         source = StepCounterSource(appContext),
@@ -223,6 +250,7 @@ class AppContainer private constructor(
                 storyRepository = FirestoreStoryRepository(FirebaseFirestore.getInstance()),
                 followRepository = FirestoreFollowRepository(FirebaseFirestore.getInstance()),
                 verificationRepository = PreviewVerificationRepository(),
+                doctorRepository = FirestoreDoctorRepository(FirebaseFirestore.getInstance()),
                 // The directory is Firestore-backed with no fake, deliberately: a preview showing the
                 // design's own two hospitals comes from SosScreen's defaults, not from here. Behind a
                 // provider so no preview ever reaches Firebase to find that out.
@@ -234,6 +262,7 @@ class AppContainer private constructor(
                 routingRepositoryProvider = { PreviewRoutingRepository() },
                 mediaRepositoryProvider = { throw NotImplementedError("Uploads are not available in previews") },
                 preferencesProvider = { throw NotImplementedError("DataStore is not available in previews") },
+                applicationProvider = { throw NotImplementedError("Application is not available in previews") },
                 stepsProvider = { PreviewStepsRepository() },
             )
         }
@@ -352,6 +381,18 @@ class AppContainer private constructor(
                         current.authRepository,
                         current.sleepRepository,
                     ) as T
+                OmniPlusViewModel::class.java ->
+                    OmniPlusViewModel(
+                        current.revenueCatRepository,
+                    ) as T
+                DoctorDirectoryViewModel::class.java ->
+                    DoctorDirectoryViewModel(
+                        current.doctorRepository,
+                    ) as T
+                DoctorProfileViewModel::class.java ->
+                    throw IllegalStateException("Use DoctorProfileViewModel.factory() instead")
+                DoctorConsultationViewModel::class.java ->
+                    throw IllegalStateException("Use DoctorConsultationViewModel.factory() instead")
                 else -> throw IllegalArgumentException("No factory for ${modelClass.name} — add it here")
             }
         }
