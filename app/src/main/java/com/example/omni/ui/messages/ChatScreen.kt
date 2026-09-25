@@ -72,6 +72,14 @@ import com.example.omni.ui.motion.OmniMotion.pressEffect
  * The column scrolls rather than lazily recycling, which is safe because the thread is capped at
  * [com.example.omni.data.model.MessagePageSize] messages by the query that feeds it — there is no
  * unbounded list here to be lazy about.
+ *
+ * ## Reused by Omni+
+ *
+ * The doctor consultation is this screen, not a second chat design: `DoctorConsultationScreen` maps its
+ * own state onto [OpenChatState] and calls straight through. The three optional strings below are the
+ * entire difference between the two — a subtitle line under the name, the back arrow's label, and the
+ * empty-thread sentence. Everything a message *looks* like stays in one place, so the two threads cannot
+ * drift apart.
  */
 @Composable
 fun ChatScreen(
@@ -79,6 +87,14 @@ fun ChatScreen(
     onBack: () -> Unit = {},
     onDraftChange: (String) -> Unit = {},
     onSend: () -> Unit = {},
+    /** A second line under the name — the consultation says what kind of thread this is. */
+    subtitle: String? = null,
+    /** Where the back arrow goes, for a screen reader. */
+    backContentDescription: String = "Back to messages",
+    /** What an empty thread says. The wording is the only thing a consultation changes about it. */
+    emptyMessage: String = "Say hello. Describe what's wrong in your own words — this thread is " +
+        "only between the two of you.",
+    modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
 
@@ -133,7 +149,7 @@ fun ChatScreen(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_set_arrow_right),
-                        contentDescription = "Back to messages",
+                        contentDescription = backContentDescription,
                         modifier = Modifier
                             .size(24.dp)
                             .scale(scaleX = -1f, scaleY = 1f),
@@ -146,14 +162,25 @@ fun ChatScreen(
                     size = HeaderAvatarSize,
                 )
 
-                Text(
-                    text = state.otherName,
-                    style = HomeType.SectionTitle,
-                    color = OmniCardInk,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = state.otherName,
+                        style = HomeType.SectionTitle,
+                        color = OmniCardInk,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = FeedType.Meta12,
+                            color = OmniFeedTimestamp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(ThreadTop))
@@ -173,8 +200,7 @@ fun ChatScreen(
                 if (state.messages.isEmpty()) {
                     item(key = EmptyThreadKey) {
                         Text(
-                            text = "Say hello. Describe what's wrong in your own words — this thread is " +
-                                "only between the two of you.",
+                            text = emptyMessage,
                             style = HomeType.CardFootnoteWrapped,
                             color = OmniSetRowSubtitle,
                         )

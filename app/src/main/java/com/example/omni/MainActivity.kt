@@ -522,10 +522,8 @@ private fun OmniApp() {
                         currentDoctorName,
                     ),
                 )
-                val state by viewModel.uiState.collectAsStateWithLifecycle()
                 DoctorConsultationScreen(
-                    state = state,
-                    onSend = { text -> viewModel.send(text) },
+                    viewModel = viewModel,
                     onBack = { screen = AppScreen.DoctorDirectory },
                 )
             }

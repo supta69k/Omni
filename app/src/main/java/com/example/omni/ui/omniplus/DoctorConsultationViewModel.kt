@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class DoctorConsultationUiState(
+    val selfUid: String = "",
     val conversationId: String? = null,
     val messages: List<Message> = emptyList(),
     val otherName: String = "",
@@ -43,6 +44,7 @@ class DoctorConsultationViewModel(
             myUid = authRepository.currentUid ?: return@launch
             val conversationId = "consultation_${myUid}_${doctorUid ?: "unknown"}"
             _uiState.value = _uiState.value.copy(
+                selfUid = myUid ?: "",
                 conversationId = conversationId,
                 isLoading = false,
             )

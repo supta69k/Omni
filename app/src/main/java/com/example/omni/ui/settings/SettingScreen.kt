@@ -53,6 +53,8 @@ import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniBackground
+import com.example.omni.ui.theme.HomeType
+import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniSetCardBody
@@ -674,87 +676,94 @@ private fun HealthcareCard(onApply: () -> Unit) {
     }
 }
 
-/** "Omni+ Premium" card — entry point to the subscription and doctor directory. */
+/**
+ * "Omni+" — the entry point to the subscription and the doctor directory.
+ *
+ * **This card is not in Figma** (§6 rule 11), so it is assembled from the parts the page it sits on
+ * already owns: [HealthcareCard]'s #F5F5F5 tray at radius 13, that card's own 24dp `ic_set_doctor`
+ * glyph, the settings row's two-line [SettingsType] pair, and the chevron every other row on this page
+ * ends with. The accent is [OmniSetApply] — the same #B184E1 the "Apply for Verification" pill uses —
+ * so "premium" reads in the palette the page already has rather than in a colour imported for it.
+ *
+ * It is a 74dp row rather than a 225dp panel because it is a *link*, not a pitch: the pitch is the
+ * paywall this opens.
+ */
 @Composable
 private fun OmniPlusCard(onClick: () -> Unit) {
-    val premiumPurple = Color(0xFF8B5CF6)
-    val gradientBackground = Color(0xFF1A1A2E)
-
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = PagePadding, end = PagePadding)
-            .height(120.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(gradientBackground)
             .pressEffect()
-            .clickable(onClick = onClick),
+            .clip(RoundedCornerShape(13.dp))
+            .background(OmniSetCardSurface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(OmniSetApply.copy(alpha = OmniPlusGlyphWash)),
+            contentAlignment = Alignment.Center,
         ) {
-            Column {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            Image(
+                painter = painterResource(R.drawable.ic_set_doctor),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Omni+",
+                    style = SettingsType.RowTitle,
+                    color = OmniSetRowTitle,
+                    maxLines = 1,
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(OmniSetApply)
+                        .padding(horizontal = 7.dp, vertical = 1.dp),
                 ) {
                     Text(
-                        text = "Omni+",
-                        style = TextStyle(
-                            fontFamily = FontFamily.SansSerif,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp,
-                        ),
-                        color = premiumPurple,
+                        text = "PREMIUM",
+                        style = SettingsType.GroupLabel,
+                        color = OmniOnInk,
+                        maxLines = 1,
+                        softWrap = false,
                     )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(premiumPurple.copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = "PREMIUM",
-                            style = TextStyle(
-                                fontFamily = FontFamily.SansSerif,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 9.sp,
-                            ),
-                            color = premiumPurple,
-                        )
-                    }
                 }
-                Text(
-                    text = "Doctor consultations & more",
-                    style = TextStyle(
-                        fontFamily = FontFamily.SansSerif,
-                        fontSize = 13.sp,
-                    ),
-                    color = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp),
-                )
             }
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(premiumPurple),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = "Open Omni+",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+
+            Spacer(Modifier.height(2.dp))
+
+            Text(
+                text = "Verified doctor consultations and more",
+                style = SettingsType.RowSubtitle,
+                color = OmniSetRowSubtitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+
+        Image(
+            painter = painterResource(R.drawable.ic_set_arrow_right),
+            contentDescription = "Open Omni+",
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
+
+/** How much of [OmniSetApply] the glyph circle keeps — the wash the paywall's benefit rows use. */
+private const val OmniPlusGlyphWash = 0.12f
 
 /** "Log Out" — Figma node 163:54, a 383 x 46 dark button at radius 8. */
 @Composable

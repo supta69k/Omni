@@ -1,5 +1,6 @@
 package com.example.omni.ui.omniplus
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,147 +14,195 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.example.omni.R
 import com.example.omni.data.model.Doctor
-import com.example.omni.ui.DevicePreviews
-import com.example.omni.ui.theme.OmniInk
+import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.DesignFrameWidth
+import com.example.omni.ui.theme.FeedType
+import com.example.omni.ui.theme.HomeType
+import com.example.omni.ui.theme.OmniBackground
+import com.example.omni.ui.theme.OmniCardInk
+import com.example.omni.ui.theme.OmniFeedHint
+import com.example.omni.ui.theme.OmniFeedSurface
+import com.example.omni.ui.theme.OmniFeedTimestamp
 import com.example.omni.ui.theme.OmniLavender
-import com.example.omni.ui.theme.OmniTheme
+import com.example.omni.ui.theme.OmniOnInk
+import com.example.omni.ui.theme.OmniSetApply
+import com.example.omni.ui.theme.OmniSetRowTitle
+import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion.pressEffect
 
-private val PremiumPurple = Color(0xFF8B5CF6)
-
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Doctor directory — Omni+'s doctor browsing screen.
+ *
+ * Matches Omni's existing card idiom (`ConversationRow` geometry): the same radius, avatar treatment,
+ * row padding, text styles, and chevron. No Material3 `Scaffold`, `TopAppBar`, `Card`, `FilterChip`,
+ * or `CircularProgressIndicator`. No emoji. `OmniLavender` (Omni's own colour for avatar fallbacks
+ * throughout the app) for the initials circle.
+ *
+ * Specialty filter chips follow Omni's segment-pill idiom: `OmniSetApply` selected,
+ * `OmniFeedSurface` unselected, `SettingsType.GroupLabel` text.
+ *
+ * No `DesignFrame` at the root — it is inside the content column to avoid nesting frames.
+ */
 @Composable
 fun DoctorDirectoryScreen(
     state: DoctorDirectoryUiState,
     onDoctorClick: (String) -> Unit,
     onBack: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "🩺 Doctor Directory",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White,
-                    titleContentColor = OmniInk,
-                ),
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+    DesignFrame {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            // Specialty filter chips
-            if (state.specialties.isNotEmpty()) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(vertical = 8.dp),
-                ) {
-                    item {
-                        FilterChip(
-                            selected = state.selectedSpecialty == null,
-                            onClick = { /* selectSpecialty(null) */ },
-                            label = { Text("All") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PremiumPurple,
-                                selectedLabelColor = Color.White,
-                            ),
-                        )
-                    }
-                    items(state.specialties) { specialty ->
-                        FilterChip(
-                            selected = state.selectedSpecialty == specialty,
-                            onClick = { /* selectSpecialty(specialty) */ },
-                            label = { Text(specialty) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PremiumPurple,
-                                selectedLabelColor = Color.White,
-                            ),
-                        )
-                    }
-                }
-            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .widthIn(max = DesignFrameWidth)
+                    .background(OmniBackground)
+                    .statusBarsPadding(),
+            ) {
+                Spacer(Modifier.height(HeaderTopGap))
 
-            if (state.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                // Back row — same as every other Omni sub-page
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = PagePadding),
+                    horizontalArrangement = Arrangement.spacedBy(BackRowGap, Alignment.Start),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    CircularProgressIndicator(color = PremiumPurple)
-                }
-            } else if (state.doctors.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🩺", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "No doctors available yet",
-                            color = Color(0xFF6C6C6C),
-                            fontSize = 16.sp,
+                    Box(
+                        modifier = Modifier
+                            .size(BackButtonSize)
+                            .pressEffect()
+                            .clip(RoundedCornerShape(percent = 50))
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_set_arrow_right),
+                            contentDescription = "Back to Omni+",
+                            modifier = Modifier
+                                .size(24.dp)
+                                .scale(scaleX = -1f, scaleY = 1f),
                         )
                     }
+
+                    Text(
+                        text = "Doctor Directory",
+                        style = HomeType.SectionTitle,
+                        color = OmniCardInk,
+                        maxLines = 1,
+                    )
                 }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(state.doctors) { doctor ->
-                        DoctorCard(
-                            doctor = doctor,
-                            onClick = { onDoctorClick(doctor.uid) },
-                        )
+
+                Spacer(Modifier.height(ListTop))
+
+                // Specialty filter chips
+                if (state.specialties.isNotEmpty()) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = PagePadding),
+                        horizontalArrangement = Arrangement.spacedBy(ChipGap),
+                    ) {
+                        item {
+                            SpecialtyChip(
+                                label = "All",
+                                selected = state.selectedSpecialty == null,
+                                onClick = { /* TODO: wire to ViewModel */ },
+                            )
+                        }
+                        items(state.specialties) { specialty ->
+                            SpecialtyChip(
+                                label = specialty,
+                                selected = state.selectedSpecialty == specialty,
+                                onClick = { /* TODO: wire to ViewModel */ },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(ListTop))
+                }
+
+                // Filtered list
+                val visible = if (state.selectedSpecialty != null) {
+                    state.doctors.filter { it.specialty == state.selectedSpecialty }
+                } else {
+                    state.doctors
+                }
+
+                when {
+                    state.isLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Loading doctors…",
+                                style = SettingsType.RowSubtitle,
+                                color = OmniFeedHint,
+                            )
+                        }
+                    }
+                    visible.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_set_doctor),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    alpha = 0.4f,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = "No doctors available yet",
+                                    style = SettingsType.RowSubtitle,
+                                    color = OmniFeedHint,
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(
+                                start = PagePadding,
+                                end = PagePadding,
+                                bottom = ContentBottomGap,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(RowGap),
+                        ) {
+                            items(visible) { doctor ->
+                                DoctorCard(
+                                    doctor = doctor,
+                                    onClick = { onDoctorClick(doctor.uid) },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -161,179 +210,178 @@ fun DoctorDirectoryScreen(
     }
 }
 
+/**
+ * One doctor row — matches Omni's `ConversationRow` geometry (radius 8, avatar gap 12,
+ * row padding 14/12, `SettingsType.RowTitle`/`RowSubtitle`, chevron).
+ */
 @Composable
 private fun DoctorCard(
     doctor: Doctor,
     onClick: () -> Unit,
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            .pressEffect()
+            .clip(RoundedCornerShape(RowCorner))
+            .background(OmniFeedSurface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = RowPaddingH, vertical = RowPaddingV),
+        horizontalArrangement = Arrangement.spacedBy(AvatarGap, Alignment.Start),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        // Avatar — same treatment as MessagesScreen's Avatar
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .size(AvatarSize)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(OmniLavender.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center,
         ) {
-            // Avatar
             if (doctor.photoUrl != null) {
                 AsyncImage(
                     model = doctor.photoUrl,
                     contentDescription = doctor.name,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape),
                     contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(OmniLavender.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = doctor.name.firstOrNull()?.uppercase() ?: "?",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = OmniLavender,
+                Text(
+                    text = doctor.name.take(1).uppercase(),
+                    style = FeedType.AuthorName,
+                    color = OmniFeedTimestamp,
+                    maxLines = 1,
+                )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "Dr. ${doctor.name}",
+                    style = SettingsType.RowTitle,
+                    color = OmniSetRowTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (doctor.verified) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_feed_badge_check),
+                        contentDescription = "Verified",
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(Modifier.height(2.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Dr. ${doctor.name}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = OmniInk,
-                    )
-                    if (doctor.verified) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("✓", color = Color(0xFF16A34A), fontSize = 14.sp)
-                    }
-                }
+            Text(
+                text = doctor.specialty,
+                style = SettingsType.RowSubtitle,
+                color = OmniSetApply,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
 
-                Text(
-                    text = doctor.specialty,
-                    fontSize = 14.sp,
-                    color = PremiumPurple,
-                    fontWeight = FontWeight.Medium,
-                )
-
-                if (doctor.rating > 0) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 4.dp),
-                    ) {
-                        Text("⭐", fontSize = 12.sp)
-                        Spacer(modifier = Modifier.width(4.dp))
+            if (doctor.rating > 0 || doctor.consultationFee.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (doctor.rating > 0) {
                         Text(
-                            text = "${doctor.rating} (${doctor.reviewCount})",
-                            fontSize = 12.sp,
-                            color = Color(0xFF6C6C6C),
+                            text = "★ ${doctor.rating} (${doctor.reviewCount})",
+                            style = FeedType.Meta12,
+                            color = OmniFeedTimestamp,
+                            maxLines = 1,
+                        )
+                    }
+                    if (doctor.consultationFee.isNotBlank()) {
+                        Text(
+                            text = doctor.consultationFee,
+                            style = FeedType.Meta12,
+                            color = OmniFeedHint,
+                            maxLines = 1,
                         )
                     }
                 }
-
-                if (doctor.consultationFee.isNotBlank()) {
-                    Text(
-                        text = doctor.consultationFee,
-                        fontSize = 13.sp,
-                        color = Color(0xFF6C6C6C),
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
             }
-
-            Icon(
-                Icons.AutoMirrored.Filled.Chat,
-                contentDescription = "Consult",
-                tint = PremiumPurple,
-                modifier = Modifier.size(24.dp),
-            )
         }
-    }
-}
 
-// ---- Previews -----------------------------------------------------------------------------------
-
-private val PreviewDoctors = listOf(
-    Doctor(
-        uid = "dr_1",
-        name = "Ayesha Rahman",
-        specialty = "Cardiology",
-        bio = "Consultant cardiologist with a focus on preventive heart care and hypertension management.",
-        yearsExperience = 12,
-        rating = 4.9f,
-        reviewCount = 214,
-        languages = listOf("English", "Bangla"),
-        consultationFee = "৳500 / consultation",
-    ),
-    Doctor(
-        uid = "dr_2",
-        name = "Tanvir Hasan",
-        specialty = "Dermatology",
-        bio = "Skin, hair and nail health, from acne care to minor procedures.",
-        yearsExperience = 8,
-        rating = 4.7f,
-        reviewCount = 158,
-        languages = listOf("English", "Bangla"),
-        consultationFee = "৳400 / consultation",
-    ),
-    Doctor(
-        uid = "dr_3",
-        name = "Nusrat Jahan",
-        specialty = "Nutrition",
-        bio = "Clinical dietitian helping people build sustainable eating habits.",
-        yearsExperience = 6,
-        rating = 4.8f,
-        reviewCount = 96,
-        languages = listOf("English"),
-        consultationFee = "৳350 / consultation",
-        available = false,
-    ),
-)
-
-private val PreviewDirectoryState = DoctorDirectoryUiState(
-    doctors = PreviewDoctors,
-    isLoading = false,
-    specialties = PreviewDoctors.map { it.specialty }.distinct().sorted(),
-)
-
-@DevicePreviews
-@Composable
-private fun DoctorDirectoryPreview() {
-    OmniTheme {
-        DoctorDirectoryScreen(state = PreviewDirectoryState, onDoctorClick = {}, onBack = {})
-    }
-}
-
-@DevicePreviews
-@Composable
-private fun DoctorDirectoryLoadingPreview() {
-    OmniTheme {
-        DoctorDirectoryScreen(state = DoctorDirectoryUiState(), onDoctorClick = {}, onBack = {})
-    }
-}
-
-@DevicePreviews
-@Composable
-private fun DoctorDirectoryEmptyPreview() {
-    OmniTheme {
-        DoctorDirectoryScreen(
-            state = DoctorDirectoryUiState(isLoading = false),
-            onDoctorClick = {},
-            onBack = {},
+        // Chevron
+        Image(
+            painter = painterResource(R.drawable.ic_set_arrow_right),
+            contentDescription = "View profile",
+            modifier = Modifier.size(ChevronSize),
+            alpha = 0.4f,
         )
     }
 }
+
+/**
+ * Specialty filter chip — follows Omni's segment pill idiom.
+ * Selected: `OmniSetApply` background; unselected: `OmniFeedSurface`.
+ */
+@Composable
+private fun SpecialtyChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .pressEffect()
+            .clip(RoundedCornerShape(ChipRadius))
+            .background(if (selected) OmniSetApply else OmniFeedSurface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = ChipPaddingH, vertical = ChipPaddingV),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = SettingsType.GroupLabel,
+            color = if (selected) OmniOnInk else OmniCardInk,
+            maxLines = 1,
+        )
+    }
+}
+
+// ---- Geometry ----------------------------------------------------------------------------------
+//
+// Borrowed from MessagesScreen's ConversationRow + FeedScreen's segment pill:
+//   PagePadding       16.dp  — gutter
+//   HeaderTopGap      12.dp  — same as every sub-page
+//   BackButtonSize    40.dp  — back row circle
+//   BackRowGap        10.dp  — back row spacing
+//   ListTop           20.dp  — space below back row before content
+//   RowCorner         8.dp   — ConversationRow card radius
+//   RowPaddingH       14.dp  — card horizontal padding
+//   RowPaddingV       12.dp  — card vertical padding
+//   AvatarSize        44.dp  — MessagesScreen AvatarSize
+//   AvatarGap         12.dp  — avatar to text gap
+//   ChevronSize       20.dp  — icon size
+//   RowGap            10.dp  — between cards
+
+private val PagePadding = 16.dp
+private val HeaderTopGap = 12.dp
+private val BackButtonSize = 40.dp
+private val BackRowGap = 10.dp
+private val ListTop = 20.dp
+private val RowCorner = 8.dp
+private val RowPaddingH = 14.dp
+private val RowPaddingV = 12.dp
+private val AvatarSize = 44.dp
+private val AvatarGap = 12.dp
+private val ChevronSize = 20.dp
+private val RowGap = 10.dp
+private val ContentBottomGap = 24.dp
+
+private val ChipGap = 8.dp
+private val ChipRadius = 19.dp
+private val ChipPaddingH = 14.dp
+private val ChipPaddingV = 8.dp
