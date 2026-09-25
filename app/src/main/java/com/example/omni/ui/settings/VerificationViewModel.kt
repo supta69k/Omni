@@ -39,6 +39,7 @@ data class VerificationUiState(
     val request: VerificationRequest? = null,
     val profession: Profession? = null,
     val licenseNumber: String = "",
+    val specialty: String = "",
     val submitting: Boolean = false,
     val error: String? = null,
 ) {
@@ -56,7 +57,10 @@ data class VerificationUiState(
 
     val canSubmit: Boolean
         get() = editable && !submitting && profession != null &&
-            licenseNumber.trim().length >= MinLicenceLength
+            licenseNumber.trim().length >= MinLicenceLength &&
+            // Only a doctor application needs one: it is what the Omni+ directory lists. A
+            // nutritionist's application has no directory tile to fill.
+            (profession != Profession.DOCTOR || specialty.trim().length >= MinSpecialtyLength)
 
     companion object {
         /**
@@ -68,6 +72,12 @@ data class VerificationUiState(
 
         /** Enough for the longest registration format; the field is one line and does not scroll. */
         const val MaxLicenceLength = 40
+
+        /** "Eye" would technically clear a validator; a directory line needs two characters. */
+        const val MinSpecialtyLength = 3
+
+        /** The specialty line's cap, matching the licence field's one-line budget. */
+        const val MaxSpecialtyLength = 40
     }
 }
 
@@ -145,6 +155,7 @@ class VerificationViewModel(
                 request = request,
                 profession = draft?.profession ?: request?.profession,
                 licenseNumber = draft?.licenseNumber ?: request?.licenseNumber.orEmpty(),
+                specialty = draft?.specialty ?: request?.specialty.orEmpty(),
                 submitting = busy,
                 error = failure,
             )
@@ -162,6 +173,13 @@ class VerificationViewModel(
     fun onLicenseNumberChange(value: String) {
         draft.value = current().copy(
             licenseNumber = value.take(VerificationUiState.MaxLicenceLength),
+        )
+        error.value = null
+    }
+
+    fun onSpecialtyChange(value: String) {
+        draft.value = current().copy(
+            specialty = value.take(VerificationUiState.MaxSpecialtyLength),
         )
         error.value = null
     }
@@ -195,6 +213,7 @@ class VerificationViewModel(
                     name = latestName.ifBlank { state.request?.name.orEmpty() },
                     profession = profession,
                     licenseNumber = state.licenseNumber.trim(),
+                    specialty = state.specialty.trim(),
                 )
                 draft.value = null
             } catch (cause: Exception) {
@@ -211,12 +230,14 @@ class VerificationViewModel(
     private fun current(): Draft = draft.value ?: Draft(
         profession = uiState.value.profession,
         licenseNumber = uiState.value.licenseNumber,
+        specialty = uiState.value.specialty,
     )
 
-    /** The form's two editable values, together — see [draft] for why they are not read-through. */
+    /** The form's editable values, together — see [draft] for why they are not read-through. */
     private data class Draft(
         val profession: Profession? = null,
         val licenseNumber: String = "",
+        val specialty: String = "",
     )
 
     private companion object {

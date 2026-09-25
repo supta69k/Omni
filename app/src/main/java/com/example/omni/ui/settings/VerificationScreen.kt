@@ -91,6 +91,7 @@ fun VerificationScreen(
     onBack: () -> Unit = {},
     onProfessionChange: (Profession) -> Unit = {},
     onLicenseNumberChange: (String) -> Unit = {},
+    onSpecialtyChange: (String) -> Unit = {},
     onSubmit: () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
@@ -177,6 +178,7 @@ fun VerificationScreen(
                     state = state,
                     onProfessionChange = onProfessionChange,
                     onLicenseNumberChange = onLicenseNumberChange,
+                    onSpecialtyChange = onSpecialtyChange,
                     onSubmit = onSubmit,
                 )
             }
@@ -199,6 +201,7 @@ private fun ApplicationForm(
     state: VerificationUiState,
     onProfessionChange: (Profession) -> Unit,
     onLicenseNumberChange: (String) -> Unit,
+    onSpecialtyChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
     val rejection = state.request?.takeIf { it.status == VerificationStatus.REJECTED }
@@ -244,6 +247,13 @@ private fun ApplicationForm(
             style = HomeType.CardFootnoteWrapped,
             color = OmniSetRowSubtitle,
         )
+
+        if (state.profession == Profession.DOCTOR) {
+            SpecialtyField(
+                value = state.specialty,
+                onValueChange = onSpecialtyChange,
+            )
+        }
 
         if (state.error != null) {
             Text(
@@ -327,6 +337,59 @@ private fun LicenceField(
                         if (value.isEmpty()) {
                             Text(
                                 text = "e.g. BMDC-A-12345",
+                                style = FeedType.PostBody,
+                                color = OmniPlaceholder,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                        inner()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/**
+ * The specialty a doctor application is listed under in the Omni+ directory — the same labelled
+ * field, normal capitalisation (specialties are written "Cardiology", not "CARDIOLOGY").
+ */
+@Composable
+private fun SpecialtyField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(LabelGap)) {
+        Text(
+            text = "Your specialty",
+            style = SettingsType.GroupLabel,
+            color = OmniSetGroupLabel,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(FieldHeight)
+                .clip(RoundedCornerShape(FieldCorner))
+                .background(OmniFieldSurface)
+                .padding(horizontal = FieldPadding),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = FeedType.PostBody.copy(color = OmniInk),
+                cursorBrush = SolidColor(OmniInk),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = "e.g. Cardiology",
                                 style = FeedType.PostBody,
                                 color = OmniPlaceholder,
                                 maxLines = 1,
@@ -481,6 +544,7 @@ private fun VerificationScreenFilledPreview() {
                 loading = false,
                 profession = Profession.DOCTOR,
                 licenseNumber = "BMDC-A-84120",
+                specialty = "Cardiology",
             ),
         )
     }
@@ -498,6 +562,7 @@ private fun VerificationScreenPendingPreview() {
                     name = "Dr.Ben",
                     profession = Profession.DOCTOR,
                     licenseNumber = "BMDC-A-84120",
+                specialty = "Cardiology",
                     status = VerificationStatus.PENDING,
                     submittedAt = System.currentTimeMillis() - 3_600_000,
                 ),

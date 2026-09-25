@@ -101,6 +101,7 @@ import com.example.omni.ui.sos.SosScreen
 import com.example.omni.ui.sos.SosViewModel
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.service.OmniMessagingService
+import com.example.omni.service.OmniTrackingService
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -517,6 +518,7 @@ private fun OmniApp() {
                     factory = DoctorConsultationViewModel.factory(
                         container.messageRepository,
                         container.authRepository,
+                        container.userRepository,
                         context as androidx.activity.ComponentActivity,
                         doctorUid,
                         currentDoctorName,
@@ -1168,6 +1170,7 @@ private fun OmniApp() {
                     onBack = { screen = AppScreen.Setting },
                     onProfessionChange = verification::onProfessionChange,
                     onLicenseNumberChange = verification::onLicenseNumberChange,
+                    onSpecialtyChange = verification::onSpecialtyChange,
                     onSubmit = verification::submit,
                 )
             }
@@ -1328,6 +1331,7 @@ private fun rememberStepPermission(): StepPermission {
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         granted = it
+        if (it) OmniTrackingService.start(context)
     }
 
     // A grant made on the system settings screen never comes back through the launcher, so the answer is
@@ -1335,6 +1339,7 @@ private fun rememberStepPermission(): StepPermission {
     // effect — Android restarts the process on a revoke, but a re-read costs nothing and is honest.
     LifecycleResumeEffect(Unit) {
         granted = hasStepPermission(context)
+        if (granted) OmniTrackingService.start(context)
         onPauseOrDispose { }
     }
 

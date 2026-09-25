@@ -1,5 +1,6 @@
 package com.example.omni.ui.omniplus
 
+import android.util.Log
 import androidx.lifecycle.AbstractSavedStateViewModelFactory
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -8,6 +9,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import com.example.omni.data.model.Message
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.MessageRepository
+import com.example.omni.data.repo.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +29,7 @@ data class DoctorConsultationUiState(
 class DoctorConsultationViewModel(
     private val messageRepository: MessageRepository,
     private val authRepository: AuthRepository,
+    private val userRepository: UserRepository,
     private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -41,10 +44,39 @@ class DoctorConsultationViewModel(
 
     init {
         viewModelScope.launch {
-            myUid = authRepository.currentUid ?: return@launch
-            val conversationId = "consultation_${myUid}_${doctorUid ?: "unknown"}"
+            val uid = authRepository.currentUid ?: return@launch
+            myUid = uid
+            val doctorUidValue = doctorUid
+            val doctorDisplayName = doctorName ?: "Doctor"
+
+            // The thread's identity has to exist before anything reads it. Every read rule on a
+            // conversation keys on `participants`, and the backend's message handler merges only
+            // summary fields — so a consultation opened without this write is a thread neither side
+            // can read, and the doctor's Patients list (participants array-contains) never sees it.
+            // [MessageRepository.openConversation] is idempotent: the id is derived from the two
+            // uids and the write is a merge of the identity fields only.
+            val self = runCatching { userRepository.getUser(uid) }.getOrNull()
+            try {
+                messageRepository.openConversation(
+                    selfUid = uid,
+                    selfName = self?.name.orEmpty().ifBlank { "Omni member" },
+                    selfPhotoUrl = self?.photoUrl,
+                    otherUid = doctorUidValue ?: "unknown",
+                    otherName = doctorDisplayName,
+                    otherPhotoUrl = null,
+                )
+            } catch (cause: Exception) {
+                // Offline still succeeds — Firestore queues the write. A rules rejection here would
+                // mean the thread cannot exist at all, so the page says so instead of rendering a
+                // message box whose writes have nowhere to go.
+                Log.w(TAG, "Opening the consultation thread failed", cause)
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                return@launch
+            }
+
+            val conversationId = "consultation_${uid}_${doctorUidValue ?: "unknown"}"
             _uiState.value = _uiState.value.copy(
-                selfUid = myUid ?: "",
+                selfUid = uid,
                 conversationId = conversationId,
                 isLoading = false,
             )
@@ -82,9 +114,12 @@ class DoctorConsultationViewModel(
     }
 
     companion object {
+        private const val TAG = "OmniConsult"
+
         fun factory(
             messageRepository: MessageRepository,
             authRepository: AuthRepository,
+            userRepository: UserRepository,
             owner: SavedStateRegistryOwner,
             defaultDoctorUid: String?,
             defaultDoctorName: String?,
@@ -97,7 +132,7 @@ class DoctorConsultationViewModel(
             ): T {
                 handle["doctorUid"] = defaultDoctorUid
                 handle["doctorName"] = defaultDoctorName
-                return DoctorConsultationViewModel(messageRepository, authRepository, handle) as T
+                return DoctorConsultationViewModel(messageRepository, authRepository, userRepository, handle) as T
             }
         }
     }

@@ -8,6 +8,7 @@ import com.example.omni.data.model.MaxMessageLength
 import com.example.omni.data.model.Message
 import com.example.omni.data.model.Profession
 import com.example.omni.data.model.User
+import com.example.omni.data.model.UserRole
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.MessageRepository
@@ -84,6 +85,8 @@ data class MessagesUiState(
     val pickerOpen: Boolean = false,
     val loading: Boolean = true,
     val open: OpenChatState? = null,
+    val isDoctor: Boolean = false,
+    val patients: List<Conversation> = emptyList(),
 )
 
 /**
@@ -296,6 +299,40 @@ class MessagesViewModel(
         }
     }
 
+    /**
+     * Whether the signed-in account is a **verified doctor** — the gate for the Patients tab.
+     *
+     * Verified-professional role plus the DOCTOR discipline: a nutritionist who clears review is a
+     * professional without consultation threads, and the patients list would always be empty for
+     * them. One `users/{uid}` listener, alive while Messages is — the profile is the one document
+     * the app treats as cheap.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val isDoctor: Flow<Boolean> = uid.flatMapLatest { uid ->
+        if (uid == null) {
+            flowOf(false)
+        } else {
+            userRepository.observeUser(uid)
+                .map { it?.role == UserRole.PROFESSIONAL && it.profession == Profession.DOCTOR }
+                .catch { cause ->
+                    Log.w("Omni", "users/$uid could not be read for the Patients gate", cause)
+                    emit(false)
+                }
+        }
+    }
+
+    /**
+     * The doctor's half of Messages: the Omni+ consultation threads, most recent first.
+     *
+     * A consultation is the same document a social thread is — participants, denormalised names —
+     * with an id that begins `consultation_`, so the filter needs no extra field, query or index.
+     * It shares [enrichedConversations]' live-identity pass, so a patient who renames themselves
+     * shows under their new name here too.
+     */
+    private val patients: Flow<List<Conversation>> = combine(enrichedConversations, isDoctor) { list, doctor ->
+        if (doctor) list.filter { it.isConsultation } else emptyList()
+    }
+
     val uiState: StateFlow<MessagesUiState> =
         combine(enrichedConversations, people, professionals, picker, chat) {
                 conversations, people, professionals, picker, chat ->
@@ -307,6 +344,8 @@ class MessagesViewModel(
                 loading = false,
                 open = chat,
             )
+        }.combine(combine(isDoctor, patients) { isDoctor, patients -> isDoctor to patients }) { state, doctor ->
+            state.copy(isDoctor = doctor.first, patients = doctor.second)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ListenerGraceMillis),

@@ -23,7 +23,15 @@ data class Conversation(
     val lastMessageAt: Long = 0L,
     val lastSenderId: String = "",
     val unread: Int = 0,
-)
+) {
+
+    /**
+     * An Omni+ consultation thread rather than a social one. Consultation ids are built as
+     * `consultation_{patientUid}_{doctorUid}` (see `DoctorConsultationViewModel`), and no Firebase
+     * uid begins with that prefix, so the id alone is the marker — no extra field, no extra index.
+     */
+    val isConsultation: Boolean get() = id.startsWith("consultation_")
+}
 
 /** One message — `conversations/{conversationId}/messages/{messageId}`. Text or an image (or both). */
 data class Message(

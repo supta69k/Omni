@@ -21,6 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +53,7 @@ import com.example.omni.ui.theme.OmniFeedSurface
 import com.example.omni.ui.theme.OmniFeedTimestamp
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
+import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniSetCardSurface
 import com.example.omni.ui.theme.OmniSetGroupLabel
 import com.example.omni.ui.theme.OmniSetRowSubtitle
@@ -84,6 +89,11 @@ fun MessagesScreen(
     onStartWith: (ProfessionalRowState) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
+
+    // The Patients switch is the doctor's own view choice, not the data's — the data is live in
+    // both lists either way. Saveable, so a rotation lands back on the tab that was open.
+    var showingPatients by rememberSaveable { mutableStateOf(false) }
+    val onPatients = state.isDoctor && showingPatients
 
     DesignFrame {
         OmniTabScaffold(
@@ -150,6 +160,27 @@ fun MessagesScreen(
                     )
                 }
 
+                if (state.isDoctor) {
+                    Spacer(Modifier.height(PickerTop))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(SegmentGap),
+                    ) {
+                        SegmentPill(
+                            label = "Chats",
+                            selected = !showingPatients,
+                            onClick = { showingPatients = false },
+                            modifier = Modifier.weight(1f),
+                        )
+                        SegmentPill(
+                            label = "Patients",
+                            selected = showingPatients,
+                            onClick = { showingPatients = true },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
                 if (state.pickerOpen) {
                     Spacer(Modifier.height(PickerTop))
                     NewMessagePicker(
@@ -167,6 +198,25 @@ fun MessagesScreen(
                         style = SettingsType.RowSubtitle,
                         color = OmniFeedHint,
                     )
+
+                    onPatients -> when {
+                        state.patients.isEmpty() -> Text(
+                            text = "No patient conversations yet. When an Omni+ member starts a " +
+                                "consultation with you from the doctor directory, it appears here.",
+                            style = HomeType.CardFootnoteWrapped,
+                            color = OmniSetRowSubtitle,
+                        )
+
+                        else -> AdaptiveColumnGrid(
+                            items = state.patients,
+                            verticalSpacing = RowGap,
+                        ) { conversation ->
+                            ConversationRow(
+                                conversation = conversation,
+                                onClick = { onOpen(conversation) },
+                            )
+                        }
+                    }
 
                     state.conversations.isEmpty() -> Text(
                         text = "No conversations yet. Tap “New message” to write to someone you follow, " +
@@ -391,6 +441,36 @@ private fun PickerGroup(
 }
 
 /**
+ * The doctor's Chats / Patients switch — the verification form's segment pill, on this page's grey.
+ * Both tabs stay the same width so the switch reads as one control, not two buttons.
+ */
+@Composable
+private fun SegmentPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(PillHeight)
+            .pressEffect()
+            .clip(RoundedCornerShape(PillCorner))
+            .background(if (selected) OmniSetApply else OmniFeedSurface)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = SettingsType.RowAction,
+            color = if (selected) OmniOnInk else OmniSetRowTitle,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+/**
  * The feed post's avatar, at whatever size the caller needs.
  *
  * The initial on the feed's grey is the stand-in that cannot fail to load, which matters more here than
@@ -465,6 +545,10 @@ private val ChevronSize = 20.dp
 private val TitleGap = 2.dp
 private val UnreadPillHeight = 18.dp
 private val UnreadPillPadding = 7.dp
+
+private val PillHeight = 34.dp
+private val PillCorner = 17.dp
+private val SegmentGap = 10.dp
 
 /** Two digits is as wide as the pill goes before it starts pushing the name's column. */
 private const val MaxShownUnread = 99
@@ -544,4 +628,28 @@ private fun MessagesScreenPickerEmptyPreview() {
 @Composable
 private fun MessagesScreenEmptyPreview() {
     OmniTheme { MessagesScreen(state = MessagesUiState(loading = false)) }
+}
+
+/** A verified doctor's view: the Patients switch, with one consultation thread behind it. */
+@DevicePreviews
+@Composable
+private fun MessagesScreenDoctorPreview() {
+    OmniTheme {
+        MessagesScreen(
+            state = PreviewMessages.copy(
+                isDoctor = true,
+                patients = listOf(
+                    Conversation(
+                        id = "consultation_uid-ben_dr-rahman",
+                        otherUid = "uid-ben",
+                        otherName = "Ben Ahmed",
+                        lastMessage = "The tightness comes back when I climb stairs, doctor.",
+                        lastMessageAt = System.currentTimeMillis() - 26 * 60_000L,
+                        lastSenderId = "uid-ben",
+                        unread = 1,
+                    ),
+                ),
+            ),
+        )
+    }
 }

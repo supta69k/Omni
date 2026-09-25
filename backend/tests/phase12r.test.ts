@@ -101,6 +101,7 @@ describe('Phase 12R: Verification Endpoints', () => {
       db: mockDb as any,
       auth: mockAuth as any,
       fcm: mockFcm as any,
+      revenueCat: { grantDoctorEntitlement: vi.fn(async () => true) },
     });
   });
 

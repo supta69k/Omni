@@ -14,6 +14,7 @@ import { RestGeminiClient } from './gemini.js';
 import { createMealAnalyzeHandler } from './meal-analyze.js';
 import { FirestoreFcmService } from './fcm.js';
 import { createVerificationHandlers } from './verification.js';
+import { createRevenueCatService } from './revenuecat.js';
 import { createLikeHandler } from './like.js';
 import { createCommentHandler } from './comment.js';
 import { createMessageHandler } from './message.js';
@@ -101,7 +102,11 @@ const analyzeMealHandler = createMealAnalyzeHandler({
 
 // Phase 12R: FCM service and endpoint handlers
 const fcmService = new FirestoreFcmService(db, admin.messaging());
-const verificationHandlers = createVerificationHandlers({ db, auth, fcm: fcmService });
+const revenueCatService = createRevenueCatService({
+  secretApiKey: config.revenueCat.secretApiKey,
+  doctorCompDuration: config.revenueCat.doctorCompDuration,
+});
+const verificationHandlers = createVerificationHandlers({ db, auth, fcm: fcmService, revenueCat: revenueCatService });
 const likeHandler = createLikeHandler({ db, fcm: fcmService });
 const commentHandler = createCommentHandler({ db, fcm: fcmService });
 const messageHandler = createMessageHandler({ db, fcm: fcmService });

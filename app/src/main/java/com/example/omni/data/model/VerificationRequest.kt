@@ -25,6 +25,7 @@ data class VerificationRequest(
     val name: String,
     val profession: Profession,
     val licenseNumber: String,
+    val specialty: String = "",
     val status: VerificationStatus = VerificationStatus.PENDING,
     val submittedAt: Long = 0L,
     val reviewedAt: Long = 0L,
@@ -48,6 +49,7 @@ fun DocumentSnapshot.toVerificationRequest(): VerificationRequest? {
         name = getString("name").orEmpty(),
         profession = profession,
         licenseNumber = getString("licenseNumber").orEmpty(),
+        specialty = getString("specialty").orEmpty(),
         status = VerificationStatus.entries
             .firstOrNull { it.name.equals(getString("status"), ignoreCase = true) }
             ?: VerificationStatus.PENDING,

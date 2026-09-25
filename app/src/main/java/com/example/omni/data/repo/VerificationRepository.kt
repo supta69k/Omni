@@ -36,8 +36,17 @@ interface VerificationRepository {
      * an account has exactly one application and a reviewer never has to work out which of three is
      * current. The rules allow the overwrite only from a rejected application, so a pending one
      * cannot be edited out from under a reviewer who is reading it.
+     *
+     * [specialty] is what the Omni+ doctor directory lists under the name once a DOCTOR application
+     * is approved — the review transaction copies it onto `doctors/{uid}` verbatim.
      */
-    suspend fun submit(uid: String, name: String, profession: Profession, licenseNumber: String)
+    suspend fun submit(
+        uid: String,
+        name: String,
+        profession: Profession,
+        licenseNumber: String,
+        specialty: String = "",
+    )
 }
 
 class FirestoreVerificationRepository(
@@ -60,6 +69,7 @@ class FirestoreVerificationRepository(
         name: String,
         profession: Profession,
         licenseNumber: String,
+        specialty: String,
     ) {
         document(uid).set(
             mapOf(
@@ -67,6 +77,7 @@ class FirestoreVerificationRepository(
                 "name" to name,
                 "profession" to profession.name,
                 "licenseNumber" to licenseNumber,
+                "specialty" to specialty.trim(),
                 "status" to PendingStatus,
                 "submittedAt" to FieldValue.serverTimestamp(),
             ),
@@ -96,5 +107,6 @@ class PreviewVerificationRepository : VerificationRepository {
         name: String,
         profession: Profession,
         licenseNumber: String,
+        specialty: String,
     ) = Unit
 }
