@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Figma "check-check" feature icon — double check in OmniAuthHeading (#8D84F9) -->
+    <path
+        android:pathData="M2,13.2593L4.58579,15.9568C5.25245,16.6523 5.58579,17 6,17C6.41421,17 6.74755,16.6523 7.41421,15.9568L16,7"
+        android:strokeColor="#8D84F9"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M22,7L13,16.3889C12.7274,16.6733 12.5911,16.8155 12.444,16.8915C12.1642,17.0362 11.8358,17.0362 11.556,16.8915C11.409,16.8155 11.2726,16.6733 11,16.3889"
+        android:strokeColor="#8D84F9"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>

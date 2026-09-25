@@ -1,5 +1,6 @@
 package com.example.omni.ui.omniplus
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,49 +31,63 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.omni.R
 import com.example.omni.data.revenuecat.EntitlementIds
 import com.example.omni.data.revenuecat.RevenueCatState
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
-import com.example.omni.ui.theme.FeedType
-import com.example.omni.ui.theme.HomeType
-import com.example.omni.ui.theme.OmniAlertRed
+import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniCardInk
-import com.example.omni.ui.theme.OmniFeedHint
-import com.example.omni.ui.theme.OmniOnInk
+import com.example.omni.ui.theme.OmniInk
+import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniSetApply
-import com.example.omni.ui.theme.OmniSetCardBody
-import com.example.omni.ui.theme.OmniSetCardSurface
-import com.example.omni.ui.theme.OmniSetRowSubtitle
-import com.example.omni.ui.theme.OmniSetRowTitle
 import com.example.omni.ui.theme.OmniTheme
-import com.example.omni.ui.theme.SettingsType
-import com.example.omni.ui.motion.OmniMotion.pressEffect
+import com.example.omni.ui.theme.PlusJakartaSans
+
+// Design-specific values from Figma node 238-23 that have no Color.kt token yet. Everything that
+// does have a token (OmniCardInk #302E2E, OmniAuthHeading #8D84F9, OmniSetApply #B184E1) is used
+// directly; these five are the gradient's own stops and the card's surfaces, verbatim from the file.
+private val BadgeGradient = listOf(
+    Color(0xFF8D84F9),
+    Color(0xFFAE96EF),
+    Color(0xFFF1BBDC),
+    Color(0xFFFEEBA9),
+    Color(0xFFAFDFDF),
+)
+private val CardBorderGradient = listOf(
+    Color(0xFFF1BBDC),
+    Color(0xFF8D84F9),
+    Color(0xFFB184E1),
+    Color(0x45B3E1E1), // rgba(179, 225, 225, 0.27) — the border fades out below the halfway point
+)
+private val OmniPlusCardSurface = Color(0xFFFDF6FA)
+private val OmniPlusNoteInk = Color(0xFF444444)
+private val OmniPlusRestoreInk = Color(0xFF5A5A5A)
 
 /**
- * Omni+ paywall — the subscribe page.
+ * Omni+ paywall — Figma node 238-23 (PROJECT_OMNI_BACKUP), built to the dp.
  *
- * An original composition built from the user's reference board: selectable plan cards with a
- * "best value" badge and large prices, a check-marked feature list, a billing info banner, and one
- * unmissable gradient CTA (`OmniAuthHeading` → `OmniSetApply`, Omni's own accent pair — no imported
- * palette). Everything stays on Omni's system: [DesignFrame], colours from `Color.kt`, the type
- * styles, `pressEffect()`, percent-50 pills — no Material3 buttons, no spinners, no emoji, no
- * hardcoded hex.
- *
- * RevenueCat wiring is unchanged: the cards come from `state.availablePackages`, the CTA buys the
- * selected package via `onPurchase(pkg.id)`, `onRestore()` is the text link, and an already-active
- * subscriber sees the success row with "Browse Doctors" instead.
+ * The frame is a gradient-bordered card: two plan tiles under a "best value" ribbon, the feature
+ * panel with double-check marks, and a single dark Subscribe button. The RevenueCat wiring is
+ * unchanged — the tiles render `state.availablePackages` (two shown, as designed), the button buys
+ * the selected package via `onPurchase(pkg.id)`, `onRestore()` is the text link, and an
+ * already-active subscriber sees the success page ([SubscribedScreen]). The design has no close
+ * control, so the system back gesture dismisses via [BackHandler].
  */
 @Composable
 fun OmniPlusPaywallScreen(
@@ -81,6 +97,8 @@ fun OmniPlusPaywallScreen(
     onBrowseDoctors: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    BackHandler(onBack = onDismiss)
+
     var selectedPackageId by remember { mutableStateOf<String?>(null) }
 
     // Pre-select the best-value plan the moment the packages arrive, so the CTA is live immediately.
@@ -110,183 +128,250 @@ fun OmniPlusPaywallScreen(
                     .widthIn(max = DesignFrameWidth)
                     .background(OmniBackground)
                     .statusBarsPadding()
-                    .navigationBarsPadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = PagePadding),
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(38.dp),
             ) {
-                Spacer(Modifier.height(HeaderTopGap))
+                Spacer(Modifier.height(88.dp))
 
-                // Close — the page-entry pattern every Omni sub-page uses
-                Row(
+                // ---- Hero --------------------------------------------------------------------------------
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(CloseButtonSize)
-                            .pressEffect()
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(OmniFeedHint.copy(alpha = 0.3f))
-                            .clickable(onClick = onDismiss),
+                            .width(113.dp)
+                            .height(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(OmniCardInk),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "✕",
-                            style = FeedType.Meta12,
-                            color = OmniCardInk,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Text(
+                                text = "Omni Plus",
+                                style = TextStyle(
+                                    brush = Brush.verticalGradient(BadgeGradient),
+                                    fontFamily = BodyFont,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                    letterSpacing = (-0.131).sp,
+                                ),
+                            )
+                            Image(
+                                painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
                     }
+
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(color = OmniInk)) { append("Your health\n") }
+                            withStyle(SpanStyle(color = OmniAuthHeading)) { append("Verified Experts") }
+                        },
+                        style = TextStyle(
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 16.sp,
+                            lineHeight = 24.sp,
+                            letterSpacing = (-0.16).sp,
+                        ),
+                        textAlign = TextAlign.Center,
+                    )
+
+                    Text(
+                        text = "Message licensed doctors, get answers that cite your own health data, " +
+                            "and keep every thread in one place.",
+                        style = TextStyle(
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 14.sp,
+                            lineHeight = 17.sp,
+                            letterSpacing = (-0.07).sp,
+                        ),
+                        color = OmniInk,
+                        textAlign = TextAlign.Center,
+                    )
                 }
 
-                Spacer(Modifier.height(BadgeTop))
-
-                // Badge pill
+                // ---- The gradient-bordered card ----------------------------------------------------------
                 Box(
                     modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(OmniSetApply.copy(alpha = 0.12f))
-                        .padding(horizontal = 20.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center,
+                        .width(351.dp)
+                        .height(491.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                0.011f to CardBorderGradient[0],
+                                0.084f to CardBorderGradient[1],
+                                0.138f to CardBorderGradient[2],
+                                0.549f to CardBorderGradient[3],
+                            ),
+                        ),
                 ) {
-                    Text(
-                        text = "Omni+",
-                        style = SettingsType.GroupLabel,
-                        color = OmniSetApply,
-                    )
-                }
-
-                Spacer(Modifier.height(HeadlineTop))
-
-                // Headline — accent colour carries the second line
-                Column(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = "Your Health,",
-                        style = HomeType.HeroTitle,
-                        color = OmniCardInk,
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        text = "Verified by Experts.",
-                        style = HomeType.HeroTitle,
-                        color = OmniAuthHeading,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-
-                Spacer(Modifier.height(SubTop))
-
-                Text(
-                    text = "Message licensed doctors, get answers that cite your own health data, and keep every thread in one place.",
-                    style = SettingsType.CardBody,
-                    color = OmniSetCardBody,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                )
-
-                Spacer(Modifier.height(FeaturesTop))
-
-                // Feature list — the check-circle idiom from the pricing references
-                Text(
-                    text = "Everything in Omni, plus",
-                    style = SettingsType.GroupLabel,
-                    color = OmniSetRowSubtitle,
-                )
-                Spacer(Modifier.height(FeatureListTop))
-                FeatureCheckRow("Verified doctor consultations")
-                Spacer(Modifier.height(FeatureRowGap))
-                FeatureCheckRow("Priority support — skip the queue")
-                Spacer(Modifier.height(FeatureRowGap))
-                FeatureCheckRow("Advanced insights on your health data")
-                Spacer(Modifier.height(FeatureRowGap))
-                FeatureCheckRow("Exclusive premium content")
-                Spacer(Modifier.height(PlansTop))
-
-                // Plans
-                Text(
-                    text = "Choose a plan",
-                    style = HomeType.SectionTitle,
-                    color = OmniCardInk,
-                )
-                Spacer(Modifier.height(PlanListTop))
-
-                if (state.availablePackages.isEmpty()) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(PlanCardMinHeight),
-                        contentAlignment = Alignment.Center,
+                            .align(Alignment.TopCenter)
+                            .padding(top = 11.dp)
+                            .width(337.dp)
+                            .height(473.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(OmniPlusCardSurface),
                     ) {
-                        Text(
-                            text = "Loading plans…",
-                            style = SettingsType.RowSubtitle,
-                            color = OmniFeedHint,
-                        )
-                    }
-                } else {
-                    state.availablePackages.forEach { pkg ->
-                        PlanCard(
-                            pkg = pkg,
-                            selected = selectedPackageId == pkg.id,
-                            enabled = !purchasing,
-                            onClick = { selectedPackageId = pkg.id },
-                        )
-                        Spacer(Modifier.height(PlanGap))
+                        Column {
+                            // ---- Plans row ---------------------------------------------------------------------------
+                            Box(modifier = Modifier.fillMaxWidth().height(121.dp)) {
+                                if (state.availablePackages.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = "Loading plans…",
+                                            style = TextStyle(
+                                                fontFamily = BodyFont,
+                                                fontWeight = FontWeight.Normal,
+                                                fontSize = 14.sp,
+                                            ),
+                                            color = OmniPlusNoteInk,
+                                        )
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.padding(start = 38.dp, top = 10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(27.dp),
+                                    ) {
+                                        state.availablePackages.take(2).forEach { pkg ->
+                                            PlanCard(
+                                                pkg = pkg,
+                                                selected = selectedPackageId == pkg.id,
+                                                onClick = { selectedPackageId = pkg.id },
+                                            )
+                                        }
+                                    }
+                                }
+                                if (state.availablePackages.any { isBestValue(it) }) {
+                                    BestValueRibbon(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(end = 5.dp),
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(24.dp))
+
+                            // ---- Features panel ----------------------------------------------------------------------
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(322.dp)
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = 21.dp,
+                                            topEnd = 21.dp,
+                                            bottomStart = 7.dp,
+                                            bottomEnd = 7.dp,
+                                        ),
+                                    )
+                                    .background(Color.White),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(start = 15.dp, top = 14.dp)
+                                        .fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(43.dp),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.width(266.dp),
+                                        verticalArrangement = Arrangement.spacedBy(24.dp),
+                                    ) {
+                                        Text(
+                                            text = "Everything in Omni plus",
+                                            style = TextStyle(
+                                                fontFamily = PlusJakartaSans,
+                                                fontWeight = FontWeight.Normal,
+                                                fontSize = 16.sp,
+                                                lineHeight = 20.sp,
+                                                letterSpacing = (-0.16).sp,
+                                            ),
+                                            color = OmniPlusNoteInk,
+                                        )
+                                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            FeatureCheckRow("Verified doctor consultations")
+                                            FeatureCheckRow("Priority support — skip the queue")
+                                            FeatureCheckRow("Advanced insights on your health data")
+                                            FeatureCheckRow("Exclusive Ai acess")
+                                        }
+                                    }
+
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        if (state.error != null) {
+                                            Text(
+                                                text = state.error,
+                                                style = TextStyle(
+                                                    fontFamily = BodyFont,
+                                                    fontWeight = FontWeight.Normal,
+                                                    fontSize = 12.sp,
+                                                    lineHeight = 16.sp,
+                                                ),
+                                                color = OmniAlertRed,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(OmniCardInk)
+                                                .clickable(
+                                                    enabled = selectedPackageId != null && !purchasing,
+                                                    onClick = { selectedPackageId?.let(onPurchase) },
+                                                )
+                                                .padding(vertical = 14.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(
+                                                text = if (purchasing) "Processing…" else "Subscribe Now",
+                                                style = TextStyle(
+                                                    fontFamily = BodyFont,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 14.sp,
+                                                    lineHeight = 24.sp,
+                                                ),
+                                                color = Color.White,
+                                            )
+                                        }
+                                        Text(
+                                            text = "Restore Purchases",
+                                            style = TextStyle(
+                                                fontFamily = BodyFont,
+                                                fontWeight = FontWeight.Normal,
+                                                fontSize = 14.sp,
+                                            ),
+                                            color = OmniPlusRestoreInk,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable(enabled = !state.isRestoring, onClick = onRestore),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-
-                Spacer(Modifier.height(BannerTop))
-
-                // Billing banner — says what the charge is before the button asks for it
-                InfoBanner()
-
-                if (state.error != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = state.error,
-                        style = SettingsType.RowSubtitle,
-                        color = OmniAlertRed,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
-                Spacer(Modifier.height(CtaTop))
-
-                // The one unmissable button
-                GradientCta(
-                    label = if (purchasing) "Processing…" else "Subscribe Now",
-                    enabled = selectedPackageId != null && !purchasing,
-                    onClick = { selectedPackageId?.let(onPurchase) },
-                )
-
-                Spacer(Modifier.height(RestoreTop))
-
-                Text(
-                    text = "Restore Purchases",
-                    style = SettingsType.RowAction,
-                    color = OmniSetApply,
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .pressEffect()
-                        .clickable(enabled = !state.isRestoring, onClick = onRestore)
-                        .padding(8.dp),
-                )
-
-                Spacer(Modifier.height(LegalTop))
-
-                Text(
-                    text = "Cancel anytime. By subscribing, you agree to our Terms of Service.",
-                    style = FeedType.Meta12,
-                    color = OmniFeedHint,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(Modifier.height(ContentBottomGap))
             }
         }
     }
@@ -324,137 +409,179 @@ private fun SubscribedScreen(
                         painter = painterResource(R.drawable.ic_auth_check),
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
-                        colorFilter = ColorFilter.tint(OmniSetApply),
                     )
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = message,
-                    style = HomeType.SectionTitle,
-                    color = OmniSetApply,
+                    style = TextStyle(
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 20.sp,
+                    ),
+                    color = OmniAuthHeading,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = "Your Omni+ membership is active.",
-                    style = SettingsType.CardBody,
-                    color = OmniSetCardBody,
+                    style = TextStyle(
+                        fontFamily = BodyFont,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                    ),
+                    color = OmniPlusNoteInk,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(32.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = PagePadding),
+                        .padding(horizontal = 16.dp),
                 ) {
-                    GradientCta(
-                        label = "Browse Doctors",
-                        enabled = true,
-                        onClick = onBrowseDoctors,
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(OmniCardInk)
+                            .clickable(onClick = onBrowseDoctors)
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Browse Doctors",
+                            style = TextStyle(
+                                fontFamily = BodyFont,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp,
+                                lineHeight = 24.sp,
+                            ),
+                            color = Color.White,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** One feature row — check in an accent wash, then the claim. */
-@Composable
-private fun FeatureCheckRow(text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(FeatureIconGap),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(FeatureIconSize)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(OmniSetApply.copy(alpha = 0.14f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_auth_check),
-                contentDescription = null,
-                modifier = Modifier.size(FeatureIconInner),
-                colorFilter = ColorFilter.tint(OmniSetApply),
-            )
-        }
-        Text(
-            text = text,
-            style = SettingsType.RowTitle,
-            color = OmniSetRowTitle,
-        )
-    }
-}
-
 /**
- * One selectable plan — the reference cards' anatomy: name and billing note on the left, the big
- * price on the right, a "BEST VALUE" pill on the yearly plan, and a 2dp accent border when
- * selected.
+ * One plan tile — 117×111, white, a 1dp OmniSetApply border, and the three-line stack from the
+ * frame. Tapping selects the package the Subscribe button buys; the design carries no visual
+ * selected state, so selection stays functional only.
  */
 @Composable
 private fun PlanCard(
     pkg: PackageOption,
     selected: Boolean,
-    enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .pressEffect()
-            .clip(RoundedCornerShape(PlanRadius))
-            .background(if (selected) OmniSetApply.copy(alpha = 0.08f) else OmniSetCardSurface)
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) OmniSetApply else OmniFeedHint.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(PlanRadius),
-            )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .width(117.dp)
+            .height(111.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.White)
+            .border(1.dp, OmniSetApply, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = pkg.name,
-                    style = SettingsType.RowTitle,
-                    color = OmniSetRowTitle,
-                )
-                if (isBestValue(pkg)) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(OmniSetApply)
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                    ) {
-                        Text(
-                            text = "BEST VALUE",
-                            style = SettingsType.GroupLabel,
-                            color = OmniOnInk,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = billedNote(pkg),
-                style = FeedType.Meta12,
-                color = OmniSetRowSubtitle,
+        Text(
+            text = pkg.name,
+            style = TextStyle(
+                fontFamily = PlusJakartaSans,
+                fontWeight = FontWeight.Normal,
+                fontSize = 13.sp,
+                lineHeight = 24.sp,
+                letterSpacing = (-0.195).sp,
+            ),
+            color = OmniCardInk,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = pkg.price.ifBlank { pkg.name },
+            style = TextStyle(
+                fontFamily = PlusJakartaSans,
+                fontWeight = FontWeight.Medium,
+                fontSize = 18.sp,
+                lineHeight = 24.sp,
+                letterSpacing = (-0.27).sp,
+            ),
+            color = OmniInk,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = billedNote(pkg),
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Normal,
+                fontSize = 7.sp,
+                lineHeight = 18.sp,
+                letterSpacing = (-0.07).sp,
+            ),
+            color = OmniPlusNoteInk,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** The "best value" ribbon — sits on the yearly tile's top-right corner, overhanging the card. */
+@Composable
+private fun BestValueRibbon(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .width(59.dp)
+            .height(17.dp)
+            .clip(
+                RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 4.dp,
+                    bottomEnd = 22.dp,
+                    bottomStart = 0.dp,
+                ),
             )
-        }
-        if (pkg.price.isNotBlank()) {
-            Text(
-                text = pkg.price,
-                style = HomeType.CardValue,
-                color = OmniCardInk,
-            )
-        }
+            .background(OmniAuthHeading),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "best value",
+            style = TextStyle(
+                fontFamily = PlusJakartaSans,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 8.sp,
+                lineHeight = 10.sp,
+            ),
+            color = Color.White,
+        )
+    }
+}
+
+/** One feature row — the double-check mark, then the claim. */
+@Composable
+private fun FeatureCheckRow(text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_omniplus_check_check),
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = text,
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = (-0.14).sp,
+            ),
+            color = OmniInk,
+        )
     }
 }
 
@@ -462,7 +589,7 @@ private fun PlanCard(
 private fun billedNote(pkg: PackageOption): String {
     val id = "${pkg.id} ${pkg.name}".lowercase()
     return when {
-        "year" in id || "annual" in id -> "Billed yearly · cancel anytime"
+        "year" in id || "annual" in id -> "Billed Yearly · cancel anytime"
         "month" in id -> "Billed monthly · cancel anytime"
         else -> "Cancel anytime, hassle-free"
     }
@@ -479,103 +606,19 @@ private fun isBestValue(pkg: PackageOption): Boolean {
     return "year" in id || "annual" in id
 }
 
-/** The "you will be billed…" banner from the checkout reference, in Omni's accent wash. */
-@Composable
-private fun InfoBanner() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(OmniSetApply.copy(alpha = 0.08f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(OmniSetApply.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "i",
-                style = SettingsType.GroupLabel,
-                color = OmniSetApply,
-            )
-        }
-        Text(
-            text = "Billed to your Google account. Cancel anytime, hassle-free.",
-            style = FeedType.Meta12,
-            color = OmniSetRowSubtitle,
-        )
-    }
-}
-
-/**
- * The CTA — a full-width pill in Omni's accent gradient. This is the page's one loud element:
- * everything above it is quiet, so the button needs no decoration to win the eye.
- */
-@Composable
-private fun GradientCta(
-    label: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (enabled) 1f else 0.5f)
-            .pressEffect()
-            .clip(RoundedCornerShape(CtaRadius))
-            .background(Brush.horizontalGradient(listOf(OmniAuthHeading, OmniSetApply)))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = CtaPaddingV),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = SettingsType.CardButton,
-            color = OmniOnInk,
-        )
-    }
-}
-
-// ---- Geometry ----------------------------------------------------------------------------------
-//
-// Page gutter, close button and pill rhythm from the previous paywall; card/CTA geometry from the
-// references: 20dp card radius, 2dp selected border, a 56dp-tall CTA at 20dp radius.
-
-private val PagePadding = 16.dp
-private val HeaderTopGap = 12.dp
-private val CloseButtonSize = 36.dp
-private val BadgeTop = 20.dp
-private val HeadlineTop = 20.dp
-private val SubTop = 12.dp
-private val FeaturesTop = 28.dp
-private val FeatureListTop = 12.dp
-private val FeatureRowGap = 12.dp
-private val FeatureIconSize = 26.dp
-private val FeatureIconInner = 14.dp
-private val FeatureIconGap = 10.dp
-private val PlansTop = 28.dp
-private val PlanListTop = 12.dp
-private val PlanGap = 10.dp
-private val PlanRadius = 20.dp
-private val PlanCardMinHeight = 64.dp
-private val BannerTop = 16.dp
-private val CtaTop = 16.dp
-private val CtaRadius = 20.dp
-private val CtaPaddingV = 16.dp
-private val RestoreTop = 12.dp
-private val LegalTop = 8.dp
-private val ContentBottomGap = 24.dp
-
-// ---- Previews ----------------------------------------------------------------------------------
+// ---- Previews -----------------------------------------------------------------------------------
 
 private val PreviewPackages = listOf(
-    PackageOption(id = "omni_plus_monthly", name = "Omni+ Monthly", price = "$4.99"),
-    PackageOption(id = "omni_plus_yearly", name = "Omni+ Yearly", price = "$39.99"),
+    PackageOption(
+        id = "omni_plus_monthly",
+        name = "Monthly",
+        price = "$4.99",
+    ),
+    PackageOption(
+        id = "omni_plus_yearly",
+        name = "Yearly",
+        price = "$39.99",
+    ),
 )
 
 private val PreviewPaywallState = OmniPlusUiState(
@@ -597,7 +640,7 @@ private fun OmniPlusPaywallPreview() {
     }
 }
 
-/** The subscribed state: the offer is replaced by the success row and the Browse Doctors CTA. */
+/** The subscribed state: the offer is replaced by the success row and the Browse Doctors button. */
 @DevicePreviews
 @Composable
 private fun OmniPlusPaywallSubscribedPreview() {
