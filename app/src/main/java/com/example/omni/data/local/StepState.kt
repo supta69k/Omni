@@ -1,5 +1,6 @@
 package com.example.omni.data.local
 
+import java.time.LocalDate
 import kotlin.math.abs
 
 /**
@@ -64,6 +65,17 @@ data class StepState(
  */
 fun StepState.reconcile(raw: Int, bootId: Long, date: String): StepState {
     if (date != this.date) {
+        // Day rollover. When the anchor still describes this boot, carry it rather than re-anchoring:
+        // the counter's gain since the last reading belongs to the new day — the midnight boundary
+        // inside that delta cannot be split without per-step timestamps — and re-anchoring here is
+        // what threw overnight steps away. A reboot or a never-anchored state starts the day fresh.
+        if (this.date.isNotEmpty() && sameBootAs(bootId)) {
+            return copy(
+                date = date,
+                total = (raw - anchorRaw).coerceAtLeast(0),
+                syncedTotal = 0,
+            )
+        }
         return StepState(bootId = bootId, anchorRaw = raw, total = 0, syncedTotal = 0, date = date)
     }
 
@@ -88,6 +100,42 @@ fun StepState.stepsOn(date: String): Int = if (this.date == date) total else 0
 
 /** How much [total] owes Firestore. Never negative — a remote total ahead of ours owes nothing. */
 fun StepState.pendingSync(): Int = (total - syncedTotal).coerceAtLeast(0)
+
+/**
+ * The state a session starts with when the stored day is over and Firestore's number for the new
+ * day ([serverSteps]) has been read.
+ *
+ * The case that matters is the **immediate rollover on the same boot** — the normal morning, on any
+ * phone that kills background apps. The counter has kept climbing the whole time the process was
+ * dead: the tail of yesterday after its final sync, plus everything walked this morning. With no
+ * per-step timestamps that delta cannot be split, and it is owed to the *new* day. Carrying the
+ * anchor forward credits it on the first reading; re-anchoring at the first reading — the old
+ * behaviour — threw all of it away, which is why mornings used to start at zero and only count
+ * again after the app had been opened once.
+ *
+ * The anchor is carried only when all three hold: the state was actually anchored ([bootId] not
+ * 0), the anchor belongs to the **current boot** (a reboot wiped the counter's continuity —
+ * steps walked between a reboot and the next open are unrecoverable without a foreground
+ * service), and the stored day is the **immediately previous** calendar day. A longer gap cannot
+ * be split honestly: a week of walking credited to one morning is worse than a gap.
+ */
+fun StepState.seedForRollover(today: String, serverSteps: Int, nowBootId: Long): StepState {
+    val carriesAnchor = sameBootAs(nowBootId) && isNextCalendarDay(date, today)
+    return if (carriesAnchor) {
+        copy(date = today, total = serverSteps, syncedTotal = serverSteps)
+    } else {
+        StepState(date = today, total = serverSteps, syncedTotal = serverSteps)
+    }
+}
+
+/** True when this state's anchor was taken on the boot [bootId] describes (and exists at all). */
+fun StepState.sameBootAs(bootId: Long): Boolean =
+    this.bootId != 0L && abs(this.bootId - bootId) <= BootDriftToleranceMillis
+
+/** True when [later] is exactly one calendar day after [earlier]; both are ISO yyyy-MM-dd. */
+private fun isNextCalendarDay(earlier: String, later: String): Boolean = runCatching {
+    LocalDate.parse(later).toEpochDay() - LocalDate.parse(earlier).toEpochDay() == 1L
+}.getOrDefault(false)
 
 /**
  * How far the derived boot timestamp may wander before it counts as a different boot.

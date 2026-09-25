@@ -25,6 +25,14 @@
          the user simply stops getting tray entries. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- The tracking service's persistent panel (steps + water). A foreground service needs the base
+         permission, and on API 34+ the health type must also be declared and backed by a health
+         permission — ACTIVITY_RECOGNITION above — before the service may start. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!-- Restarting the tracking service after a reboot or an app update. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Not required: plenty of devices have no pedometer, and the app is perfectly usable without
          one. Marking it required would hide Omni from those devices in the Play Store. -->
     <uses-feature
@@ -70,6 +78,26 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- The live tracking foreground service: one sensor listener and one reconciler per process,
+             alive while Omni is closed, with today's steps and water as its persistent panel. The
+             health type is what lets it run long-term on API 34+; ACTIVITY_RECOGNITION above is the
+             health permission that backs it. -->
+        <service
+            android:name=".service.OmniTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+        <!-- Restarts the tracking service after a reboot or an app update. MIUI additionally gates
+             this behind the app's Autostart toggle. -->
+        <receiver
+            android:name=".service.OmniBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- The icon and channel Android falls back to when a push arrives while the app is in the
              background and the payload names neither. Without the channel id, a message delivered on

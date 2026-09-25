@@ -113,8 +113,12 @@ class HomeViewModel(
     /**
      * This device's own step count for today.
      *
-     * Collected only while the permission is held: on API 29+ the OS withholds sensor events without it,
-     * so registering a listener anyway would just hold hardware open for nothing.
+     * Read from what the tracking service has persisted rather than from the sensor: the pipeline
+     * (listener, reconcile, sync) is owned by `OmniTrackingService` and runs while Omni is closed,
+     * and one owner is what keeps two reconcilers from racing on the same DataStore.
+     *
+     * Collected only while the permission is held — the service never starts without it, so there
+     * would be nothing to read and the card would show the server's number alone.
      *
      * Keyed on the date as well as the session even though the repository computes today's key itself —
      * that is what resets the tile at midnight for a phone sitting on a table, where no sensor event
@@ -128,7 +132,7 @@ class HomeViewModel(
                 if (granted != true) {
                     flowOf(0)
                 } else {
-                    stepsRepository.observeTodaySteps(uid).catch { cause ->
+                    stepsRepository.observeLocalSteps(uid).catch { cause ->
                         Log.w("Omni", "The step counter stopped", cause)
                         emit(0)
                     }

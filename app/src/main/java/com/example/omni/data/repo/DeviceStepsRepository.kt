@@ -7,11 +7,16 @@ import com.example.omni.data.local.StepState
 import com.example.omni.data.local.currentBootId
 import com.example.omni.data.local.pendingSync
 import com.example.omni.data.local.reconcile
+import com.example.omni.data.local.seedForRollover
 import com.example.omni.data.local.stepsOn
 import com.example.omni.data.model.todayKey
+import com.example.omni.data.model.todayKeyFlow
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * [StepsRepository] over the hardware counter, with DataStore as its memory and Firestore as its record.
@@ -28,11 +33,14 @@ import kotlinx.coroutines.flow.flow
  *    [SyncThresholdSteps] steps, plus once when a day ends and once when a session starts holding anything
  *    unsynced (BACKEND_PLAN §11 Phase 4).
  *
- * The honest limitation, stated in the plan and worth repeating: without a foreground service the app only
- * *observes* while it is alive. The sensor keeps counting regardless, so reopening the app catches up on
- * everything walked in between — but steps taken between the last reading and a reboot are gone, because
- * the counter they were in has been reset and nobody read it. That is the accepted trade for not running a
- * permanent notification.
+ * The pipeline has exactly one owner: `OmniTrackingService`, the foreground service, which collects
+ * [observeTodaySteps] around the clock — the sensor listener, the DataStore writes and the throttled
+ * Firestore sync all live there, and [observeLocalSteps] is how the rest of the app reads what it has
+ * folded in. The service keeps observing while Omni is closed, which is what makes the notification's
+ * live panel possible and what closes the old "steps walked while closed" gap: the counter keeps
+ * counting regardless, so even a service that MIUI kills catches up on its next start. The one loss
+ * that remains is a device reboot — the counter resets, and steps taken between the reboot and the
+ * service's next reading (it is restarted by a boot receiver) are gone.
  */
 class DeviceStepsRepository(
     private val source: StepCounterSource,
@@ -64,14 +72,25 @@ class DeviceStepsRepository(
             state = if (state.date == startedOn) {
                 state.copy(total = serverSteps.coerceAtLeast(state.total), syncedTotal = serverSteps)
             } else {
-                StepState(date = startedOn, total = serverSteps, syncedTotal = serverSteps)
+                // The stored day is over. Its last session may have ended with steps that never
+                // crossed the sync threshold (killed before 250) — publish them now, because after
+                // the seed no later write can name that date.
+                if (state.date.isNotEmpty() && state.pendingSync() > 0) {
+                    try {
+                        metrics.setSteps(uid, state.date, state.total)
+                    } catch (cause: Exception) {
+                        Log.w("Omni", "Could not publish ${state.date}'s final total", cause)
+                    }
+                }
+                // Then carry the anchor across the rollover when it is safe to — this is what makes
+                // the steps walked while the app was closed land in the new day instead of vanishing.
+                state.seedForRollover(today = startedOn, serverSteps = serverSteps, nowBootId = currentBootId())
             }
             preferences.setStepState(uid, state)
         }
 
-        // Whatever the last session left unwritten goes out now. When the stored day has since ended this
-        // is the date-rollover write, and it is the reason the app can be closed at 23:59 and still have
-        // yesterday's total on the server.
+        // Belt and braces: after seeding nothing should owe a write yet — the rollover path above
+        // publishes yesterday's tail itself — so this is a no-op in every normal flow.
         state = flush(uid, state)
         emit(state.stepsOn(startedOn))
 
@@ -90,6 +109,13 @@ class DeviceStepsRepository(
             if (state.pendingSync() >= SyncThresholdSteps) state = flush(uid, state)
             emit(state.total)
         }
+    }
+
+    override fun observeLocalSteps(uid: String?): Flow<Int> {
+        if (uid == null) return flowOf(0)
+        return combine(preferences.stepState(uid), todayKeyFlow()) { state, today ->
+            state.stepsOn(today)
+        }.distinctUntilChanged()
     }
 
     /**

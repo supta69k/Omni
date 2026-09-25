@@ -6,4 +6,10 @@
          switches for a feature that has one. -->
     <string name="notification_channel_name">Omni alerts</string>
     <string name="notification_channel_description">Replies, reminders and emergency updates.</string>
+
+    <!-- The tracking service\'s persistent panel (today\'s steps and water) and its channel. -->
+    <string name="tracking_channel_name">Live tracking</string>
+    <string name="tracking_channel_description">Today\'s steps and water, live in the notification panel.</string>
+    <string name="tracking_notification_title">%1$d steps today</string>
+    <string name="tracking_notification_text">%1$d glasses of water logged</string>
 </resources>

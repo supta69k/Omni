@@ -49,7 +49,7 @@ class StepStateTest {
     // ---- the day boundary ----------------------------------------------------------------------
 
     @Test
-    fun `a new day starts over and owes no writes`() {
+    fun `a live rollover attributes the since-last-reading tail to the new day`() {
         val yesterday = StepState()
             .reconcile(raw = 4_200, bootId = Boot, date = Today)
             .reconcile(raw = 12_000, bootId = Boot, date = Today)
@@ -57,10 +57,18 @@ class StepStateTest {
 
         val today = yesterday.reconcile(raw = 12_050, bootId = Boot, date = Tomorrow)
 
-        assertEquals(0, today.total)
+        // The 50 steps walked since yesterday's last reading cannot be split across midnight, so
+        // they land on the new day — which is what makes the closed-app morning count instead of
+        // starting at zero. The day still owes its write: syncedTotal resets with the day.
+        assertEquals(50, today.total)
         assertEquals(0, today.syncedTotal)
-        assertEquals(12_050, today.anchorRaw)
+        assertEquals(12_000, today.anchorRaw)
         assertEquals(Tomorrow, today.date)
+
+        // Walking continues from the carried anchor, not from the first post-midnight reading: the
+        // 150 new steps add on top of the 50 the tail already contributed.
+        val walked = today.reconcile(raw = 12_150, bootId = Boot, date = Tomorrow)
+        assertEquals(200, walked.total)
     }
 
     // ---- account isolation on a shared device --------------------------------------------------
@@ -192,6 +200,79 @@ class StepStateTest {
     @Test
     fun `a synced total ahead of the local one owes nothing`() {
         assertEquals(0, StepState(total = 900, syncedTotal = 1_000).pendingSync())
+    }
+
+    // ---- the overnight rollover ----------------------------------------------------------------
+    //
+    // The process is dead while the day rolls over — every morning, on any phone that kills
+    // background apps. The since-boot counter keeps climbing the whole time; the question is what
+    // the new day's seed does with the anchor. Re-anchoring at the first reading (the old behaviour)
+    // threw away every step taken while the app was closed, which is why mornings used to start at
+    // zero and only count again after the app had been opened once.
+
+    @Test
+    fun `an immediate rollover on the same boot carries the anchor so the closed-app morning counts`() {
+        val yesterday = StepState()
+            .reconcile(raw = 4_200, bootId = Boot, date = Today)
+            .reconcile(raw = 12_000, bootId = Boot, date = Today) // last reading yesterday evening
+
+        // Firestore has nothing for the new day yet.
+        val seeded = yesterday.seedForRollover(today = Tomorrow, serverSteps = 0, nowBootId = Boot)
+
+        assertEquals(Tomorrow, seeded.date)
+        assertEquals(0, seeded.total)
+        assertEquals(12_000, seeded.anchorRaw) // the old anchor survives the rollover
+        assertEquals(Boot, seeded.bootId)
+
+        // The first reading of the morning: everything walked since yesterday evening lands at once.
+        val morning = seeded.reconcile(raw = 14_300, bootId = Boot, date = Tomorrow)
+        assertEquals(2_300, morning.total)
+    }
+
+    @Test
+    fun `a rollover more than one day later re-anchors rather than crediting a week of walking`() {
+        val last = StepState(date = Today, bootId = Boot, anchorRaw = 12_000, total = 7_800, syncedTotal = 7_800)
+
+        val nextWeek = last.seedForRollover(today = "2026-09-17", serverSteps = 0, nowBootId = Boot)
+
+        // A fresh state: the next reading anchors wherever it lands, and the gap stays a gap.
+        assertEquals(0, nextWeek.total)
+        assertEquals(0L, nextWeek.bootId)
+        assertEquals(0, nextWeek.anchorRaw)
+    }
+
+    @Test
+    fun `a rollover across a reboot cannot carry the anchor`() {
+        val last = StepState(date = Today, bootId = Boot, anchorRaw = 12_000, total = 7_800, syncedTotal = 7_800)
+
+        val seeded = last.seedForRollover(today = Tomorrow, serverSteps = 0, nowBootId = Boot + 60_000L)
+
+        // The counter restarted at zero; there is no continuity to carry, and the next reading
+        // anchors fresh. Steps between the reboot and the next open are unrecoverable without a
+        // foreground service — the accepted trade.
+        assertEquals(0L, seeded.bootId)
+        assertEquals(0, seeded.total)
+    }
+
+    @Test
+    fun `a rollover keeps a cross-device total and drops yesterday's local one`() {
+        // Another device synced 300 steps for the new day while this one was closed; yesterday's
+        // local total belongs to yesterday's date and must not leak into it.
+        val last = StepState(date = Today, bootId = Boot, anchorRaw = 12_000, total = 7_800, syncedTotal = 7_500)
+
+        val seeded = last.seedForRollover(today = Tomorrow, serverSteps = 300, nowBootId = Boot)
+
+        assertEquals(300, seeded.total)
+        assertEquals(300, seeded.syncedTotal)
+        assertEquals(12_000, seeded.anchorRaw) // but the anchor still carries
+    }
+
+    @Test
+    fun `a never-anchored state seeds without inventing a boot id`() {
+        val seeded = StepState(date = Today).seedForRollover(today = Tomorrow, serverSteps = 0, nowBootId = Boot)
+
+        assertEquals(0, seeded.total)
+        assertEquals(0L, seeded.bootId) // the next reading anchors wherever it lands, adding nothing
     }
 
     private companion object {

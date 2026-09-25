@@ -19,6 +19,8 @@ class PreviewStepsRepository(
 
     override fun observeTodaySteps(uid: String?): Flow<Int> = flowOf(steps)
 
+    override fun observeLocalSteps(uid: String?): Flow<Int> = flowOf(steps)
+
     private companion object {
         /** The step card's own mock number. */
         const val PreviewSteps = 5_600
