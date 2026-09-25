@@ -8,6 +8,7 @@ import com.example.omni.data.revenuecat.RevenueCatState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 data class OmniPlusUiState(
@@ -34,16 +35,35 @@ class OmniPlusViewModel(
     val uiState: StateFlow<OmniPlusUiState> = _uiState.asStateFlow()
 
     init {
+        // Fresh offerings every time the paywall opens — the manager also fetches once at init,
+        // so a user who was offline at app start still gets plans on returning to this screen.
         viewModelScope.launch {
-            revenueCatRepository.subscriptionState.collect { state ->
-                val offerings = revenueCatRepository.offerings()
-                _uiState.value = _uiState.value.copy(
-                    subscriptionState = state,
-                    availablePackages = offerings.map { (id, name) ->
-                        PackageOption(id = id, name = name, price = "")
+            revenueCatRepository.refreshOfferings()
+        }
+
+        // One subscription builds the whole state from the repository's three sources, so the
+        // paywall can never show a plan list that disagrees with the subscription state. The
+        // transient purchase/restore flags live outside this combine (see the copy below) because
+        // purchase() and restore() toggle them on the state directly.
+        viewModelScope.launch {
+            combine(
+                revenueCatRepository.subscriptionState,
+                revenueCatRepository.packages,
+                revenueCatRepository.packagesError,
+            ) { subscriptionState, packages, packagesError ->
+                OmniPlusUiState(
+                    subscriptionState = subscriptionState,
+                    availablePackages = packages.map { pkg ->
+                        PackageOption(id = pkg.id, name = pkg.name, price = pkg.price)
                     },
-                    error = if (state is RevenueCatState.Error) state.message else null,
-                    successMessage = if (state is RevenueCatState.Active) "Welcome to Omni+!" else null,
+                    error = packagesError ?: (subscriptionState as? RevenueCatState.Error)?.message,
+                    successMessage = if (subscriptionState is RevenueCatState.Active) "Welcome to Omni+!" else null,
+                )
+            }.collect { rebuilt ->
+                _uiState.value = rebuilt.copy(
+                    isPurchasing = _uiState.value.isPurchasing,
+                    purchasePackageId = _uiState.value.purchasePackageId,
+                    isRestoring = _uiState.value.isRestoring,
                 )
             }
         }
@@ -51,13 +71,13 @@ class OmniPlusViewModel(
 
     fun purchase(activity: Activity, packageId: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isPurchasing = true, error = null)
+            _uiState.value = _uiState.value.copy(isPurchasing = true, purchasePackageId = packageId, error = null)
             try {
                 revenueCatRepository.purchase(activity, packageId)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
             } finally {
-                _uiState.value = _uiState.value.copy(isPurchasing = false)
+                _uiState.value = _uiState.value.copy(isPurchasing = false, purchasePackageId = null)
             }
         }
     }

@@ -48,7 +48,11 @@ class RevenueCatManager(
     private val _subscriptionState = MutableStateFlow<RevenueCatState>(RevenueCatState.Loading)
     override val subscriptionState: StateFlow<RevenueCatState> = _subscriptionState.asStateFlow()
 
-    private var currentOfferings: Map<String, String> = emptyMap()
+    private val _packages = MutableStateFlow<List<OfferingPackage>>(emptyList())
+    override val packages: StateFlow<List<OfferingPackage>> = _packages.asStateFlow()
+
+    private val _packagesError = MutableStateFlow<String?>(null)
+    override val packagesError: StateFlow<String?> = _packagesError.asStateFlow()
 
     init {
         if (apiKey.isBlank()) {
@@ -57,6 +61,9 @@ class RevenueCatManager(
         } else {
             initializeRevenueCat()
             syncWithAuthState()
+            // Fetch the current offering up front — the paywall reads [packages], which used to
+            // stay empty until a purchase touched getOfferings, leaving it stuck on "Loading plans…".
+            scope.launch { refreshOfferings() }
         }
     }
 
@@ -128,73 +135,130 @@ class RevenueCatManager(
         return state is RevenueCatState.Active && state.entitlements[EntitlementIds.OMNI_PLUS] == true
     }
 
-    override suspend fun purchase(activity: Activity, packageId: String) = suspendCoroutine { cont ->
-        Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
-            override fun onReceived(offerings: Offerings) {
-                val current = offerings.current
-                if (current == null) {
-                    Log.e(TAG, "No current offering available")
-                    _subscriptionState.value = RevenueCatState.Error("No subscription available")
-                    cont.resume(Unit)
-                    return
-                }
-
-                currentOfferings = current.availablePackages.associate { pkg: Package ->
-                    pkg.identifier to pkg.product.title
-                }
-
-                val packageToPurchase = current.availablePackages.find { it.identifier == packageId }
-                if (packageToPurchase == null) {
-                    Log.e(TAG, "Package $packageId not found in offerings")
-                    cont.resume(Unit)
-                    return
-                }
-
-                val purchaseParams = PurchaseParams.Builder(activity, packageToPurchase).build()
-                Purchases.sharedInstance.purchase(purchaseParams, object : PurchaseCallback {
-                    override fun onCompleted(transaction: StoreTransaction, customerInfo: CustomerInfo) {
-                        Log.i(TAG, "Purchase successful")
-                        handleCustomerInfo(customerInfo)
+    override suspend fun purchase(activity: Activity, packageId: String) {
+        if (!ensureConfigured()) return
+        return suspendCoroutine { cont ->
+            Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
+                override fun onReceived(offerings: Offerings) {
+                    val current = offerings.current
+                    if (current == null) {
+                        Log.e(TAG, "No current offering available")
+                        _subscriptionState.value = RevenueCatState.Error("No subscription available")
                         cont.resume(Unit)
+                        return
                     }
 
-                    override fun onError(error: PurchasesError, userCancelled: Boolean) {
-                        if (userCancelled) {
-                            Log.d(TAG, "Purchase cancelled by user")
-                        } else {
-                            Log.e(TAG, "Purchase error: ${error.message}")
-                            _subscriptionState.value = RevenueCatState.Error(error.message)
+                    val packageToPurchase = current.availablePackages.find { it.identifier == packageId }
+                    if (packageToPurchase == null) {
+                        Log.e(TAG, "Package $packageId not found in offerings")
+                        _packagesError.value = "Package $packageId is not in the current offering"
+                        cont.resume(Unit)
+                        return
+                    }
+
+                    val purchaseParams = PurchaseParams.Builder(activity, packageToPurchase).build()
+                    Purchases.sharedInstance.purchase(purchaseParams, object : PurchaseCallback {
+                        override fun onCompleted(transaction: StoreTransaction, customerInfo: CustomerInfo) {
+                            Log.i(TAG, "Purchase successful")
+                            handleCustomerInfo(customerInfo)
+                            cont.resume(Unit)
                         }
-                        cont.resume(Unit)
+
+                        override fun onError(error: PurchasesError, userCancelled: Boolean) {
+                            if (userCancelled) {
+                                Log.d(TAG, "Purchase cancelled by user")
+                            } else {
+                                Log.e(TAG, "Purchase error: ${error.message}")
+                                _subscriptionState.value = RevenueCatState.Error(error.message)
+                            }
+                            cont.resume(Unit)
+                        }
+                    })
+                }
+
+                override fun onError(error: PurchasesError) {
+                    Log.e(TAG, "Failed to fetch offerings: ${error.message}")
+                    _subscriptionState.value = RevenueCatState.Error(error.message)
+                    cont.resume(Unit)
+                }
+            })
+        }
+    }
+
+    override suspend fun refreshOfferings() {
+        if (apiKey.isBlank()) {
+            Log.e(TAG, "refreshOfferings skipped — API key is blank")
+            return
+        }
+        // Resumes with the error message (null = success), which becomes [packagesError].
+        // Failures land there rather than in [subscriptionState]: a failed plan fetch is a
+        // paywall concern, and overwriting the subscription state here would make a network
+        // blip look like an entitlement problem.
+        _packagesError.value = suspendCoroutine { cont ->
+            Purchases.sharedInstance.getOfferings(object : ReceiveOfferingsCallback {
+                override fun onReceived(offerings: Offerings) {
+                    val current = offerings.current
+                    if (current == null) {
+                        Log.w(TAG, "RevenueCat returned no current offering — is one marked Current in the dashboard?")
+                        cont.resume("No plans are published yet — check the RevenueCat dashboard")
+                        return
                     }
-                })
-            }
+                    _packages.value = current.availablePackages.map { pkg: Package ->
+                        OfferingPackage(
+                            id = pkg.identifier,
+                            name = pkg.product.name.ifBlank { pkg.product.title },
+                            // StoreProduct.price is the SDK's Price object; `formatted` is the
+                            // localized string Play shows ("$4.99", "US$4.99", …).
+                            price = pkg.product.price.formatted,
+                        )
+                    }
+                    Log.i(TAG, "Offerings loaded: ${current.availablePackages.map { it.identifier }}")
+                    cont.resume(null)
+                }
 
-            override fun onError(error: PurchasesError) {
-                Log.e(TAG, "Failed to fetch offerings: ${error.message}")
-                _subscriptionState.value = RevenueCatState.Error(error.message)
-                cont.resume(Unit)
-            }
-        })
+                override fun onError(error: PurchasesError) {
+                    Log.w(
+                        TAG,
+                        "Offerings fetch failed: ${error.message} (code=${error.code}, " +
+                            "underlying=${error.underlyingErrorMessage ?: "none"})",
+                    )
+                    cont.resume(error.message?.ifBlank { null } ?: "Couldn't load plans")
+                }
+            })
+        }
     }
 
-    override suspend fun restorePurchases() = suspendCoroutine { cont ->
-        Purchases.sharedInstance.restorePurchases(object : ReceiveCustomerInfoCallback {
-            override fun onReceived(customerInfo: CustomerInfo) {
-                Log.i(TAG, "Purchases restored")
-                handleCustomerInfo(customerInfo)
-                cont.resume(Unit)
-            }
+    override suspend fun restorePurchases() {
+        if (!ensureConfigured()) return
+        return suspendCoroutine { cont ->
+            Purchases.sharedInstance.restorePurchases(object : ReceiveCustomerInfoCallback {
+                override fun onReceived(customerInfo: CustomerInfo) {
+                    Log.i(TAG, "Purchases restored")
+                    handleCustomerInfo(customerInfo)
+                    cont.resume(Unit)
+                }
 
-            override fun onError(error: PurchasesError) {
-                Log.e(TAG, "Restore purchases failed: ${error.message}")
-                _subscriptionState.value = RevenueCatState.Error(error.message)
-                cont.resume(Unit)
-            }
-        })
+                override fun onError(error: PurchasesError) {
+                    Log.w(TAG, "Restore purchases failed: ${error.message}")
+                    _subscriptionState.value = RevenueCatState.Error(error.message)
+                    cont.resume(Unit)
+                }
+            })
+        }
     }
 
-    override fun offerings(): Map<String, String> = currentOfferings
+    /**
+     * Guards every SDK entry point: `Purchases.sharedInstance` throws when the SDK was never
+     * configured, so a blank key must fail into the error state instead of crashing the paywall.
+     */
+    private fun ensureConfigured(): Boolean {
+        if (apiKey.isBlank()) {
+            Log.e(TAG, "RevenueCat call skipped — API key is blank")
+            _subscriptionState.value = RevenueCatState.Error("API key not configured")
+            return false
+        }
+        return true
+    }
 
     private companion object {
         const val TAG = "RevenueCat"

@@ -224,6 +224,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The Omni+ doctor directory — the hospitals directory's sibling: verified doctors written
+    // from the console or an import script, never from the app. Read-only for signed-in clients,
+    // which keeps the directory available offline through Firestore's cache after the first sync.
+    match /doctors/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // Stories (§7's social surface): a 24-hour image with optional text. Any signed-in user reads
     // the strip; only the author creates or deletes, and the create must carry their own uid.
     // `update` is closed deliberately — a story is published once and taken down, never edited.

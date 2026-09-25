@@ -1,18 +1,29 @@
 package com.example.omni.data.revenuecat
 
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * In-memory fake for Compose previews and unit tests.
- * Simulates an inactive Omni+ subscription by default.
+ * Simulates an inactive Omni+ subscription by default, with the two packages the paywall's
+ * previews are designed around.
  */
 class PreviewRevenueCatRepository(
     private val initialState: RevenueCatState = RevenueCatState.Inactive,
 ) : RevenueCatRepository {
 
     private val _state = MutableStateFlow(initialState)
-    override val subscriptionState: StateFlow<RevenueCatState> = _state
+    override val subscriptionState: StateFlow<RevenueCatState> = _state.asStateFlow()
+
+    override val packages: StateFlow<List<OfferingPackage>> = MutableStateFlow(
+        listOf(
+            OfferingPackage(id = "omni_plus_monthly", name = "Omni+ Monthly", price = "$4.99"),
+            OfferingPackage(id = "omni_plus_yearly", name = "Omni+ Yearly", price = "$39.99"),
+        ),
+    )
+
+    override val packagesError: StateFlow<String?> = MutableStateFlow(null)
 
     override fun hasOmniPlus(): Boolean {
         val state = subscriptionState.value
@@ -24,12 +35,11 @@ class PreviewRevenueCatRepository(
         _state.value = RevenueCatState.Active(mapOf(EntitlementIds.OMNI_PLUS to true))
     }
 
+    override suspend fun refreshOfferings() {
+        // Previews stay static — the fake packages above never change.
+    }
+
     override suspend fun restorePurchases() {
         // No-op for preview
     }
-
-    override fun offerings(): Map<String, String> = mapOf(
-        "omni_plus_monthly" to "Omni+ Monthly",
-        "omni_plus_yearly" to "Omni+ Yearly",
-    )
 }
