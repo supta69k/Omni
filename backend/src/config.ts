@@ -43,8 +43,9 @@ export const config = {
   },
 
   // RevenueCat (server side). The SECRET key — only the backend holds it; the Android app ships
-  // the public SDK key, which cannot grant anything. Verified doctors are comped the `omni_plus`
-  // entitlement through this key so premium checks stay a single lookup client-side.
+  // the public SDK key, which cannot grant anything. Verified doctors are comped the project's
+  // premium entitlement (`omni_pro` — the identifier is locked in the dashboard) through this key
+  // so premium checks stay a single lookup client-side.
   revenueCat: {
     secretApiKey: process.env.REVENUECAT_SECRET_API_KEY,
     doctorCompDuration: process.env.DOCTOR_COMP_DURATION || 'lifetime',

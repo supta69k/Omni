@@ -139,7 +139,7 @@ export interface SendMessageResponse {
 export interface VerificationDecisionResponse {
   success: boolean;
   message: string;
-  /** Doctor approvals only: whether the omni_plus promotional entitlement was granted. */
+  /** Doctor approvals only: whether the omni_pro promotional entitlement was granted. */
   comped?: boolean;
 }
 

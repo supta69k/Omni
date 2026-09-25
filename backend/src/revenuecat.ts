@@ -8,8 +8,12 @@
  *
  * The app user id is the Firebase UID — the client logs into RevenueCat with it — so granting by
  * uid reaches the same customer the phone is already reading.
+ *
+ * The entitlement id must match the dashboard verbatim: the project's entitlement was created as
+ * `omni_pro` and identifiers are locked once created.
  */
 const RC_BASE = 'https://api.revenuecat.com/v1';
+const OMNI_PLUS_ENTITLEMENT = 'omni_pro';
 
 export interface RevenueCatDeps {
   secretApiKey: string | undefined;
@@ -50,13 +54,13 @@ export function createRevenueCatService(deps: RevenueCatDeps): RevenueCatService
       if (!deps.secretApiKey) {
         console.warn(
           '[RC_COMP_SKIPPED] REVENUECAT_SECRET_API_KEY is not set — grant ' +
-            appUserId + ' the omni_plus entitlement manually in the dashboard',
+            appUserId + ' the ' + OMNI_PLUS_ENTITLEMENT + ' entitlement manually in the dashboard',
         );
         return false;
       }
-      const granted = await grantPromotionalEntitlement(appUserId, 'omni_plus', deps.doctorCompDuration);
+      const granted = await grantPromotionalEntitlement(appUserId, OMNI_PLUS_ENTITLEMENT, deps.doctorCompDuration);
       if (granted) {
-        console.log('[RC_COMP] granted omni_plus to ' + appUserId + ' (' + deps.doctorCompDuration + ')');
+        console.log('[RC_COMP] granted ' + OMNI_PLUS_ENTITLEMENT + ' to ' + appUserId + ' (' + deps.doctorCompDuration + ')');
       }
       return granted;
     },

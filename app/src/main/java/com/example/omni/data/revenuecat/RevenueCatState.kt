@@ -1,10 +1,15 @@
 package com.example.omni.data.revenuecat
 
 /**
- * Subscription entitlement identifiers as defined in the RevenueCat dashboard.
+ * Entitlement identifiers as defined in the RevenueCat dashboard.
  */
 object EntitlementIds {
-    const val OMNI_PLUS = "omni_plus"
+    /**
+     * The dashboard's entitlement was created as `omni_pro` and its identifier is locked there —
+     * the code follows the dashboard, not the other way round. Everything premium keys on this one
+     * string, so if a new entitlement is ever created, change it here.
+     */
+    const val OMNI_PLUS = "omni_pro"
 }
 
 /**
