@@ -36,11 +36,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.omni.data.revenuecat.EntitlementIds
 import com.example.omni.data.revenuecat.RevenueCatState
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniLavender
 import com.example.omni.ui.theme.OmniPeriwinkle
+import com.example.omni.ui.theme.OmniTheme
 
 private val PremiumGold = Color(0xFFFFD700)
 private val PremiumPurple = Color(0xFF8B5CF6)
@@ -309,5 +312,49 @@ private fun PackageCard(
                 )
             }
         }
+    }
+}
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewPackages = listOf(
+    PackageOption(id = "omni_plus_monthly", name = "Omni+ Monthly", price = "$4.99 / month"),
+    PackageOption(id = "omni_plus_yearly", name = "Omni+ Yearly", price = "$39.99 / year"),
+)
+
+private val PreviewPaywallState = OmniPlusUiState(
+    subscriptionState = RevenueCatState.Inactive,
+    availablePackages = PreviewPackages,
+)
+
+@DevicePreviews
+@Composable
+private fun OmniPlusPaywallPreview() {
+    OmniTheme {
+        OmniPlusPaywallScreen(
+            state = PreviewPaywallState,
+            onPurchase = {},
+            onRestore = {},
+            onBrowseDoctors = {},
+            onDismiss = {},
+        )
+    }
+}
+
+/** The subscribed state: packages collapse to the success row and the Browse Doctors button. */
+@DevicePreviews
+@Composable
+private fun OmniPlusPaywallSubscribedPreview() {
+    OmniTheme {
+        OmniPlusPaywallScreen(
+            state = OmniPlusUiState(
+                subscriptionState = RevenueCatState.Active(mapOf(EntitlementIds.OMNI_PLUS to true)),
+                successMessage = "Welcome to Omni+!",
+            ),
+            onPurchase = {},
+            onRestore = {},
+            onBrowseDoctors = {},
+            onDismiss = {},
+        )
     }
 }

@@ -41,8 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.omni.data.model.Doctor
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniLavender
+import com.example.omni.ui.theme.OmniTheme
 
 private val PremiumPurple = Color(0xFF8B5CF6)
 
@@ -269,4 +271,38 @@ private fun StatItem(label: String, value: String) {
         Text(text = label, fontSize = 13.sp, color = Color(0xFF6C6C6C))
     }
 }
-// timestamp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewDoctor = Doctor(
+    uid = "dr_1",
+    name = "Ayesha Rahman",
+    specialty = "Cardiology",
+    bio = "Consultant cardiologist with twelve years of clinical practice. Focused on preventive " +
+        "heart care, hypertension management and lifestyle-first treatment plans.",
+    yearsExperience = 12,
+    rating = 4.9f,
+    reviewCount = 214,
+    languages = listOf("English", "Bangla", "Hindi"),
+    consultationFee = "৳500 / consultation",
+)
+
+@DevicePreviews
+@Composable
+private fun DoctorProfilePreview() {
+    OmniTheme {
+        DoctorProfileScreen(
+            state = DoctorProfileUiState(doctor = PreviewDoctor, isLoading = false),
+            onStartConsultation = {},
+            onBack = {},
+        )
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorProfileLoadingPreview() {
+    OmniTheme {
+        DoctorProfileScreen(state = DoctorProfileUiState(), onStartConsultation = {}, onBack = {})
+    }
+}

@@ -47,8 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.omni.data.model.Doctor
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniLavender
+import com.example.omni.ui.theme.OmniTheme
 
 private val PremiumPurple = Color(0xFF8B5CF6)
 
@@ -262,4 +264,76 @@ private fun DoctorCard(
         }
     }
 }
-// timestamp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewDoctors = listOf(
+    Doctor(
+        uid = "dr_1",
+        name = "Ayesha Rahman",
+        specialty = "Cardiology",
+        bio = "Consultant cardiologist with a focus on preventive heart care and hypertension management.",
+        yearsExperience = 12,
+        rating = 4.9f,
+        reviewCount = 214,
+        languages = listOf("English", "Bangla"),
+        consultationFee = "৳500 / consultation",
+    ),
+    Doctor(
+        uid = "dr_2",
+        name = "Tanvir Hasan",
+        specialty = "Dermatology",
+        bio = "Skin, hair and nail health, from acne care to minor procedures.",
+        yearsExperience = 8,
+        rating = 4.7f,
+        reviewCount = 158,
+        languages = listOf("English", "Bangla"),
+        consultationFee = "৳400 / consultation",
+    ),
+    Doctor(
+        uid = "dr_3",
+        name = "Nusrat Jahan",
+        specialty = "Nutrition",
+        bio = "Clinical dietitian helping people build sustainable eating habits.",
+        yearsExperience = 6,
+        rating = 4.8f,
+        reviewCount = 96,
+        languages = listOf("English"),
+        consultationFee = "৳350 / consultation",
+        available = false,
+    ),
+)
+
+private val PreviewDirectoryState = DoctorDirectoryUiState(
+    doctors = PreviewDoctors,
+    isLoading = false,
+    specialties = PreviewDoctors.map { it.specialty }.distinct().sorted(),
+)
+
+@DevicePreviews
+@Composable
+private fun DoctorDirectoryPreview() {
+    OmniTheme {
+        DoctorDirectoryScreen(state = PreviewDirectoryState, onDoctorClick = {}, onBack = {})
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorDirectoryLoadingPreview() {
+    OmniTheme {
+        DoctorDirectoryScreen(state = DoctorDirectoryUiState(), onDoctorClick = {}, onBack = {})
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorDirectoryEmptyPreview() {
+    OmniTheme {
+        DoctorDirectoryScreen(
+            state = DoctorDirectoryUiState(isLoading = false),
+            onDoctorClick = {},
+            onBack = {},
+        )
+    }
+}

@@ -48,12 +48,14 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.example.omni.data.model.Message
 import com.example.omni.data.model.relativeTimeOf
+import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFieldSurface
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
 import com.example.omni.ui.theme.OmniPlaceholder
+import com.example.omni.ui.theme.OmniTheme
 
 private val PremiumPurple = Color(0xFF8B5CF6)
 private val BubbleGap = 8.dp
@@ -297,4 +299,58 @@ private fun ConsultationInput(
         }
     }
 }
-// timestamp
+
+// ---- Previews -----------------------------------------------------------------------------------
+
+private val PreviewMessages = listOf(
+    Message(
+        id = "m1",
+        senderId = "patient",
+        text = "Hi doctor, I've been getting chest tightness when I climb stairs. Should I be worried?",
+        createdAt = System.currentTimeMillis() - 26 * 60_000L,
+    ),
+    Message(
+        id = "m2",
+        senderId = "dr_1",
+        text = "Hello. Tightness on exertion is worth checking. Any pain at rest, or shortness of " +
+            "breath when lying down?",
+        createdAt = System.currentTimeMillis() - 18 * 60_000L,
+    ),
+    Message(
+        id = "m3",
+        senderId = "patient",
+        text = "No, only when I exert myself. It goes away after a couple of minutes of rest.",
+        createdAt = System.currentTimeMillis() - 12 * 60_000L,
+    ),
+)
+
+private val PreviewConsultationState = DoctorConsultationUiState(
+    conversationId = "consultation_patient_dr_1",
+    messages = PreviewMessages,
+    otherName = "Dr. Ayesha Rahman",
+    isLoading = false,
+)
+
+@DevicePreviews
+@Composable
+private fun DoctorConsultationPreview() {
+    OmniTheme {
+        DoctorConsultationScreen(
+            state = PreviewConsultationState,
+            onSend = {},
+            onBack = {},
+        )
+    }
+}
+
+@DevicePreviews
+@Composable
+private fun DoctorConsultationEmptyPreview() {
+    OmniTheme {
+        DoctorConsultationScreen(
+            state = DoctorConsultationUiState(otherName = "Dr. Ayesha Rahman", isLoading = false),
+            onSend = {},
+            onBack = {},
+        )
+    }
+}
