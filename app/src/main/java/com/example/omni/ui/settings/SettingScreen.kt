@@ -700,7 +700,7 @@ private fun OmniPlusCard(onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = PagePadding, end = PagePadding)
-            .height(80.dp)
+            .height(78.dp)
             .pressEffect()
             .clip(RoundedCornerShape(13.dp))
             .background(OmniCardInk)
@@ -719,10 +719,12 @@ private fun OmniPlusCard(onClick: () -> Unit) {
                 .padding(start = 20.dp, top = 18.dp),
         )
 
+        // Figma anchors the badge group's centre at (50% − 31.06, 50% − 10.5) — just right of the
+        // title's own centre line, not card-centred.
         Row(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 22.dp),
+                .align(Alignment.Center)
+                .offset(x = (-31).dp, y = (-10.5).dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
