@@ -55,7 +55,6 @@ import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniBackground
-import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
@@ -703,7 +702,7 @@ private fun OmniPlusCard(onClick: () -> Unit) {
             .height(78.dp)
             .pressEffect()
             .clip(RoundedCornerShape(13.dp))
-            .background(OmniCardInk)
+            .background(OmniInk)
             .clickable(onClick = onClick),
     ) {
         Text(

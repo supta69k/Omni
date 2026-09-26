@@ -52,7 +52,6 @@ import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniBackground
-import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniSetApply
@@ -60,7 +59,7 @@ import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.PlusJakartaSans
 
 // Design-specific values from Figma node 238-23 that have no Color.kt token yet. Everything that
-// does have a token (OmniCardInk #302E2E, OmniAuthHeading #8D84F9, OmniSetApply #B184E1) is used
+// does have a token (OmniInk #302E2E, OmniAuthHeading #8D84F9, OmniSetApply #B184E1) is used
 // directly; these five are the gradient's own stops and the card's surfaces, verbatim from the file.
 private val BadgeGradient = listOf(
     Color(0xFF8D84F9),
@@ -146,7 +145,7 @@ fun OmniPlusPaywallScreen(
                             .width(113.dp)
                             .height(32.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(OmniCardInk),
+                            .background(OmniInk),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(
@@ -334,7 +333,7 @@ fun OmniPlusPaywallScreen(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clip(RoundedCornerShape(14.dp))
-                                                .background(OmniCardInk)
+                                                .background(OmniInk)
                                                 .clickable(
                                                     enabled = selectedPackageId != null && !purchasing,
                                                     onClick = { selectedPackageId?.let(onPurchase) },
@@ -443,7 +442,7 @@ private fun SubscribedScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(OmniCardInk)
+                            .background(OmniInk)
                             .clickable(onClick = onBrowseDoctors)
                             .padding(vertical = 14.dp),
                         contentAlignment = Alignment.Center,
@@ -496,7 +495,7 @@ private fun PlanCard(
                 lineHeight = 24.sp,
                 letterSpacing = (-0.195).sp,
             ),
-            color = OmniCardInk,
+            color = OmniInk,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(14.dp))
