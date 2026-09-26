@@ -1012,6 +1012,8 @@ private fun OmniApp() {
                     // always drawn — see `User.pushNotifications`.
                     pushNotifications = user?.pushNotifications ?: true,
                     offlineCache = user?.offlineCache ?: true,
+                    // A verified professional has already been reviewed — the apply card is history.
+                    verified = user?.verified == true,
                     // No `onNavigate`: Settings draws no bar or rail, so the back arrow is the only
                     // way out and it returns to whichever tab opened it.
                     onBack = { screen = lastTab },

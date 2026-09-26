@@ -35,7 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -53,6 +55,7 @@ import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniBackground
+import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniOnInk
@@ -71,7 +74,9 @@ import com.example.omni.ui.theme.OmniSetToggleCache
 import com.example.omni.ui.theme.OmniSetToggleKnob
 import com.example.omni.ui.theme.OmniSetToggleOff
 import com.example.omni.ui.theme.OmniSetTogglePush
+import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.OmniTheme
+import com.example.omni.ui.theme.PlusJakartaSans
 import com.example.omni.ui.theme.SettingsType
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 
@@ -130,6 +135,7 @@ fun SettingScreen(
     onOfflineCacheChange: (Boolean) -> Unit = {},
     onApplyForVerification: () -> Unit = {},
     onOmniPlus: () -> Unit = {},
+    verified: Boolean = false,
     onLogOut: () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
@@ -242,13 +248,16 @@ fun SettingScreen(
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(UpgradeCardTopGap))
 
                 OmniPlusCard(onClick = onOmniPlus)
 
-                Spacer(Modifier.height(HealthcareCardGap))
+                // A verified professional has nothing left to apply for — the card is their past.
+                if (!verified) {
+                    Spacer(Modifier.height(UpgradeCardBottomGap))
 
-                HealthcareCard(onApply = onApplyForVerification)
+                    HealthcareCard(onApply = onApplyForVerification)
+                }
 
                 Spacer(Modifier.height(LogOutGap))
 
@@ -677,93 +686,103 @@ private fun HealthcareCard(onApply: () -> Unit) {
 }
 
 /**
- * "Omni+" — the entry point to the subscription and the doctor directory.
+ * "Upgrade to Omni Plus" — Figma node 243-235, to the dp.
  *
- * **This card is not in Figma** (§6 rule 11), so it is assembled from the parts the page it sits on
- * already owns: [HealthcareCard]'s #F5F5F5 tray at radius 13, that card's own 24dp `ic_set_doctor`
- * glyph, the settings row's two-line [SettingsType] pair, and the chevron every other row on this page
- * ends with. The accent is [OmniSetApply] — the same #B184E1 the "Apply for Verification" pill uses —
- * so "premium" reads in the palette the page already has rather than in a colour imported for it.
- *
- * It is a 74dp row rather than a 225dp panel because it is a *link*, not a pitch: the pitch is the
- * paywall this opens.
+ * The dark card pins four elements: "Upgrade to" at the top-left, the gradient-text "Omni Plus"
+ * badge with its sparkles centred above the middle (the same five-stop gradient the paywall badge
+ * uses), the one-line subtitle at the bottom-left, and the rotated arrow on the right. The badge's
+ * sparkles are the same white-stroke asset the paywall badge uses — untinted, because the dark
+ * surface is what the asset was drawn for.
  */
 @Composable
 private fun OmniPlusCard(onClick: () -> Unit) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = PagePadding, end = PagePadding)
+            .height(80.dp)
             .pressEffect()
             .clip(RoundedCornerShape(13.dp))
-            .background(OmniSetCardSurface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(OmniCardInk)
+            .clickable(onClick = onClick),
     ) {
-        Box(
+        Text(
+            text = "Upgrade to",
+            style = TextStyle(
+                fontFamily = PlusJakartaSans,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+            ),
+            color = Color.White,
             modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(OmniSetApply.copy(alpha = OmniPlusGlyphWash)),
-            contentAlignment = Alignment.Center,
+                .align(Alignment.TopStart)
+                .padding(start = 20.dp, top = 18.dp),
+        )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_set_doctor),
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-            )
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Omni+",
-                    style = SettingsType.RowTitle,
-                    color = OmniSetRowTitle,
-                    maxLines = 1,
-                )
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(OmniSetApply)
-                        .padding(horizontal = 7.dp, vertical = 1.dp),
-                ) {
-                    Text(
-                        text = "PREMIUM",
-                        style = SettingsType.GroupLabel,
-                        color = OmniOnInk,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(2.dp))
-
             Text(
-                text = "Verified doctor consultations and more",
-                style = SettingsType.RowSubtitle,
-                color = OmniSetRowSubtitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                text = "Omni Plus",
+                style = TextStyle(
+                    brush = Brush.verticalGradient(
+                        0.0277f to OmniPlusBadgeGradient[0],
+                        0.1127f to OmniPlusBadgeGradient[1],
+                        0.2849f to OmniPlusBadgeGradient[2],
+                        0.5218f to OmniPlusBadgeGradient[3],
+                        1f to OmniPlusBadgeGradient[4],
+                    ),
+                    fontFamily = BodyFont,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    letterSpacing = (-0.131).sp,
+                ),
+            )
+            Image(
+                painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
             )
         }
+
+        Text(
+            text = "Unlock premium tools and expert support with Omni+.",
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Normal,
+                fontSize = 10.sp,
+            ),
+            color = OmniUpgradeSubtitle,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 20.dp, bottom = 14.dp),
+        )
 
         Image(
-            painter = painterResource(R.drawable.ic_set_arrow_right),
+            painter = painterResource(R.drawable.ic_omniplus_arrow),
             contentDescription = "Open Omni+",
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 13.dp)
+                .size(24.dp),
         )
     }
 }
 
-/** How much of [OmniSetApply] the glyph circle keeps — the wash the paywall's benefit rows use. */
-private const val OmniPlusGlyphWash = 0.12f
+/** The badge text's five-stop gradient — the paywall badge's own, from Figma node 243-235. */
+private val OmniPlusBadgeGradient = listOf(
+    Color(0xFF8D84F9),
+    Color(0xFFAE96EF),
+    Color(0xFFF1BBDC),
+    Color(0xFFFEEBA9),
+    Color(0xFFAFDFDF),
+)
+
+private val OmniUpgradeSubtitle = Color(0xFFDADADA)
 
 /** "Log Out" — Figma node 163:54, a 383 x 46 dark button at radius 8. */
 @Composable
@@ -844,6 +863,10 @@ private val LandscapeColumnGap = 16.dp
 
 /** 653 − 613 */
 private val HealthcareCardGap = 40.dp
+
+/** Figma 243-235: the upgrade card's breathing room above and below. */
+private val UpgradeCardTopGap = 24.dp
+private val UpgradeCardBottomGap = 24.dp
 
 /** 940 − 878 */
 private val LogOutGap = 62.dp
