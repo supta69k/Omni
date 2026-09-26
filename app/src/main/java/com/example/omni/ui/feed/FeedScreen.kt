@@ -66,6 +66,7 @@ import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
+import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.theme.FeedType
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.getValue
@@ -629,11 +630,7 @@ private fun SearchResultRow(user: com.example.omni.data.model.User, onClick: () 
                     softWrap = false,
                 )
                 if (user.verified) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_feed_badge_check),
-                        contentDescription = "Verified",
-                        modifier = Modifier.size(14.dp),
-                    )
+                    VerifiedBadge()
                 }
             }
             Text(
@@ -1069,11 +1066,7 @@ private fun FeedPost(
                                 softWrap = false,
                             )
                             if (post.authorVerified) {
-                                Image(
-                                    painter = painterResource(R.drawable.ic_feed_badge_check),
-                                    contentDescription = "Verified",
-                                    modifier = Modifier.size(14.dp),
-                                )
+                                VerifiedBadge()
                             }
                         }
                         Text(

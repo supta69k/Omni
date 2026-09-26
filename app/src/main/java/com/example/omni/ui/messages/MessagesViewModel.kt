@@ -4,12 +4,14 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.Conversation
+import com.example.omni.data.model.Doctor
 import com.example.omni.data.model.MaxMessageLength
 import com.example.omni.data.model.Message
 import com.example.omni.data.model.Profession
 import com.example.omni.data.model.User
 import com.example.omni.data.model.UserRole
 import com.example.omni.data.repo.AuthRepository
+import com.example.omni.data.repo.DoctorRepository
 import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.MessageRepository
 import com.example.omni.data.repo.UserRepository
@@ -43,6 +45,7 @@ data class ProfessionalRowState(
     val name: String,
     val discipline: String,
     val photoUrl: String? = null,
+    val verified: Boolean = false,
 )
 
 /**
@@ -58,6 +61,7 @@ data class OpenChatState(
     val otherUid: String,
     val otherName: String,
     val otherPhotoUrl: String? = null,
+    val otherVerified: Boolean = false,
     val messages: List<Message> = emptyList(),
     val draft: String = "",
 ) {
@@ -111,6 +115,7 @@ class MessagesViewModel(
     private val userRepository: UserRepository,
     private val messageRepository: MessageRepository,
     private val followRepository: FollowRepository,
+    private val doctorRepository: DoctorRepository,
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key every read below restarts on. */
@@ -119,6 +124,26 @@ class MessagesViewModel(
     private val openThread = MutableStateFlow<OpenThread?>(null)
     private val draft = MutableStateFlow("")
     private val picker = MutableStateFlow(false)
+
+    /**
+     * Optimistic outgoing messages — shown the instant [send] is called, before the HTTP round-trip to
+     * the backend commits them to Firestore.
+     *
+     * [messages] is server truth, and this app does not write a message to Firestore from the client
+     * (the Render backend does), so without this echo the sender stares at an unchanged thread until
+     * Render answers — seconds on a cold free-tier dyno, and previously *nothing at all* when the
+     * backend's post-commit notification step made the call return non-2xx even though the message had
+     * already been written (the recipient saw it, the sender did not). That was the sender-missing-message
+     * bug.
+     *
+     * Reconciled by content in [undelivered]/[pruneDelivered]: the moment the server copy of an echo
+     * arrives on [messages], the matching optimistic one is dropped, so a message is one bubble, never
+     * two. Cleared whenever the open thread changes so an echo never leaks into another chat.
+     */
+    private val pending = MutableStateFlow<List<Message>>(emptyList())
+
+    /** Distinguishes otherwise-identical optimistic messages; never shown. */
+    private var pendingSeq = 0L
 
     /**
      * Live profiles keyed by uid — the source of truth that overrides the stale denormalised identity
@@ -184,12 +209,31 @@ class MessagesViewModel(
                 if (!open) {
                     flowOf(emptyList())
                 } else {
-                    userRepository.observeProfessionals()
-                        .map { list -> list.filter { it.uid != uid }.map { it.toRow() } }
+                    // Two directories, one list. The `users`-verified professionals (app-approved doctors
+                    // and nutritionists) and the `doctors` consultation directory are separate collections;
+                    // a doctor seeded straight into `doctors` never had a `users.verified` flag, so before
+                    // this merge the only way to reach such a doctor from the picker was to follow them, or
+                    // to be an Omni+ subscriber and reach them through Browse Doctors — which is the reported
+                    // bug. Merged and de-duplicated by uid (the `users` row wins, being the canonical
+                    // profile), every verified doctor becomes a normal, ungated direct message for anyone.
+                    val verified = userRepository.observeProfessionals()
                         .catch { cause ->
                             Log.w("Omni", "The professional directory could not be read", cause)
                             emit(emptyList())
                         }
+                    val doctors = doctorRepository.observeDoctors()
+                        .catch { cause ->
+                            Log.w("Omni", "The doctor directory could not be read", cause)
+                            emit(emptyList())
+                        }
+                    combine(verified, doctors) { verifiedUsers, directoryDoctors ->
+                        (verifiedUsers.map { it.toRow() } + directoryDoctors.map { it.toRow() })
+                            .asSequence()
+                            .filter { it.uid != uid }
+                            .distinctBy { it.uid }
+                            .sortedBy { it.name.lowercase() }
+                            .toList()
+                    }
                 }
             }
 
@@ -254,8 +298,22 @@ class MessagesViewModel(
             }
         }
 
+    /**
+     * Server messages with any not-yet-confirmed optimistic ones appended.
+     *
+     * [pruneDelivered], wired onto [messages], removes an echo from [pending] the moment its server
+     * twin arrives — and it runs *before* this combine sees the new server list, so the append here is
+     * simply "whatever is still pending". Matching is done in exactly one place (the prune), so a single
+     * server message can never consume two echoes.
+     */
+    private val mergedMessages: Flow<List<Message>> = messages
+        .onEach(::pruneDelivered)
+        .combine(pending) { server, echoes ->
+            if (echoes.isEmpty()) server else server + echoes
+        }
+
     private val chatRaw: Flow<OpenChatState?> =
-        combine(uid, openThread, messages, draft) { uid, thread, messages, draft ->
+        combine(uid, openThread, mergedMessages, draft) { uid, thread, messages, draft ->
             if (uid == null || thread == null) {
                 null
             } else {
@@ -295,6 +353,7 @@ class MessagesViewModel(
             state.copy(
                 otherName = live?.name?.ifBlank { null } ?: state.otherName,
                 otherPhotoUrl = live?.photoUrl ?: state.otherPhotoUrl,
+                otherVerified = live?.verified ?: state.otherVerified,
             )
         }
     }
@@ -367,6 +426,7 @@ class MessagesViewModel(
     fun open(conversation: Conversation) {
         picker.value = false
         draft.value = ""
+        pending.value = emptyList()
         openThread.value = OpenThread(
             conversationId = conversation.id,
             otherUid = conversation.otherUid,
@@ -420,6 +480,7 @@ class MessagesViewModel(
                 )
                 picker.value = false
                 draft.value = ""
+                pending.value = emptyList()
                 openThread.value = OpenThread(
                     conversationId = conversationId,
                     otherUid = professional.uid,
@@ -443,11 +504,13 @@ class MessagesViewModel(
     /**
      * Sends the draft.
      *
-     * The field is cleared before the write, not after it: Firestore applies the message to its local cache
-     * and re-fires the thread listener before the round-trip, so the bubble appears on the same frame the
-     * input empties — offline included. A failure here is a rules rejection rather than a lost network, and
-     * it is logged rather than restored into the field, because putting text back into a box the user has
-     * already started retyping in is worse than losing it.
+     * The field is cleared immediately and the message is shown at once as an optimistic echo
+     * ([pending]) — the message is written by the backend over HTTP, not by Firestore's own local
+     * cache, so the echo is what makes the bubble appear on the same frame the input empties instead of
+     * after the round-trip. The echo is reconciled away when the server copy arrives on the listener
+     * (never a duplicate), and removed if the send actually failed. The draft is not restored on
+     * failure, because putting text back into a box the user has already started retyping in is worse
+     * than losing it.
      */
     fun send() {
         val thread = openThread.value ?: return
@@ -456,6 +519,15 @@ class MessagesViewModel(
         if (body.isEmpty()) return
 
         draft.value = ""
+        // senderId is the authenticated uid — the same value the backend stamps from the ID token — so
+        // the echo sits on the sender's side of the column and matches its server twin for reconciliation.
+        val echo = Message(
+            id = "pending-${pendingSeq++}",
+            senderId = uid,
+            text = body,
+            createdAt = System.currentTimeMillis(),
+        )
+        pending.value = pending.value + echo
         viewModelScope.launch {
             try {
                 messageRepository.send(
@@ -465,6 +537,9 @@ class MessagesViewModel(
                     text = body,
                 )
             } catch (cause: Exception) {
+                // The write did not land. Drop the echo so the thread does not imply it did; if it
+                // secretly did land, the listener still delivers the real copy.
+                pending.value = pending.value.filterNot { it.id == echo.id }
                 Log.w("Omni", "A message to ${thread.otherUid} could not be sent", cause)
             }
         }
@@ -475,6 +550,7 @@ class MessagesViewModel(
         val wasOpen = openThread.value != null
         openThread.value = null
         draft.value = ""
+        pending.value = emptyList()
         return wasOpen
     }
 
@@ -499,7 +575,38 @@ class MessagesViewModel(
         return copy(
             otherName = author.name.ifBlank { otherName },
             otherPhotoUrl = author.photoUrl ?: otherPhotoUrl,
+            otherVerified = author.verified,
         )
+    }
+
+    /**
+     * The optimistic echoes whose server copy has *not* yet arrived on [server].
+     *
+     * Matched by (senderId, text) and counted, not by identity: the backend assigns its own message id,
+     * so an echo cannot be matched by id, but sending the same words twice must still resolve to two
+     * bubbles — so each server copy consumes exactly one echo.
+     */
+    private fun undelivered(server: List<Message>, echoes: List<Message>): List<Message> {
+        val counts = HashMap<Pair<String, String>, Int>()
+        server.forEach { m -> counts[m.senderId to m.text] = (counts[m.senderId to m.text] ?: 0) + 1 }
+        return echoes.filter { echo ->
+            val key = echo.senderId to echo.text
+            val n = counts[key] ?: 0
+            if (n > 0) {
+                counts[key] = n - 1
+                false
+            } else {
+                true
+            }
+        }
+    }
+
+    /** Drops from [pending] any optimistic message the server has now delivered. */
+    private fun pruneDelivered(server: List<Message>) {
+        val current = pending.value
+        if (current.isEmpty()) return
+        val remaining = undelivered(server, current)
+        if (remaining.size != current.size) pending.value = remaining
     }
 
     /**
@@ -548,6 +655,20 @@ class MessagesViewModel(
                 null -> "Verified professional"
             },
             photoUrl = photoUrl,
+            verified = verified,
+        )
+
+        /**
+         * A row for a consultation-directory doctor (the `doctors` collection). Its discipline is the
+         * doctor's own specialty, and a directory doctor is verified by definition — the directory is
+         * admin-written only.
+         */
+        fun Doctor.toRow(): ProfessionalRowState = ProfessionalRowState(
+            uid = uid,
+            name = name.ifBlank { "Doctor" },
+            discipline = specialty.ifBlank { "Doctor" },
+            photoUrl = photoUrl,
+            verified = verified,
         )
 
         /**
@@ -566,6 +687,7 @@ class MessagesViewModel(
                 null -> "You follow them"
             },
             photoUrl = photoUrl,
+            verified = verified,
         )
     }
 }

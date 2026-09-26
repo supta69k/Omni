@@ -33,7 +33,7 @@ function mockReqRes(body: unknown, uid: string | undefined, isAdmin = true) {
   return { req, res, captured };
 }
 
-function makeHarness(requestData: any) {
+function makeHarness(requestData: any, userData: any = { photoUrl: 'https://cdn.example/doc.jpg' }) {
   const doctorsRef = { id: 'user-123' };
   const batchSets: Array<{ ref: any; data: any }> = [];
   const grantDoctorEntitlement = vi.fn(async () => true);
@@ -44,6 +44,15 @@ function makeHarness(requestData: any) {
         return {
           doc: vi.fn(() => ({
             get: vi.fn(async () => ({ exists: true, id: 'user-123', data: () => requestData })),
+          })),
+        };
+      }
+      if (name === 'users') {
+        return {
+          doc: vi.fn(() => ({
+            get: vi.fn(async () => ({ exists: true, id: 'user-123', data: () => userData })),
+            set: vi.fn(async () => {}),
+            update: vi.fn(async () => {}),
           })),
         };
       }
@@ -99,6 +108,26 @@ describe('Doctor verification approve', () => {
         available: true,
       }),
     );
+  });
+
+  it('copies the doctor account photo onto the directory tile', async () => {
+    const { batchSets, doctorsRef, handlers } = makeHarness(
+      {
+        status: 'pending',
+        uid: 'user-123',
+        name: 'Dr. Ayesha Rahman',
+        specialty: 'Cardiology',
+        profession: 'DOCTOR',
+      },
+      { photoUrl: 'https://res.cloudinary.com/omni/doc-123.jpg' },
+    );
+    const { req, res } = mockReqRes({ uid: 'user-123', profession: 'DOCTOR' }, 'admin-uid');
+    (req as any).user = { uid: 'admin-uid', admin: true };
+
+    await handlers.approve(req, res);
+
+    const tile = batchSets.find((entry) => entry.ref === doctorsRef);
+    expect(tile?.data.photoUrl).toBe('https://res.cloudinary.com/omni/doc-123.jpg');
   });
 
   it('approving a doctor grants the omni_plus entitlement and reports it', async () => {

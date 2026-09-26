@@ -26,6 +26,7 @@
 - **OmniHeader** [client] — props: state — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **HeaderAction** [client] — props: icon, contentDescription, unread, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniBottomNav** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **NavIconButton** [client] — props: item, selected, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **NavCell** [client] — props: item, selected, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniTabScaffold** [client] — props: selected, onNavigate — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniNavRail** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
@@ -95,11 +96,13 @@
 - **ConversationRow** [client] — props: conversation, onClick — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **NewMessagePicker** [client] — props: people, professionals, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **PickerGroup** [client] — props: label, rows, empty, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **SegmentPill** [client] — props: label, selected, onClick — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **Avatar** [client] — props: name, photoUrl, size — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPickerPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPickerEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **MessagesScreenDoctorPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **NotificationsScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationRow** [client] — props: item, onClick — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationsScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
@@ -138,6 +141,31 @@
 - **FoodLogEntry** [client] — props: meal, onClick — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **MacroChip** [client] — props: amount, fill — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **NutritionScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **DoctorConsultationScreen** [client] — props: viewModel, onBack — `app\src\main\java\com\example\omni\ui\omniplus\DoctorConsultationScreen.kt`
+- **DoctorConsultationPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorConsultationScreen.kt`
+- **DoctorConsultationEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorConsultationScreen.kt`
+- **DoctorDirectoryScreen** [client] — props: state, onDoctorClick — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorCard** [client] — props: doctor, onClick — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **SpecialtyChip** [client] — props: label, selected, onClick — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorDirectoryPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorDirectoryLoadingPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorDirectoryEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorProfileScreen** [client] — props: state, onStartConsultation — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **ProfileStat** [client] — props: label, value — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **SectionHeading** [client] — props: text — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **DoctorProfilePreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **DoctorProfileLoadingPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **OmniPlusPaywallScreen** [client] — props: state, onPurchase — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **SubscribedScreen** [client] — props: message, onBrowseDoctors — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **PlanCard** [client] — props: pkg, selected, onClick — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **BestValueRibbon** [client] — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **FeatureCheckRow** [client] — props: text — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **OmniPlusPaywallPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **OmniPlusPaywallSubscribedPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **PremiumGate** [client] — props: revenueCatRepository, onNavigateToPaywall — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
+- **GatePage** [client] — props: title, body, action, onAction — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
+- **PremiumGatePreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
+- **PremiumGateInactivePreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
 - **OnboardingScreen** [client] — props: onFinish — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
 - **OnboardingPageContent** [client] — props: page — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
 - **PageIndicator** [client] — props: pageCount, currentPage — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
@@ -186,12 +214,14 @@
 - **SettingsRow** [client] — props: title, subtitle, textWidth, onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **PreferenceSwitch** [client] — props: checked, trackOn, onCheckedChange — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **HealthcareCard** [client] — props: onApply — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **OmniPlusCard** [client] — props: onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **LogOutButton** [client] — props: onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **SettingScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **VerificationScreen** [client] — props: state — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **ApplicationForm** [client] — props: state, onProfessionChange — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **ProfessionChip** [client] — props: label, selected, onClick — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **LicenceField** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
+- **SpecialtyField** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **SubmitButton** [client] — props: state, onSubmit — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **PendingCard** [client] — props: request — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **StatusCard** [client] — props: title, body — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`

@@ -44,6 +44,7 @@ import com.example.omni.ui.components.OmniTabScaffold
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
+import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniBackground
@@ -279,13 +280,22 @@ private fun ConversationRow(
         )
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = conversation.otherName,
-                style = SettingsType.RowTitle,
-                color = OmniSetRowTitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(BadgeGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = conversation.otherName,
+                    style = SettingsType.RowTitle,
+                    color = OmniSetRowTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (conversation.otherVerified) {
+                    VerifiedBadge()
+                }
+            }
 
             Spacer(Modifier.height(TitleGap))
 
@@ -414,13 +424,22 @@ private fun PickerGroup(
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = row.name,
-                        style = SettingsType.RowTitle,
-                        color = OmniSetRowTitle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(BadgeGap),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = row.name,
+                            style = SettingsType.RowTitle,
+                            color = OmniSetRowTitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (row.verified) {
+                            VerifiedBadge()
+                        }
+                    }
                     Text(
                         text = row.discipline,
                         style = SettingsType.RowSubtitle,
@@ -543,6 +562,8 @@ private val PickerAvatarSize = 38.dp
 private val AvatarGap = 12.dp
 private val ChevronSize = 20.dp
 private val TitleGap = 2.dp
+/** Between a name and its verified badge — tight, so the mark reads as part of the name. */
+private val BadgeGap = 4.dp
 private val UnreadPillHeight = 18.dp
 private val UnreadPillPadding = 7.dp
 
@@ -566,6 +587,7 @@ val PreviewMessages = MessagesUiState(
             id = "preview-0",
             otherUid = "dr-rahman",
             otherName = "Dr. Sadia Rahman",
+            otherVerified = true,
             lastMessage = "Take the paracetamol with food, and send me a photo if the rash spreads.",
             lastMessageAt = System.currentTimeMillis() - 9 * 60_000L,
             lastSenderId = "dr-rahman",
@@ -585,8 +607,8 @@ val PreviewMessages = MessagesUiState(
 
 /** The picker's own preview data — the same two accounts `PreviewUserRepository` seeds. */
 private val PreviewProfessionalRows = listOf(
-    ProfessionalRowState("dr-rahman", "Dr. Sadia Rahman", "Doctor"),
-    ProfessionalRowState("nut-karim", "Tanvir Karim", "Nutritionist"),
+    ProfessionalRowState("dr-rahman", "Dr. Sadia Rahman", "Doctor", verified = true),
+    ProfessionalRowState("nut-karim", "Tanvir Karim", "Nutritionist", verified = true),
 )
 
 /** Two ordinary accounts, so the preview shows the social group beside the healthcare one. */

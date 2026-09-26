@@ -8,11 +8,9 @@ import com.example.omni.data.model.Message
 import com.example.omni.data.model.MessagePageSize
 import com.example.omni.data.model.conversationIdOf
 import com.example.omni.data.model.conversationIdentityMap
-import com.example.omni.data.model.newMessageMap
 import com.example.omni.data.model.toConversation
 import com.example.omni.data.model.toMessage
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -70,6 +68,7 @@ interface MessageRepository {
         otherUid: String,
         otherName: String,
         otherPhotoUrl: String?,
+        consultation: Boolean = false,
     ): String
 
     /**
@@ -90,20 +89,16 @@ interface MessageRepository {
 }
 
 /**
- * [MessageRepository] over Firestore.
+ * [MessageRepository] over Firestore for reads, and the Render backend for the one write.
  *
- * **The thread summary is maintained by the client, not by a function.** §9's `onMessageCreated` is what
- * should move `lastMessage`, `lastMessageAt` and the unread counters, and it is Phase 12's. Until it
- * exists the sender does it in the same [com.google.firebase.firestore.WriteBatch] as the message, which
- * the deployed rules already permit (`allow update: if … request.auth.uid in resource.data.participants`).
- * A batch rather than a transaction, for the reason every write in this app gives: transactions need the
- * network, and a message typed on a train has to leave the moment it is typed.
- *
- * **`readBy` is written once and never grows.** The rules forbid updating a message at all
- * (`allow update, delete: if false`), which is right — a message nobody can edit after the fact is the
- * whole point of a consultation log — but it means per-message read receipts are not something a client
- * can maintain. The thread-level `unread` counter carries "seen" instead, which is what the list draws.
- * §11 Phase 11 puts read receipts out of scope anyway.
+ * **A message is written by the backend, not the client.** [send] POSTs to
+ * `/conversations/{id}/messages`; the server verifies the Firebase ID token, stamps `senderId` from it
+ * (never from the body), writes the message and moves the thread summary (`lastMessage`,
+ * `lastMessageAt`, `lastSenderId`, and the recipient's `unread`) in one batch, and fires the push. The
+ * client therefore does not write the summary and does not maintain `readBy`; "seen" is the thread-level
+ * `unread` counter, zeroed by [markRead]. Because the write is a round-trip rather than a Firestore
+ * local-cache append, the *sender's* immediate feedback is the ViewModel's optimistic echo, not this
+ * repository — see `MessagesViewModel.send`.
  *
  * **One composite index is required** (§7): `conversations` where `participants array-contains` ordered
  * by `lastMessageAt desc`. Firestore prints the console link to create it on the first failure; until it
@@ -164,6 +159,7 @@ class FirestoreMessageRepository(
         otherUid: String,
         otherName: String,
         otherPhotoUrl: String?,
+        consultation: Boolean,
     ): String {
         require(selfUid != otherUid) { "A conversation needs two different people" }
         val id = conversationIdOf(selfUid, otherUid)
@@ -189,6 +185,7 @@ class FirestoreMessageRepository(
                     otherUid = otherUid,
                     otherName = otherName,
                     otherPhotoUrl = otherPhotoUrl,
+                    consultation = consultation,
                 ),
                 SetOptions.merge(),
             )
@@ -287,6 +284,7 @@ class PreviewMessageRepository : MessageRepository {
         otherUid: String,
         otherName: String,
         otherPhotoUrl: String?,
+        consultation: Boolean,
     ): String {
         require(selfUid != otherUid) { "A conversation needs two different people" }
         return conversationIdOf(selfUid, otherUid)

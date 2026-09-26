@@ -43,6 +43,7 @@ import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniBackground
@@ -163,13 +164,22 @@ fun ChatScreen(
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = state.otherName,
-                        style = HomeType.SectionTitle,
-                        color = OmniCardInk,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(HeaderBadgeGap),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = state.otherName,
+                            style = HomeType.SectionTitle,
+                            color = OmniCardInk,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (state.otherVerified) {
+                            VerifiedBadge()
+                        }
+                    }
 
                     if (subtitle != null) {
                         Text(
@@ -364,6 +374,8 @@ private val HeaderTopGap = 12.dp
 private val BackButtonSize = 40.dp
 private val BackRowGap = 10.dp
 private val HeaderAvatarSize = 36.dp
+/** Between the other participant's name and their verified badge in the chat header. */
+private val HeaderBadgeGap = 4.dp
 private val ThreadTop = 16.dp
 private val BubbleGap = 12.dp
 private val BubbleCorner = 14.dp

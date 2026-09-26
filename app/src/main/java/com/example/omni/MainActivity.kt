@@ -175,6 +175,7 @@ private fun OmniApp() {
             OmniHeaderState(
                 userName = it.name,
                 photoUrl = it.photoUrl,
+                verified = it.verified,
                 unreadMessages = it.unreadMessages,
                 unreadNotifications = 0,
             )
@@ -212,6 +213,7 @@ private fun OmniApp() {
      */
     var doctorUid by rememberSaveable { mutableStateOf<String?>(null) }
     var currentDoctorName by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentDoctorPhotoUrl by rememberSaveable { mutableStateOf<String?>(null) }
 
     /**
      * The last bottom-bar tab the user stood on — where the three header pages go back to.
@@ -491,6 +493,7 @@ private fun OmniApp() {
                         val doctor = state.doctors.find { it.uid == uid }
                         doctorUid = uid
                         currentDoctorName = doctor?.name ?: "Doctor"
+                        currentDoctorPhotoUrl = doctor?.photoUrl
                         screen = AppScreen.DoctorProfile
                     },
                     onBack = { screen = AppScreen.OmniPlus },
@@ -501,6 +504,7 @@ private fun OmniApp() {
                 val viewModel: DoctorProfileViewModel = viewModel(
                     factory = DoctorProfileViewModel.factory(
                         container.doctorRepository,
+                        container.userRepository,
                         context as androidx.activity.ComponentActivity,
                         doctorUid,
                     ),
@@ -522,6 +526,7 @@ private fun OmniApp() {
                         context as androidx.activity.ComponentActivity,
                         doctorUid,
                         currentDoctorName,
+                        currentDoctorPhotoUrl,
                     ),
                 )
                 DoctorConsultationScreen(

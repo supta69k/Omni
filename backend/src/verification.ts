@@ -46,6 +46,13 @@ export function createVerificationHandlers(deps: VerificationDeps) {
     }
     const application = reqDoc.data() ?? {};
 
+    // The doctor's directory tile should show their real profile photo. The photo lives on the
+    // account document (`users/{uid}.photoUrl`), not on the application, so read it here and copy it
+    // onto the tile — otherwise every approved doctor renders with only an initial in the directory,
+    // the profile, and the consultation header.
+    const userSnap = await deps.db.collection('users').doc(uid).get();
+    const doctorPhotoUrl = (userSnap.data()?.photoUrl as string | undefined)?.trim() || null;
+
     const batch = deps.db.batch();
 
     batch.update(deps.db.collection('verificationRequests').doc(uid), {
@@ -70,7 +77,7 @@ export function createVerificationHandlers(deps: VerificationDeps) {
         name: String(application.name ?? '').trim(),
         specialty: String(application.specialty ?? '').trim() || 'General Medicine',
         bio: '',
-        photoUrl: null,
+        photoUrl: doctorPhotoUrl,
         yearsExperience: 0,
         rating: 0,
         reviewCount: 0,

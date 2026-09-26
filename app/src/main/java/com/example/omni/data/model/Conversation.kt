@@ -1,7 +1,6 @@
 package com.example.omni.data.model
 
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
 
 /**
  * One thread — the `conversations/{conversationId}` document (BACKEND_PLAN §7).
@@ -19,18 +18,31 @@ data class Conversation(
     val otherUid: String,
     val otherName: String,
     val otherPhotoUrl: String? = null,
+    /**
+     * Whether the other participant is a verified professional. It is **not** denormalised onto the
+     * thread — the thread stores only name and photo — so it is `false` for a row drawn straight from
+     * Firestore and becomes true only once the live `users/{uid}` profile is resolved on top (see
+     * `MessagesViewModel.withAuthor`). The badge therefore appears the same moment a live name or photo
+     * would, never from a second, competing verification field.
+     */
+    val otherVerified: Boolean = false,
     val lastMessage: String = "",
     val lastMessageAt: Long = 0L,
     val lastSenderId: String = "",
     val unread: Int = 0,
+    /**
+     * Whether this thread was opened as an Omni+ doctor consultation — a stored flag (`consultation`
+     * on the document), set once by the consultation entry point and merged in, never removed. It is a
+     * *flag on the one canonical thread*, not a separate thread: the same two people have exactly one
+     * conversation whatever door they came through (see [conversationIdOf]). Legacy threads created by
+     * the old `consultation_{a}_{b}` id scheme are still recognised by their id prefix, so nothing that
+     * already exists drops out of the doctor's Patients tab.
+     */
+    val consultation: Boolean = false,
 ) {
 
-    /**
-     * An Omni+ consultation thread rather than a social one. Consultation ids are built as
-     * `consultation_{patientUid}_{doctorUid}` (see `DoctorConsultationViewModel`), and no Firebase
-     * uid begins with that prefix, so the id alone is the marker — no extra field, no extra index.
-     */
-    val isConsultation: Boolean get() = id.startsWith("consultation_")
+    /** An Omni+ consultation thread rather than a social one — the stored flag, or a legacy id. */
+    val isConsultation: Boolean get() = consultation || id.startsWith("consultation_")
 }
 
 /** One message — `conversations/{conversationId}/messages/{messageId}`. Text or an image (or both). */
@@ -58,7 +70,7 @@ fun conversationIdOf(a: String, b: String): String =
  * This is the whole document [com.example.omni.data.repo.MessageRepository.openConversation] writes,
  * and it is written with `SetOptions.merge()`. The four summary fields (`lastMessage`,
  * `lastMessageAt`, `lastSenderId`, `unread`) are **deliberately absent**: they are created by the first
- * [newMessageMap] that lands, and merging blanks over a thread that already has messages in it would
+ * message the backend writes, and merging blanks over a thread that already has messages in it would
  * wipe the inbox preview, reset the other person's unread badge, and bump an untouched thread to the
  * top of their list every time somebody opened the chat.
  *
@@ -82,27 +94,17 @@ fun conversationIdentityMap(
     otherUid: String,
     otherName: String,
     otherPhotoUrl: String?,
-): Map<String, Any?> = mapOf(
-    "participants" to listOf(selfUid, otherUid).sorted(),
-    "participantNames" to mapOf(
+    consultation: Boolean = false,
+): Map<String, Any?> = buildMap {
+    put("participants", listOf(selfUid, otherUid).sorted())
+    put("participantNames", mapOf(
         selfUid to selfName.take(MaxParticipantNameLength),
         otherUid to otherName.take(MaxParticipantNameLength),
-    ),
-    "participantPhotos" to mapOf(selfUid to selfPhotoUrl, otherUid to otherPhotoUrl),
-)
-
-/**
- * The message document. Server-stamped for the same reason every other write in this app is.
- *
- * Either [text] or [imageUrl] (or both) must be present; a message with neither is rejected at the
- * repository boundary.
- */
-fun newMessageMap(senderId: String, text: String, imageUrl: String? = null): Map<String, Any?> = buildMap {
-    put("senderId", senderId)
-    if (text.isNotBlank()) put("text", text.take(MaxMessageLength))
-    if (imageUrl != null) put("imageUrl", imageUrl)
-    put("createdAt", FieldValue.serverTimestamp())
-    put("readBy", listOf(senderId))
+    ))
+    put("participantPhotos", mapOf(selfUid to selfPhotoUrl, otherUid to otherPhotoUrl))
+    // Only ever written as `true`, and only when opened as a consultation — a merge must never turn
+    // an existing consultation flag back off, so a normal open (consultation = false) omits the key.
+    if (consultation) put("consultation", true)
 }
 
 /**
@@ -132,6 +134,7 @@ fun DocumentSnapshot.toConversation(selfUid: String): Conversation? {
         lastMessageAt = millisOf("lastMessageAt"),
         lastSenderId = getString("lastSenderId").orEmpty(),
         unread = (get("unread.$selfUid") as? Number)?.toInt()?.coerceAtLeast(0) ?: 0,
+        consultation = getBoolean("consultation") ?: false,
     )
 }
 

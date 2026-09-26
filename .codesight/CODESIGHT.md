@@ -3,9 +3,9 @@
 > **Stack:** android, express | none | jetpack-compose | typescript
 > **Monorepo:** omni-otp-backend, omni-functions, omni-seed-tools
 
-> 5 routes (5 inferred) | 0 models | 233 components | 7 lib files | 8 env vars | 3 middleware
+> 11 routes (11 inferred) | 0 models | 263 components | 14 lib files | 11 env vars | 3 middleware
 > **Token savings:** this file is ~0 tokens. Without it, AI exploration would cost ~0 tokens. **Saves ~0 tokens per conversation.**
-> **Last scanned:** 2026-09-19 17:32 — re-run after significant changes
+> **Last scanned:** 2026-09-26 06:28 — re-run after significant changes
 
 ---
 
@@ -21,6 +21,12 @@
 - `POST` `/otp/verify` [auth, db] `[inferred]`
 - `GET` `/health` `[inferred]`
 - `POST` `/ai/meal/analyze` [auth] `[inferred]`
+- `POST` `/verification/approve` [auth] `[inferred]`
+- `POST` `/verification/reject` [auth] `[inferred]`
+- `POST` `/posts/:postId/like` params(postId) [auth] `[inferred]`
+- `POST` `/posts/:postId/comments` params(postId) [auth] `[inferred]`
+- `POST` `/conversations/:conversationId/messages` params(conversationId) [auth] `[inferred]`
+- `POST` `/admin/grant` [auth] `[inferred]`
 
 ---
 
@@ -52,6 +58,7 @@
 - **OmniHeader** [client] — props: state — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **HeaderAction** [client] — props: icon, contentDescription, unread, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniBottomNav** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
+- **NavIconButton** [client] — props: item, selected, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **NavCell** [client] — props: item, selected, onClick — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniTabScaffold** [client] — props: selected, onNavigate — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
 - **OmniNavRail** [client] — props: selected, onSelect — `app\src\main\java\com\example\omni\ui\components\OmniChrome.kt`
@@ -121,11 +128,13 @@
 - **ConversationRow** [client] — props: conversation, onClick — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **NewMessagePicker** [client] — props: people, professionals, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **PickerGroup** [client] — props: label, rows, empty, onStartWith — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **SegmentPill** [client] — props: label, selected, onClick — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **Avatar** [client] — props: name, photoUrl, size — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPickerPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenPickerEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **MessagesScreenEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
+- **MessagesScreenDoctorPreview** [client] — `app\src\main\java\com\example\omni\ui\messages\MessagesScreen.kt`
 - **NotificationsScreen** [client] — props: state, onBack — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationRow** [client] — props: item, onClick — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
 - **NotificationsScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\notifications\NotificationsScreen.kt`
@@ -164,6 +173,31 @@
 - **FoodLogEntry** [client] — props: meal, onClick — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **MacroChip** [client] — props: amount, fill — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
 - **NutritionScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\nutrition\NutritionScreen.kt`
+- **DoctorConsultationScreen** [client] — props: viewModel, onBack — `app\src\main\java\com\example\omni\ui\omniplus\DoctorConsultationScreen.kt`
+- **DoctorConsultationPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorConsultationScreen.kt`
+- **DoctorConsultationEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorConsultationScreen.kt`
+- **DoctorDirectoryScreen** [client] — props: state, onDoctorClick — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorCard** [client] — props: doctor, onClick — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **SpecialtyChip** [client] — props: label, selected, onClick — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorDirectoryPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorDirectoryLoadingPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorDirectoryEmptyPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorDirectoryScreen.kt`
+- **DoctorProfileScreen** [client] — props: state, onStartConsultation — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **ProfileStat** [client] — props: label, value — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **SectionHeading** [client] — props: text — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **DoctorProfilePreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **DoctorProfileLoadingPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\DoctorProfileScreen.kt`
+- **OmniPlusPaywallScreen** [client] — props: state, onPurchase — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **SubscribedScreen** [client] — props: message, onBrowseDoctors — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **PlanCard** [client] — props: pkg, selected, onClick — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **BestValueRibbon** [client] — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **FeatureCheckRow** [client] — props: text — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **OmniPlusPaywallPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **OmniPlusPaywallSubscribedPreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\OmniPlusPaywallScreen.kt`
+- **PremiumGate** [client] — props: revenueCatRepository, onNavigateToPaywall — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
+- **GatePage** [client] — props: title, body, action, onAction — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
+- **PremiumGatePreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
+- **PremiumGateInactivePreview** [client] — `app\src\main\java\com\example\omni\ui\omniplus\PremiumGate.kt`
 - **OnboardingScreen** [client] — props: onFinish — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
 - **OnboardingPageContent** [client] — props: page — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
 - **PageIndicator** [client] — props: pageCount, currentPage — `app\src\main\java\com\example\omni\ui\onboarding\OnboardingScreen.kt`
@@ -212,12 +246,14 @@
 - **SettingsRow** [client] — props: title, subtitle, textWidth, onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **PreferenceSwitch** [client] — props: checked, trackOn, onCheckedChange — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **HealthcareCard** [client] — props: onApply — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
+- **OmniPlusCard** [client] — props: onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **LogOutButton** [client] — props: onClick — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **SettingScreenPreview** [client] — `app\src\main\java\com\example\omni\ui\settings\SettingScreen.kt`
 - **VerificationScreen** [client] — props: state — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **ApplicationForm** [client] — props: state, onProfessionChange — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **ProfessionChip** [client] — props: label, selected, onClick — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **LicenceField** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
+- **SpecialtyField** [client] — props: value, onValueChange — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **SubmitButton** [client] — props: state, onSubmit — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **PendingCard** [client] — props: request — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
 - **StatusCard** [client] — props: title, body — `app\src\main\java\com\example\omni\ui\settings\VerificationScreen.kt`
@@ -264,8 +300,13 @@
 
 # Libraries
 
+- `backend\src\comment.ts` — function createCommentHandler: (deps) => void, interface CommentDeps
 - `backend\src\config.ts` — function validateConfig: () => void, const config
 - `backend\src\email-template.ts` — function generateOtpEmailHtml: (data) => string, function generateOtpEmailText: (data) => string
+- `backend\src\fcm.ts`
+  - class FirestoreFcmService
+  - class NoOpFcmService
+  - interface FcmService
 - `backend\src\gemini.ts`
   - function describeGeminiFailure: (bodyText) => string
   - class GeminiUnavailableError
@@ -274,6 +315,7 @@
   - interface GeminiClient
   - const MEAL_SYSTEM_PROMPT
   - _...1 more_
+- `backend\src\like.ts` — function createLikeHandler: (deps) => void, interface LikeDeps
 - `backend\src\meal-analyze.ts`
   - function normalizeUnit: (unit) => QuantityKind
   - function maxQuantityForUnit: (unit) => number
@@ -282,11 +324,16 @@
   - function validateAnalysis: (raw) => MealAnalysisResult
   - function computeTotals: (items) => MealTotals
   - _...3 more_
+- `backend\src\message.ts` — function createMessageHandler: (deps) => void, interface MessageDeps
 - `backend\src\rate-limiter.ts`
   - class FirestoreRateLimiter
   - interface RateLimitConfig
   - interface RateLimitInfo
   - interface RateLimitError
+- `backend\src\revenuecat.ts`
+  - function createRevenueCatService: (deps) => RevenueCatService
+  - interface RevenueCatDeps
+  - interface RevenueCatService
 - `backend\src\sendgrid.ts`
   - function initializeSendGrid: () => void
   - function isSendGridConfigured: () => boolean
@@ -299,6 +346,8 @@
   - function formatOtpForDisplay: (otp) => string
   - function getRemainingSeconds: (expiresAt) => number
   - _...1 more_
+- `backend\src\verification.ts` — function createVerificationHandlers: (deps) => void, interface VerificationDeps
+- `scripts\navbar-fix.py` — function replace: (path, old, new) -> None
 
 ---
 
@@ -306,12 +355,15 @@
 
 ## Environment Variables
 
+- `ADMIN_BOOTSTRAP_UID` **required** — backend\src\index.ts
+- `DOCTOR_COMP_DURATION` (has default) — backend\src\config.ts
 - `FIREBASE_HOSTING_URL` (has default) — backend\.env.example
 - `FIREBASE_SERVICE_ACCOUNT` **required** — backend\.env.example
 - `GEMINI_API_KEY` **required** — backend\.env.example
 - `GEMINI_MODEL` (has default) — backend\diagnose-multi-item.js
 - `GOOGLE_APPLICATION_CREDENTIALS` **required** — tools\seed-hospitals.mjs
 - `PORT` (has default) — backend\.env.example
+- `REVENUECAT_SECRET_API_KEY` **required** — backend\src\config.ts
 - `SENDGRID_API_KEY` **required** — backend\.env.example
 - `SENDGRID_FROM_EMAIL` (has default) — backend\.env.example
 
@@ -338,25 +390,33 @@
 
 ## Most Imported Files (change these carefully)
 
-- `backend\src\types.ts` — imported by **4** files
+- `backend\src\types.ts` — imported by **8** files
+- `backend\src\fcm.ts` — imported by **6** files
 - `backend\src\utils.ts` — imported by **3** files
 - `backend\src\email-template.ts` — imported by **3** files
+- `backend\src\verification.ts` — imported by **3** files
 - `backend\src\config.ts` — imported by **2** files
 - `backend\src\gemini.ts` — imported by **2** files
+- `backend\src\revenuecat.ts` — imported by **2** files
+- `backend\src\like.ts` — imported by **2** files
+- `backend\src\comment.ts` — imported by **2** files
+- `backend\src\message.ts` — imported by **2** files
 - `backend\src\sendgrid.ts` — imported by **1** files
 - `backend\src\rate-limiter.ts` — imported by **1** files
 - `backend\src\meal-analyze.ts` — imported by **1** files
 
 ## Import Map (who imports what)
 
-- `backend\src\types.ts` ← `backend\src\email-template.ts`, `backend\src\index.ts`, `backend\src\meal-analyze.ts`, `backend\src\sendgrid.ts`
+- `backend\src\types.ts` ← `backend\src\comment.ts`, `backend\src\email-template.ts`, `backend\src\index.ts`, `backend\src\like.ts`, `backend\src\meal-analyze.ts` +3 more
+- `backend\src\fcm.ts` ← `backend\src\comment.ts`, `backend\src\index.ts`, `backend\src\like.ts`, `backend\src\message.ts`, `backend\src\verification.ts` +1 more
 - `backend\src\utils.ts` ← `backend\src\email-template.ts`, `backend\src\index.ts`, `backend\tests\otp.test.ts`
 - `backend\src\email-template.ts` ← `backend\src\index.ts`, `backend\src\sendgrid.ts`, `backend\tests\otp.test.ts`
+- `backend\src\verification.ts` ← `backend\src\index.ts`, `backend\tests\doctor-verification.test.ts`, `backend\tests\phase12r.test.ts`
 - `backend\src\config.ts` ← `backend\src\index.ts`, `backend\src\sendgrid.ts`
 - `backend\src\gemini.ts` ← `backend\src\index.ts`, `backend\tests\meal-analyze.test.ts`
-- `backend\src\sendgrid.ts` ← `backend\src\index.ts`
-- `backend\src\rate-limiter.ts` ← `backend\src\index.ts`
-- `backend\src\meal-analyze.ts` ← `backend\src\index.ts`
+- `backend\src\revenuecat.ts` ← `backend\src\index.ts`, `backend\src\verification.ts`
+- `backend\src\like.ts` ← `backend\src\index.ts`, `backend\tests\phase12r.test.ts`
+- `backend\src\comment.ts` ← `backend\src\index.ts`, `backend\tests\phase12r.test.ts`
 
 ---
 

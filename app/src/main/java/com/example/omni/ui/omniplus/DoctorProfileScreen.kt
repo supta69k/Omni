@@ -36,6 +36,7 @@ import coil3.compose.AsyncImage
 import com.example.omni.R
 import com.example.omni.data.model.Doctor
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.theme.HomeType
@@ -186,11 +187,7 @@ fun DoctorProfileScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 if (doctor.verified) {
-                                    Image(
-                                        painter = painterResource(R.drawable.ic_feed_badge_check),
-                                        contentDescription = "Verified",
-                                        modifier = Modifier.size(18.dp),
-                                    )
+                                    VerifiedBadge(size = 18.dp)
                                 }
                             }
 

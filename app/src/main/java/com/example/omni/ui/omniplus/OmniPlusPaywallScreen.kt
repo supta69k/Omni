@@ -53,6 +53,7 @@ import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniBackground
+import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniSetApply
@@ -170,7 +171,7 @@ fun OmniPlusPaywallScreen(
 
                     Text(
                         text = buildAnnotatedString {
-                            withStyle(SpanStyle(color = OmniInk)) { append("Your health\n") }
+                            withStyle(SpanStyle(color = OmniCardInk)) { append("Your health\n") }
                             withStyle(SpanStyle(color = OmniAuthHeading)) { append("Verified Experts") }
                         },
                         style = TextStyle(
@@ -193,7 +194,7 @@ fun OmniPlusPaywallScreen(
                             lineHeight = 17.sp,
                             letterSpacing = (-0.07).sp,
                         ),
-                        color = OmniInk,
+                        color = OmniCardInk,
                         textAlign = TextAlign.Center,
                     )
                 }
@@ -202,7 +203,7 @@ fun OmniPlusPaywallScreen(
                 Box(
                     modifier = Modifier
                         .width(351.dp)
-                        .height(491.dp)
+                        .height(515.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(
                             Brush.verticalGradient(
@@ -218,31 +219,32 @@ fun OmniPlusPaywallScreen(
                             .align(Alignment.TopCenter)
                             .padding(top = 11.dp)
                             .width(337.dp)
-                            .height(473.dp)
+                            .height(497.dp)
                             .clip(RoundedCornerShape(7.dp))
                             .background(OmniPlusCardSurface),
                     ) {
-                        Column {
-                            // ---- Plans row ---------------------------------------------------------------------------
-                            Box(modifier = Modifier.fillMaxWidth().height(121.dp)) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            // ---- Plans block (243:61) — 294×121 at (38, 6) inside the surface ---------
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = 38.dp, y = 6.dp)
+                                    .width(294.dp)
+                                    .height(121.dp),
+                            ) {
                                 if (state.availablePackages.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(
-                                            text = "Loading plans…",
-                                            style = TextStyle(
-                                                fontFamily = BodyFont,
-                                                fontWeight = FontWeight.Normal,
-                                                fontSize = 14.sp,
-                                            ),
-                                            color = OmniPlusNoteInk,
-                                        )
-                                    }
+                                    Text(
+                                        text = "Loading plans…",
+                                        style = TextStyle(
+                                            fontFamily = BodyFont,
+                                            fontWeight = FontWeight.Normal,
+                                            fontSize = 14.sp,
+                                        ),
+                                        color = OmniPlusNoteInk,
+                                        modifier = Modifier.align(Alignment.Center),
+                                    )
                                 } else {
                                     Row(
-                                        modifier = Modifier.padding(start = 38.dp, top = 10.dp),
+                                        modifier = Modifier.offset(y = 10.dp),
                                         horizontalArrangement = Arrangement.spacedBy(27.dp),
                                     ) {
                                         state.availablePackages.take(2).forEach { pkg ->
@@ -254,22 +256,19 @@ fun OmniPlusPaywallScreen(
                                         }
                                     }
                                 }
+                                // The ribbon overhangs the yearly tile's top-right (243:35 at x=235, y=0).
                                 if (state.availablePackages.any { isBestValue(it) }) {
-                                    BestValueRibbon(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(end = 5.dp),
-                                    )
+                                    BestValueRibbon(modifier = Modifier.offset(x = 235.dp))
                                 }
                             }
 
-                            Spacer(Modifier.height(24.dp))
-
-                            // ---- Features panel ----------------------------------------------------------------------
+                            // ---- Features panel (243:37) — 337 wide at y=151; height raised so the
+                            // Restore line clears the bottom edge, panel bottom flush with surface (497).
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(322.dp)
+                                    .offset(y = 151.dp)
+                                    .width(337.dp)
+                                    .height(346.dp)
                                     .clip(
                                         RoundedCornerShape(
                                             topStart = 21.dp,
@@ -283,7 +282,7 @@ fun OmniPlusPaywallScreen(
                                 Column(
                                     modifier = Modifier
                                         .padding(start = 15.dp, top = 14.dp)
-                                        .fillMaxWidth(),
+                                        .width(298.dp),
                                     verticalArrangement = Arrangement.spacedBy(43.dp),
                                 ) {
                                     Column(
@@ -498,9 +497,10 @@ private fun SubscribedScreen(
 private val SubscribedSubtitleInk = Color(0xFF5A5A5A)
 
 /**
- * One plan tile — 117×111, white, a 1dp OmniSetApply border, and the three-line stack from the
- * frame. Tapping selects the package the Subscribe button buys; the design carries no visual
- * selected state, so selection stays functional only.
+ * One plan tile — 117×111, a 1dp OmniSetApply border, and the three-line stack from the frame.
+ * The selected tile fills white; the unselected one is transparent and shows the card's #FDF6FA
+ * surface, which is the design's active/inactive treatment. Tapping selects the package the
+ * Subscribe button buys.
  */
 @Composable
 private fun PlanCard(
@@ -513,7 +513,8 @@ private fun PlanCard(
             .width(117.dp)
             .height(111.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.White)
+            // Figma: the selected tile fills white; the other stays transparent over the #FDF6FA card.
+            .background(if (selected) Color.White else Color.Transparent)
             .border(1.dp, OmniSetApply, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -541,7 +542,7 @@ private fun PlanCard(
                 lineHeight = 24.sp,
                 letterSpacing = (-0.27).sp,
             ),
-            color = OmniInk,
+            color = OmniCardInk,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(14.dp))
@@ -612,7 +613,7 @@ private fun FeatureCheckRow(text: String) {
                 lineHeight = 20.sp,
                 letterSpacing = (-0.14).sp,
             ),
-            color = OmniInk,
+            color = OmniCardInk,
         )
     }
 }

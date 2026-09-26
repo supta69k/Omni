@@ -375,6 +375,7 @@ class AppContainer private constructor(
                         current.userRepository,
                         current.messageRepository,
                         current.followRepository,
+                        current.doctorRepository,
                     ) as T
                 SleepViewModel::class.java ->
                     SleepViewModel(
@@ -388,6 +389,7 @@ class AppContainer private constructor(
                 DoctorDirectoryViewModel::class.java ->
                     DoctorDirectoryViewModel(
                         current.doctorRepository,
+                        current.userRepository,
                     ) as T
                 DoctorProfileViewModel::class.java ->
                     throw IllegalStateException("Use DoctorProfileViewModel.factory() instead")

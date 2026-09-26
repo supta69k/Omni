@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.savedstate.SavedStateRegistryOwner
 import com.example.omni.data.model.Message
+import com.example.omni.data.model.conversationIdOf
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.MessageRepository
 import com.example.omni.data.repo.UserRepository
@@ -35,12 +36,27 @@ class DoctorConsultationViewModel(
 
     private val doctorUid: String? = savedStateHandle.get<String>("doctorUid")
     private val doctorName: String? = savedStateHandle.get<String>("doctorName")
+    private val doctorPhotoUrl: String? = savedStateHandle.get<String>("doctorPhotoUrl")
 
     private var myUid: String? = null
     private val _uiState = MutableStateFlow(DoctorConsultationUiState(
         otherName = doctorName ?: "Doctor",
+        otherPhotoUrl = doctorPhotoUrl,
     ))
     val uiState: StateFlow<DoctorConsultationUiState> = _uiState.asStateFlow()
+
+    /** Server truth for this thread; the displayed list is this plus any [pending] optimistic echoes. */
+    private var serverMessages: List<Message> = emptyList()
+
+    /**
+     * Optimistic outgoing messages — the consultation chat is written by the backend over HTTP just
+     * like a normal thread, so without this the sender's own message would not appear until the
+     * round-trip returned (the sender-missing-message bug). Reconciled by (senderId, text) against the
+     * server copy in [pruneDelivered], so a message is one bubble and never a duplicate. Mirrors
+     * [com.example.omni.ui.messages.MessagesViewModel].
+     */
+    private val pending = mutableListOf<Message>()
+    private var pendingSeq = 0L
 
     init {
         viewModelScope.launch {
@@ -56,14 +72,23 @@ class DoctorConsultationViewModel(
             // [MessageRepository.openConversation] is idempotent: the id is derived from the two
             // uids and the write is a merge of the identity fields only.
             val self = runCatching { userRepository.getUser(uid) }.getOrNull()
+            val otherUid = doctorUidValue ?: "unknown"
+            // The canonical id, identical to what the normal messaging flow computes for the same two
+            // people (sorted uids). This is the whole fix for the split-conversation bug: the old
+            // `consultation_{patient}_{doctor}` id gave the directory chat a different identity from the
+            // New Message chat, so the same pair had two histories. Now every entry point resolves here.
+            val conversationId = conversationIdOf(uid, otherUid)
             try {
                 messageRepository.openConversation(
                     selfUid = uid,
                     selfName = self?.name.orEmpty().ifBlank { "Omni member" },
                     selfPhotoUrl = self?.photoUrl,
-                    otherUid = doctorUidValue ?: "unknown",
+                    otherUid = otherUid,
                     otherName = doctorDisplayName,
-                    otherPhotoUrl = null,
+                    otherPhotoUrl = doctorPhotoUrl,
+                    // Flags the one canonical thread as a consultation for the doctor's Patients tab —
+                    // it does not fork a separate thread.
+                    consultation = true,
                 )
             } catch (cause: Exception) {
                 // Offline still succeeds — Firestore queues the write. A rules rejection here would
@@ -74,7 +99,6 @@ class DoctorConsultationViewModel(
                 return@launch
             }
 
-            val conversationId = "consultation_${uid}_${doctorUidValue ?: "unknown"}"
             _uiState.value = _uiState.value.copy(
                 selfUid = uid,
                 conversationId = conversationId,
@@ -82,7 +106,8 @@ class DoctorConsultationViewModel(
             )
 
             messageRepository.observeMessages(conversationId).collect { messages ->
-                _uiState.value = _uiState.value.copy(messages = messages, isLoading = false)
+                serverMessages = messages
+                renderMessages(isLoading = false)
             }
         }
     }
@@ -94,21 +119,63 @@ class DoctorConsultationViewModel(
     fun send(text: String) {
         val conversationId = _uiState.value.conversationId ?: return
         val uid = myUid ?: return
-        if (text.isBlank()) return
+        val body = text.trim()
+        if (body.isEmpty()) return
+
+        // Optimistic echo: the bubble appears now, stamped with the authenticated uid so it sits on
+        // the sender's side and matches its server twin for reconciliation.
+        val echo = Message(
+            id = "pending-${pendingSeq++}",
+            senderId = uid,
+            text = body,
+            createdAt = System.currentTimeMillis(),
+        )
+        pending += echo
+        _uiState.value = _uiState.value.copy(inputText = "", isSending = true)
+        renderMessages()
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSending = true)
             try {
                 messageRepository.send(
                     conversationId = conversationId,
                     senderId = uid,
                     recipientId = doctorUid ?: "unknown",
-                    text = text.trim(),
+                    text = body,
                     imageUrl = null,
                 )
-                _uiState.value = _uiState.value.copy(inputText = "", isSending = false)
-            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isSending = false)
+            } catch (e: Exception) {
+                // The write did not land; drop the echo so the thread does not imply it did.
+                pending.removeAll { it.id == echo.id }
+                _uiState.value = _uiState.value.copy(isSending = false)
+                renderMessages()
+            }
+        }
+    }
+
+    /** Recomputes the visible list: server messages, then any optimistic echo not yet delivered. */
+    private fun renderMessages(isLoading: Boolean? = null) {
+        pruneDelivered()
+        val visible = if (pending.isEmpty()) serverMessages else serverMessages + pending
+        _uiState.value = _uiState.value.copy(
+            messages = visible,
+            isLoading = isLoading ?: _uiState.value.isLoading,
+        )
+    }
+
+    /** Drops any optimistic echo whose server twin has arrived, matched by (senderId, text) and counted. */
+    private fun pruneDelivered() {
+        if (pending.isEmpty()) return
+        val counts = HashMap<Pair<String, String>, Int>()
+        serverMessages.forEach { m -> counts[m.senderId to m.text] = (counts[m.senderId to m.text] ?: 0) + 1 }
+        val iterator = pending.iterator()
+        while (iterator.hasNext()) {
+            val echo = iterator.next()
+            val key = echo.senderId to echo.text
+            val n = counts[key] ?: 0
+            if (n > 0) {
+                counts[key] = n - 1
+                iterator.remove()
             }
         }
     }
@@ -123,6 +190,7 @@ class DoctorConsultationViewModel(
             owner: SavedStateRegistryOwner,
             defaultDoctorUid: String?,
             defaultDoctorName: String?,
+            defaultDoctorPhotoUrl: String? = null,
         ): AbstractSavedStateViewModelFactory = object : AbstractSavedStateViewModelFactory() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(
@@ -132,6 +200,7 @@ class DoctorConsultationViewModel(
             ): T {
                 handle["doctorUid"] = defaultDoctorUid
                 handle["doctorName"] = defaultDoctorName
+                handle["doctorPhotoUrl"] = defaultDoctorPhotoUrl
                 return DoctorConsultationViewModel(messageRepository, authRepository, userRepository, handle) as T
             }
         }

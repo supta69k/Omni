@@ -42,6 +42,8 @@ fun DoctorConsultationScreen(
         otherUid = "", // not used in MessageBubble (only selfUid matters for bubble side)
         otherName = state.otherName,
         otherPhotoUrl = state.otherPhotoUrl,
+        // A consultation is always with a verified doctor, so the header carries the badge.
+        otherVerified = true,
         messages = state.messages,
         draft = state.inputText,
     )

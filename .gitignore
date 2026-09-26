@@ -31,3 +31,6 @@ pubsub-debug.log
 ui-debug.log
 firebase-debug.*.log
 .firebase/
+
+# Figma MCP personal access token — loaded by figma-developer-mcp via --env, never commit it.
+.figma.env

@@ -38,6 +38,7 @@ import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.OmniNavItem
+import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.SettingsType
@@ -188,11 +189,7 @@ fun ProfileScreen(
                             softWrap = false,
                         )
                         if (state.user?.verified == true) {
-                            Image(
-                                painter = painterResource(R.drawable.ic_feed_badge_check),
-                                contentDescription = "Verified",
-                                modifier = Modifier.size(14.dp),
-                            )
+                            VerifiedBadge()
                         }
                     }
                     Text(

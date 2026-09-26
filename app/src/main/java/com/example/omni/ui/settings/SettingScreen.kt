@@ -53,6 +53,7 @@ import com.example.omni.R
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.LocalDesignWindow
+import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.theme.OmniAuthError
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.HomeType
@@ -179,6 +180,7 @@ fun SettingScreen(
                     photoUrl = photoUrl,
                     uploading = photoUploading,
                     error = photoError,
+                    verified = verified,
                     onChangePhoto = onChangePhoto,
                 )
 
@@ -416,6 +418,7 @@ private fun ProfileRow(
     photoUrl: String?,
     uploading: Boolean,
     error: String?,
+    verified: Boolean,
     onChangePhoto: () -> Unit,
 ) {
     Row(
@@ -456,14 +459,23 @@ private fun ProfileRow(
                 }
             }
             Column(modifier = Modifier.width(165.dp)) {
-                Text(
-                    text = name,
-                    style = SettingsType.ProfileName,
-                    color = OmniSetName,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = name,
+                        style = SettingsType.ProfileName,
+                        color = OmniSetName,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (verified) {
+                        VerifiedBadge()
+                    }
+                }
                 Text(
                     text = if (uploading) "Uploading your photo…" else email,
                     style = SettingsType.ProfileEmail,

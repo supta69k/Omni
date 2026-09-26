@@ -104,6 +104,7 @@ import kotlinx.coroutines.delay
 data class OmniHeaderState(
     val userName: String = "Sayed Mahir",
     val photoUrl: String? = null,
+    val verified: Boolean = false,
     val unreadMessages: Int = 0,
     val unreadNotifications: Int = 0,
 ) {
@@ -185,14 +186,23 @@ fun OmniHeader(
                     maxLines = 1,
                     softWrap = false,
                 )
-                Text(
-                    text = state.userName,
-                    style = HomeType.HeaderName,
-                    color = OmniHomeName,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = state.userName,
+                        style = HomeType.HeaderName,
+                        color = OmniHomeName,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (state.verified) {
+                        VerifiedBadge()
+                    }
+                }
             }
         }
 

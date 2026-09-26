@@ -51,6 +51,13 @@ export function createMessageHandler(deps: MessageDeps) {
         res.status(403).json({ error: 'Not a participant of this conversation' });
         return;
       }
+      // The unread counter below is incremented for recipientId, so it must actually be the other
+      // participant of this thread — never a uid the client picked freely. Otherwise a malformed or
+      // malicious request could inflate a stranger's unread badge.
+      if (recipientId === senderId || !participants.includes(recipientId)) {
+        res.status(400).json({ error: 'recipientId is not a participant of this conversation' });
+        return;
+      }
     }
 
     const messageRef = convoRef.collection('messages').doc();
@@ -77,27 +84,34 @@ export function createMessageHandler(deps: MessageDeps) {
 
     console.log('[MESSAGE_SENT] from=' + senderId + ' convo=' + conversationId + ' msg=' + messageRef.id);
 
-    const senderSnap = await deps.db.collection('users').doc(senderId).get();
-    const senderName = (senderSnap.data()?.name as string) || 'Someone';
-
-    const notifRef = deps.db.collection('notifications').doc(recipientId).collection('items').doc();
-    await notifRef.set({
-      type: 'MESSAGE',
-      title: senderName,
-      body: preview.slice(0, 160),
-      read: false,
-      deeplink: 'omni://chat/' + conversationId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    try {
-      await deps.fcm.sendToUser(recipientId, senderName, preview.slice(0, 160), { type: 'MESSAGE', conversationId });
-    } catch (fcmError) {
-      console.error('[MESSAGE_FCM_ERROR] recipient=' + recipientId, fcmError);
-    }
-
+    // The message is committed — the recipient already has it via their listener. Answer the sender
+    // NOW, before the best-effort notification/push work below, so that a failure in the notification
+    // read/write or FCM can never turn an already-delivered message into a 500 that makes the sender
+    // think their message was lost. That asymmetry (recipient sees it, sender gets an error and, with
+    // no optimistic echo, sees nothing) was the sender-missing-message bug.
     const response: SendMessageResponse = { success: true, messageId: messageRef.id };
     res.json(response);
+
+    // Best-effort, after the response: an in-app notification and a push. Wrapped as one so a transient
+    // Firestore read/write or FCM failure is logged, not thrown into an already-answered request.
+    try {
+      const senderSnap = await deps.db.collection('users').doc(senderId).get();
+      const senderName = (senderSnap.data()?.name as string) || 'Someone';
+
+      const notifRef = deps.db.collection('notifications').doc(recipientId).collection('items').doc();
+      await notifRef.set({
+        type: 'MESSAGE',
+        title: senderName,
+        body: preview.slice(0, 160),
+        read: false,
+        deeplink: 'omni://chat/' + conversationId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await deps.fcm.sendToUser(recipientId, senderName, preview.slice(0, 160), { type: 'MESSAGE', conversationId });
+    } catch (notifyError) {
+      console.error('[MESSAGE_NOTIFY_ERROR] recipient=' + recipientId, notifyError);
+    }
   }
 
   return { sendMessage };

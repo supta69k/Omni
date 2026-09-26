@@ -4,6 +4,12 @@ import android.app.Application
 import android.util.Log
 import com.example.omni.di.AppContainer
 import com.example.omni.service.OmniTrackingService
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 /**
  * The one place the real dependency graph is built.
@@ -25,9 +31,32 @@ class OmniApplication : Application() {
         // killed comes back with it. A no-op while ACTIVITY_RECOGNITION is missing — the service is
         // started again the moment the permission is granted.
         OmniTrackingService.start(this)
+        logDebugIdToken()
         Log.i(
             "Omni",
             "AppContainer ready — auth: ${AppContainer.current.authRepository::class.simpleName}",
         )
+    }
+
+    /**
+     * DEBUG-only helper for the backend's admin/bootstrap curls: prints a freshly forced ID token
+     * to logcat (`adb logcat -s OmniDebug`), so the admin claim can be bootstrapped and refreshed
+     * without retyping the password. REST-minted tokens carry an issuer the backend's
+     * `verifyIdToken` rejects — only SDK tokens verify. Compiled out of release builds.
+     */
+    private fun logDebugIdToken() {
+        if (!BuildConfig.DEBUG) return
+        CoroutineScope(Dispatchers.Default).launch {
+            repeat(10) {
+                runCatching {
+                    FirebaseAuth.getInstance().currentUser?.getIdToken(true)?.await()?.token
+                }.getOrNull()?.let { token ->
+                    Log.i("OmniDebug", "ID_TOKEN=$token")
+                    return@launch
+                }
+                delay(2000)
+            }
+            Log.w("OmniDebug", "No signed-in user — no ID token to log")
+        }
     }
 }
