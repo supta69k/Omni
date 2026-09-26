@@ -414,59 +414,45 @@ private fun SubscribedScreen(
                         .clip(RoundedCornerShape(5.dp))
                         .background(Color.White),
                 ) {
-                    Column(
+                    // Figma 257:100 — the content container: 188dp wide, 201dp tall, top 13.4 (≈ centred).
+                    Box(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .padding(start = 24.dp, top = 13.dp)
-                            .width(177.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(30.dp),
+                            .padding(top = 13.dp)
+                            .width(188.dp)
+                            .height(201.dp),
                     ) {
-                        Box(
+                        Image(
+                            painter = painterResource(R.drawable.omniplus_celebration),
+                            contentDescription = "Celebration",
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(141.dp),
+                                .align(Alignment.TopCenter)
+                                .offset(x = 10.dp)
+                                .size(67.dp),
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(23.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Image(
-                                painter = painterResource(R.drawable.omniplus_celebration),
-                                contentDescription = "Celebration",
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .offset(x = 6.dp)
-                                    .size(67.dp),
-                            )
                             Column(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .width(153.dp)
-                                        .height(25.dp),
-                                ) {
-                                    Text(
-                                        text = "Welcome to Omni Plus",
-                                        style = TextStyle(
-                                            fontFamily = BodyFont,
-                                            fontWeight = FontWeight.Normal,
-                                            fontSize = 14.sp,
-                                            lineHeight = 22.sp,
-                                            letterSpacing = (-0.28).sp,
-                                        ),
-                                        color = OmniInk,
-                                        modifier = Modifier.align(Alignment.CenterStart),
-                                    )
-                                    Image(
-                                        painter = painterResource(R.drawable.ic_omniplus_sparkles_lavender),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .align(Alignment.CenterEnd)
-                                            .size(14.dp),
-                                    )
-                                }
+                                Text(
+                                    text = "Welcome to Omni Plus",
+                                    style = TextStyle(
+                                        fontFamily = BodyFont,
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 16.sp,
+                                        lineHeight = 22.sp,
+                                        letterSpacing = (-0.32).sp,
+                                    ),
+                                    color = OmniInk,
+                                    textAlign = TextAlign.Center,
+                                )
                                 Text(
                                     text = "Your omni plus membership is active now",
                                     style = TextStyle(
@@ -478,31 +464,29 @@ private fun SubscribedScreen(
                                     ),
                                     color = SubscribedSubtitleInk,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .width(129.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(OmniAuthHeading)
-                                .clickable(onClick = onBrowseDoctors)
-                                .padding(horizontal = 16.dp, vertical = 5.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "Browse Doctors",
-                                style = TextStyle(
-                                    fontFamily = PlusJakartaSans,
-                                    fontWeight = FontWeight.Normal,
-                                    fontSize = 10.sp,
-                                    lineHeight = 19.sp,
-                                    letterSpacing = (-0.1).sp,
-                                ),
-                                color = Color.White,
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(37.dp)
+                                    .clip(RoundedCornerShape(5.83.dp))
+                                    .background(OmniAuthHeading)
+                                    .clickable(onClick = onBrowseDoctors),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Browse Doctors",
+                                    style = TextStyle(
+                                        fontFamily = PlusJakartaSans,
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 14.57.sp,
+                                        lineHeight = 27.69.sp,
+                                        letterSpacing = (-0.1457).sp,
+                                    ),
+                                    color = Color.White,
+                                )
+                            }
                         }
                     }
                 }
