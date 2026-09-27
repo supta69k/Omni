@@ -143,7 +143,14 @@ class NutritionViewModel(
     private val metricsRepository: MetricsRepository,
     private val mealRepository: MealRepository,
     private val mealAnalysisRepository: MealAnalysisRepository,
+    private val revenueCatRepository: com.example.omni.data.revenuecat.RevenueCatRepository,
 ) : ViewModel() {
+
+    /**
+     * Whether AI meal analysis is unlocked — the app-wide Omni+ access flow, observed by the screen so
+     * a free user's "Use AI" tap goes to the paywall instead of opening the AI sheet.
+     */
+    val isOmniPlusActive: StateFlow<Boolean> = revenueCatRepository.isOmniPlusActive
 
     private val uid: StateFlow<String?> = authRepository.sessionUid
 
@@ -311,6 +318,10 @@ class NutritionViewModel(
      */
     fun analyzeMeal(text: String) {
         if (_aiMeal.value is AiMealState.Analyzing) return
+        // AI meal analysis is an Omni+ feature. This is the defence-in-depth guard behind the screen's
+        // own gate: if analysis is somehow requested without an active entitlement, it never reaches
+        // the (paid) Gemini-backed backend.
+        if (!revenueCatRepository.isOmniPlusActive.value) return
         val trimmed = text.trim()
         if (trimmed.isEmpty()) {
             _aiMeal.value = AiMealState.Failed(MealAnalysisError.InvalidInput)

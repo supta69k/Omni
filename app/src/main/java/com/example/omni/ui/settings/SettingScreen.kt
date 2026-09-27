@@ -135,6 +135,13 @@ fun SettingScreen(
     onOfflineCacheChange: (Boolean) -> Unit = {},
     onApplyForVerification: () -> Unit = {},
     onOmniPlus: () -> Unit = {},
+    /** Omni+ active state — swaps the promo card for the current-plan card. Central RevenueCat state. */
+    omniPlusActive: Boolean = false,
+    /** "Monthly" / "Yearly" / null — the label under "Current plan", from RevenueCat's CustomerInfo. */
+    omniPlusPlan: String? = null,
+    canUpgradeToYearly: Boolean = false,
+    onManageSubscription: () -> Unit = {},
+    onUpgradeToYearly: () -> Unit = {},
     verified: Boolean = false,
     onLogOut: () -> Unit = {},
 ) {
@@ -181,6 +188,7 @@ fun SettingScreen(
                     uploading = photoUploading,
                     error = photoError,
                     verified = verified,
+                    omniPlus = omniPlusActive,
                     onChangePhoto = onChangePhoto,
                 )
 
@@ -251,7 +259,17 @@ fun SettingScreen(
 
                 Spacer(Modifier.height(UpgradeCardTopGap))
 
-                OmniPlusCard(onClick = onOmniPlus)
+                // Free users see the promo; an active subscriber sees their plan with Manage/Upgrade.
+                if (omniPlusActive) {
+                    OmniPlusActiveCard(
+                        plan = omniPlusPlan,
+                        canUpgradeToYearly = canUpgradeToYearly,
+                        onManage = onManageSubscription,
+                        onUpgrade = onUpgradeToYearly,
+                    )
+                } else {
+                    OmniPlusCard(onClick = onOmniPlus)
+                }
 
                 // A verified professional has nothing left to apply for — the card is their past.
                 if (!verified) {
@@ -419,6 +437,7 @@ private fun ProfileRow(
     uploading: Boolean,
     error: String?,
     verified: Boolean,
+    omniPlus: Boolean,
     onChangePhoto: () -> Unit,
 ) {
     Row(
@@ -474,6 +493,9 @@ private fun ProfileRow(
                     )
                     if (verified) {
                         VerifiedBadge()
+                    }
+                    if (omniPlus) {
+                        com.example.omni.ui.components.OmniPlusBadge()
                     }
                 }
                 Text(
@@ -782,6 +804,113 @@ private fun OmniPlusCard(onClick: () -> Unit) {
                 .align(Alignment.CenterEnd)
                 .padding(end = 13.dp)
                 .size(24.dp),
+        )
+    }
+}
+
+/**
+ * The active-subscriber card: the promo card's dark Omni Plus surface and gradient badge, but showing
+ * the current plan with Manage and (for a monthly plan) Upgrade actions instead of the "Upgrade to"
+ * pitch. No Figma frame for this state (§6 rule 11), so it borrows the promo card's surface/radius/badge.
+ */
+@Composable
+private fun OmniPlusActiveCard(
+    plan: String?,
+    canUpgradeToYearly: Boolean,
+    onManage: () -> Unit,
+    onUpgrade: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PagePadding, end = PagePadding)
+            .clip(RoundedCornerShape(13.dp))
+            .background(OmniInk)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text(
+                text = "Omni Plus",
+                style = TextStyle(
+                    brush = Brush.verticalGradient(
+                        0.0277f to OmniPlusBadgeGradient[0],
+                        0.1127f to OmniPlusBadgeGradient[1],
+                        0.2849f to OmniPlusBadgeGradient[2],
+                        0.5218f to OmniPlusBadgeGradient[3],
+                        1f to OmniPlusBadgeGradient[4],
+                    ),
+                    fontFamily = BodyFont,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    letterSpacing = (-0.131).sp,
+                ),
+            )
+            Image(
+                painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+        // PLACEHOLDER_ACTIVECARD_BODY
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = "Current plan",
+                style = TextStyle(fontFamily = BodyFont, fontWeight = FontWeight.Normal, fontSize = 10.sp),
+                color = OmniUpgradeSubtitle,
+            )
+            Text(
+                text = plan ?: "Active",
+                style = TextStyle(
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                ),
+                color = Color.White,
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color.White.copy(alpha = 0.12f)),
+        )
+
+        OmniPlusActionRow(label = "Manage subscription", accent = false, onClick = onManage)
+        if (canUpgradeToYearly) {
+            OmniPlusActionRow(label = "Upgrade to Yearly", accent = true, onClick = onUpgrade)
+        }
+    }
+}
+
+/** One action row inside [OmniPlusActiveCard] — a label and the white arrow, lavender when [accent]. */
+@Composable
+private fun OmniPlusActionRow(label: String, accent: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressEffect()
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = if (accent) FontWeight.Medium else FontWeight.Normal,
+                fontSize = 14.sp,
+            ),
+            color = if (accent) OmniSetApply else Color.White,
+        )
+        Image(
+            painter = painterResource(R.drawable.ic_omniplus_arrow),
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
         )
     }
 }

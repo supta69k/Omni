@@ -229,7 +229,7 @@ private fun TickBox(done: Boolean) {
  * and this is the one place the app is allowed to shout.
  */
 @Composable
-private fun WarningCard(warnings: List<String>) {
+internal fun WarningCard(warnings: List<String>) {
     Column(
         modifier = Modifier
             .fillMaxWidth()

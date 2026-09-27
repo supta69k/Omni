@@ -16,6 +16,23 @@ class PreviewRevenueCatRepository(
     private val _state = MutableStateFlow(initialState)
     override val subscriptionState: StateFlow<RevenueCatState> = _state.asStateFlow()
 
+    private val _isOmniPlusActive = MutableStateFlow(hasOmniPlus())
+    override val isOmniPlusActive: StateFlow<Boolean> = _isOmniPlusActive.asStateFlow()
+
+    private val _subscription = MutableStateFlow(
+        if (hasOmniPlus()) {
+            OmniPlusSubscription(
+                productId = "omni_plus_monthly",
+                period = OmniPlusPeriod.MONTHLY,
+                managementUrl = null,
+                willRenew = true,
+            )
+        } else {
+            null
+        },
+    )
+    override val subscription: StateFlow<OmniPlusSubscription?> = _subscription.asStateFlow()
+
     override val packages: StateFlow<List<OfferingPackage>> = MutableStateFlow(
         listOf(
             OfferingPackage(id = "omni_plus_monthly", name = "Omni+ Monthly", price = "$4.99"),
@@ -33,6 +50,17 @@ class PreviewRevenueCatRepository(
     override suspend fun purchase(activity: android.app.Activity, packageId: String) {
         // Simulate successful purchase for preview
         _state.value = RevenueCatState.Active(mapOf(EntitlementIds.OMNI_PLUS to true))
+        _isOmniPlusActive.value = true
+        _subscription.value = OmniPlusSubscription(
+            productId = packageId,
+            period = if ("year" in packageId.lowercase() || "annual" in packageId.lowercase()) {
+                OmniPlusPeriod.YEARLY
+            } else {
+                OmniPlusPeriod.MONTHLY
+            },
+            managementUrl = null,
+            willRenew = true,
+        )
     }
 
     override suspend fun refreshOfferings() {

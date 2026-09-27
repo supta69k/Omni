@@ -297,6 +297,7 @@ class AppContainer private constructor(
                         current.metricsRepository,
                         current.mealRepository,
                         current.mealAnalysisRepository,
+                        current.revenueCatRepository,
                     ) as T
                 GuidesViewModel::class.java ->
                     GuidesViewModel(
@@ -376,6 +377,7 @@ class AppContainer private constructor(
                         current.messageRepository,
                         current.followRepository,
                         current.doctorRepository,
+                        current.revenueCatRepository,
                     ) as T
                 SleepViewModel::class.java ->
                     SleepViewModel(

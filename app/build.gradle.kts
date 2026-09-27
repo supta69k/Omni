@@ -120,6 +120,9 @@ dependencies {
     // `AsyncImage` compiles and then fails at runtime on any http(s) model.
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // Animated GIF decoding for the CPR guide's hero animation. Without it Coil renders only the
+    // first frame; with it (registered on the singleton ImageLoader in OmniApplication) the GIF plays.
+    implementation(libs.coil.gif)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)

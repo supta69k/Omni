@@ -1,7 +1,13 @@
 package com.example.omni
 
 import android.app.Application
+import android.os.Build
 import android.util.Log
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
 import com.example.omni.di.AppContainer
 import com.example.omni.service.OmniTrackingService
 import com.google.firebase.auth.FirebaseAuth
@@ -23,7 +29,7 @@ import kotlinx.coroutines.tasks.await
  * it must name `FirebaseAuthRepository`. If it says `PreviewAuthRepository`, the manifest entry is
  * missing or misspelled and nothing below the UI is real.
  */
-class OmniApplication : Application() {
+class OmniApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         AppContainer.init(this)
@@ -37,6 +43,23 @@ class OmniApplication : Application() {
             "AppContainer ready — auth: ${AppContainer.current.authRepository::class.simpleName}",
         )
     }
+
+    /**
+     * The one app-wide [ImageLoader], taught to decode animated GIFs (the CPR guide's hero). Every
+     * `AsyncImage` in the app uses this singleton, so no existing avatar/photo load changes — the only
+     * difference is that a GIF now animates instead of showing its first frame. [AnimatedImageDecoder]
+     * is the ImageDecoder-based path (API 28+); [GifDecoder] is the Movie-based fallback for 26–27.
+     */
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader.Builder(context)
+            .components {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(AnimatedImageDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+            }
+            .build()
 
     /**
      * DEBUG-only helper for the backend's admin/bootstrap curls: prints a freshly forced ID token

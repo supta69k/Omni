@@ -105,6 +105,7 @@ data class OmniHeaderState(
     val userName: String = "Sayed Mahir",
     val photoUrl: String? = null,
     val verified: Boolean = false,
+    val omniPlus: Boolean = false,
     val unreadMessages: Int = 0,
     val unreadNotifications: Int = 0,
 ) {
@@ -201,6 +202,9 @@ fun OmniHeader(
                     )
                     if (state.verified) {
                         VerifiedBadge()
+                    }
+                    if (state.omniPlus) {
+                        OmniPlusBadge()
                     }
                 }
             }

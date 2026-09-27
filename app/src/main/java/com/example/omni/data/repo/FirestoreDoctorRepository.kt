@@ -4,7 +4,6 @@ import android.util.Log
 import com.example.omni.data.model.Doctor
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -15,19 +14,23 @@ class FirestoreDoctorRepository(
 ) : DoctorRepository {
 
     override fun observeDoctors(): Flow<List<Doctor>> = callbackFlow {
+        // Filter on `available` only; sort by rating in Kotlin. The old `orderBy("rating")` needed a
+        // composite index (which fails the whole query, emptying the directory, until it is built) AND
+        // silently dropped any doctor document missing a `rating` field. A single-field equality query
+        // needs no composite index and returns every available doctor, so a verified doctor always shows.
         val listener = firestore.collection("doctors")
             .whereEqualTo("available", true)
-            .orderBy("rating", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    // A rejected listen (rules, a still-building index, offline) must not take the
-                    // app down — the directory renders empty and the listener stays alive, so the
-                    // query recovers on its own once the backend side is fixed.
+                    // A rejected listen (rules, offline) must not take the app down — the directory
+                    // renders empty and the listener stays alive, so the query recovers on its own.
                     Log.w(TAG, "doctors listen failed: ${error.message}")
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
-                val doctors = snapshot?.documents?.mapNotNull { it.toDoctor() } ?: emptyList()
+                val doctors = snapshot?.documents?.mapNotNull { it.toDoctor() }
+                    ?.sortedByDescending { it.rating }
+                    ?: emptyList()
                 trySend(doctors)
             }
         awaitClose { listener.remove() }

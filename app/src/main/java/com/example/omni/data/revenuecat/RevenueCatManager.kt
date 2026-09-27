@@ -54,6 +54,12 @@ class RevenueCatManager(
     private val _packagesError = MutableStateFlow<String?>(null)
     override val packagesError: StateFlow<String?> = _packagesError.asStateFlow()
 
+    private val _isOmniPlusActive = MutableStateFlow(false)
+    override val isOmniPlusActive: StateFlow<Boolean> = _isOmniPlusActive.asStateFlow()
+
+    private val _subscription = MutableStateFlow<OmniPlusSubscription?>(null)
+    override val subscription: StateFlow<OmniPlusSubscription?> = _subscription.asStateFlow()
+
     init {
         if (apiKey.isBlank()) {
             Log.e(TAG, "RevenueCat API key is blank — monetization disabled")
@@ -68,15 +74,30 @@ class RevenueCatManager(
     }
 
     private fun initializeRevenueCat() {
-        val config = PurchasesConfiguration.Builder(application, apiKey).build()
-        Purchases.configure(config)
+        val builder = PurchasesConfiguration.Builder(application, apiKey)
+        // Configure with the Firebase UID up front when the user is already signed in — the app-restart
+        // case. RevenueCat is then the identified user from the very first frame, so there is no
+        // anonymous window in which a purchase could attach to a throwaway app-user id and be "lost" on
+        // the next launch. syncWithAuthState keeps the identity in step across later login/logout.
+        authRepository.currentUid?.let { builder.appUserID(it) }
+        Purchases.configure(builder.build())
 
         Purchases.sharedInstance.updatedCustomerInfoListener = UpdatedCustomerInfoListener { customerInfo ->
             Log.d(TAG, "CustomerInfo updated from SDK listener")
             handleCustomerInfo(customerInfo)
         }
 
-        Log.i(TAG, "RevenueCat initialized")
+        // Restore the entitlement deterministically on every cold start: read the locally-cached (then
+        // network-refreshed) CustomerInfo now, rather than waiting for the auth listener to re-emit.
+        // RevenueCat is the source of truth — this is what makes Omni+ survive a force-close.
+        Purchases.sharedInstance.getCustomerInfo(object : ReceiveCustomerInfoCallback {
+            override fun onReceived(customerInfo: CustomerInfo) = handleCustomerInfo(customerInfo)
+            override fun onError(error: PurchasesError) {
+                Log.w(TAG, "Initial getCustomerInfo failed: ${error.message}")
+            }
+        })
+
+        Log.i(TAG, "RevenueCat initialized (appUserID=${authRepository.currentUid ?: "anonymous"})")
     }
 
     private fun syncWithAuthState() {
@@ -87,30 +108,47 @@ class RevenueCatManager(
                     Purchases.sharedInstance.logOut(object : ReceiveCustomerInfoCallback {
                         override fun onReceived(customerInfo: CustomerInfo) {
                             Log.d(TAG, "RevenueCat logout complete")
-                            _subscriptionState.value = RevenueCatState.Inactive
+                            // Route through handleCustomerInfo so premium access is recomputed for the
+                            // fresh anonymous user — it clears isOmniPlusActive/subscription, so one
+                            // account's Omni+ can never linger into the next.
+                            handleCustomerInfo(customerInfo)
                         }
 
                         override fun onError(error: PurchasesError) {
                             Log.w(TAG, "RevenueCat logout error: ${error.message}")
                             _subscriptionState.value = RevenueCatState.Inactive
+                            _isOmniPlusActive.value = false
+                            _subscription.value = null
                         }
                     })
                 } else {
-                    Log.d(TAG, "Auth session started — logging into RevenueCat with UID")
-                    Purchases.sharedInstance.logIn(
-                        newAppUserID = firebaseUid,
-                        callback = object : LogInCallback {
-                            override fun onReceived(customerInfo: CustomerInfo, created: Boolean) {
-                                Log.d(TAG, "RevenueCat login successful, created=$created")
-                                handleCustomerInfo(customerInfo)
-                            }
-
+                    if (Purchases.sharedInstance.appUserID == firebaseUid) {
+                        // Already identified as this user (configured at startup). A redundant logIn
+                        // would just re-fetch; refresh CustomerInfo directly instead.
+                        Log.d(TAG, "RevenueCat already identified as the current user — refreshing")
+                        Purchases.sharedInstance.getCustomerInfo(object : ReceiveCustomerInfoCallback {
+                            override fun onReceived(customerInfo: CustomerInfo) = handleCustomerInfo(customerInfo)
                             override fun onError(error: PurchasesError) {
-                                Log.e(TAG, "RevenueCat login failed: ${error.message}")
-                                _subscriptionState.value = RevenueCatState.Error(error.message)
+                                Log.w(TAG, "getCustomerInfo refresh failed: ${error.message}")
                             }
-                        }
-                    )
+                        })
+                    } else {
+                        Log.d(TAG, "Auth session started — logging into RevenueCat with UID")
+                        Purchases.sharedInstance.logIn(
+                            newAppUserID = firebaseUid,
+                            callback = object : LogInCallback {
+                                override fun onReceived(customerInfo: CustomerInfo, created: Boolean) {
+                                    Log.d(TAG, "RevenueCat login successful, created=$created")
+                                    handleCustomerInfo(customerInfo)
+                                }
+
+                                override fun onError(error: PurchasesError) {
+                                    Log.e(TAG, "RevenueCat login failed: ${error.message}")
+                                    _subscriptionState.value = RevenueCatState.Error(error.message)
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -127,7 +165,26 @@ class RevenueCatManager(
             RevenueCatState.Active(activeEntitlements)
         }
 
-        Log.d(TAG, "Active entitlements: ${activeEntitlements.keys}")
+        // The single source of truth for premium access — keyed to the one canonical entitlement,
+        // and to *active* (an expired or never-purchased entitlement is simply absent from `active`).
+        val omniPlus = customerInfo.entitlements.active[EntitlementIds.OMNI_PLUS]
+        _isOmniPlusActive.value = omniPlus?.isActive == true
+        _subscription.value = omniPlus?.let { info ->
+            val productId = info.productIdentifier
+            val lower = productId.lowercase()
+            OmniPlusSubscription(
+                productId = productId,
+                period = when {
+                    "year" in lower || "annual" in lower -> OmniPlusPeriod.YEARLY
+                    "month" in lower -> OmniPlusPeriod.MONTHLY
+                    else -> OmniPlusPeriod.OTHER
+                },
+                managementUrl = customerInfo.managementURL?.toString(),
+                willRenew = info.willRenew,
+            )
+        }
+
+        Log.d(TAG, "Active entitlements: ${activeEntitlements.keys}; omniPlus=${_isOmniPlusActive.value}")
     }
 
     override fun hasOmniPlus(): Boolean {

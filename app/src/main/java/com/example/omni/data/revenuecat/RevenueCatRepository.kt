@@ -13,6 +13,20 @@ interface RevenueCatRepository {
     val subscriptionState: StateFlow<RevenueCatState>
 
     /**
+     * The single source of truth for premium access: `true` only while the `omni_pro` entitlement is
+     * currently active. Every premium gate in the app observes this one flow rather than re-deriving
+     * the check. It is `false` while [subscriptionState] is Loading, Inactive or Error — premium is
+     * never granted by default, only by an active entitlement (never `hasEverPurchased`).
+     */
+    val isOmniPlusActive: StateFlow<Boolean>
+
+    /**
+     * The active Omni+ subscription's details for the Settings "current plan" area, from RevenueCat's
+     * `CustomerInfo`. `null` whenever Omni+ is not active.
+     */
+    val subscription: StateFlow<OmniPlusSubscription?>
+
+    /**
      * Whether the signed-in user has the Omni+ entitlement.
      * Convenience wrapper around `subscriptionState` for common checks.
      */

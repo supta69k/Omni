@@ -32,3 +32,21 @@ sealed interface RevenueCatState {
         val message: String,
     ) : RevenueCatState
 }
+
+/** Which billing period the active Omni+ subscription renews on — drives the Settings plan label. */
+enum class OmniPlusPeriod { MONTHLY, YEARLY, OTHER }
+
+/**
+ * The active Omni+ subscription's details, taken straight from RevenueCat's `CustomerInfo` — never
+ * computed or persisted locally. `null` whenever Omni+ is not active.
+ *
+ * @property managementUrl RevenueCat's `CustomerInfo.managementURL` (the Play "manage subscription"
+ *   destination). Can be `null` — e.g. Test Store purchases have no Play management page — in which
+ *   case Settings falls back to the generic Play subscriptions screen.
+ */
+data class OmniPlusSubscription(
+    val productId: String,
+    val period: OmniPlusPeriod,
+    val managementUrl: String?,
+    val willRenew: Boolean,
+)

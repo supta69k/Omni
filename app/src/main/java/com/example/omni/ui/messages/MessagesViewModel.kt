@@ -15,6 +15,7 @@ import com.example.omni.data.repo.DoctorRepository
 import com.example.omni.data.repo.FollowRepository
 import com.example.omni.data.repo.MessageRepository
 import com.example.omni.data.repo.UserRepository
+import com.example.omni.data.revenuecat.RevenueCatRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,6 +92,12 @@ data class MessagesUiState(
     val open: OpenChatState? = null,
     val isDoctor: Boolean = false,
     val patients: List<Conversation> = emptyList(),
+    /**
+     * Whether the signed-in user has active Omni+. The Verified Doctors entry in the chat list is a
+     * direct doorway to the doctor directory for a subscriber, and a paywall prompt for a free user —
+     * driven by the app-wide access flow, not a per-screen check.
+     */
+    val isOmniPlusActive: Boolean = false,
 )
 
 /**
@@ -116,6 +123,7 @@ class MessagesViewModel(
     private val messageRepository: MessageRepository,
     private val followRepository: FollowRepository,
     private val doctorRepository: DoctorRepository,
+    private val revenueCatRepository: RevenueCatRepository,
 ) : ViewModel() {
 
     /** `null` whenever nobody is signed in — the key every read below restarts on. */
@@ -405,6 +413,8 @@ class MessagesViewModel(
             )
         }.combine(combine(isDoctor, patients) { isDoctor, patients -> isDoctor to patients }) { state, doctor ->
             state.copy(isDoctor = doctor.first, patients = doctor.second)
+        }.combine(revenueCatRepository.isOmniPlusActive) { state, omniPlus ->
+            state.copy(isOmniPlusActive = omniPlus)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ListenerGraceMillis),

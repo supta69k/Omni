@@ -48,6 +48,7 @@ import com.example.omni.ui.components.VerifiedBadge
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniBackground
+import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFeedHint
 import com.example.omni.ui.theme.OmniFeedSurface
@@ -88,6 +89,7 @@ fun MessagesScreen(
     onOpen: (Conversation) -> Unit = {},
     onTogglePicker: () -> Unit = {},
     onStartWith: (ProfessionalRowState) -> Unit = {},
+    onVerifiedDoctors: () -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
 
@@ -188,6 +190,17 @@ fun MessagesScreen(
                         people = state.people,
                         professionals = state.professionals,
                         onStartWith = onStartWith,
+                    )
+                }
+
+                // Verified Doctors — a direct doorway to the doctor directory, in the chats view only.
+                // Omni+ opens the directory; a free user is sent to the paywall (routing decided by the
+                // caller, which reads the same central Omni+ state).
+                if (!onPatients && !state.pickerOpen) {
+                    Spacer(Modifier.height(PickerTop))
+                    VerifiedDoctorsEntry(
+                        isOmniPlus = state.isOmniPlusActive,
+                        onClick = onVerifiedDoctors,
                     )
                 }
 
@@ -455,6 +468,96 @@ private fun PickerGroup(
                     modifier = Modifier.size(ChevronSize),
                 )
             }
+        }
+    }
+}
+
+/**
+ * The Verified Doctors doorway — a labelled card in the chats view that opens the doctor directory.
+ *
+ * Borrowed, not invented (§6 rule 11): the group label is the settings groups', the tray is the
+ * healthcare card's #F5F5F5 at radius 8, the leading glyph is the settings page's `ic_set_doctor` on
+ * the Omni+ lavender wash, and the chevron is the picker rows'. For a free user the subtitle names the
+ * Omni+ requirement and an "Omni+" mark sits before the chevron — the tap then leads to the paywall;
+ * for a subscriber it leads straight to the directory. The routing is the caller's, off the same
+ * central Omni+ state.
+ */
+@Composable
+private fun VerifiedDoctorsEntry(
+    isOmniPlus: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(PickerGap)) {
+        Text(
+            text = "Verified Doctors",
+            style = SettingsType.GroupLabel,
+            color = OmniSetGroupLabel,
+            maxLines = 1,
+            softWrap = false,
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .pressEffect()
+                .clip(RoundedCornerShape(RowCorner))
+                .background(OmniSetCardSurface)
+                .clickable(onClick = onClick)
+                .padding(horizontal = RowPaddingH, vertical = RowPaddingV),
+            horizontalArrangement = Arrangement.spacedBy(AvatarGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(AvatarSize)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(OmniSetApply.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_set_doctor),
+                    contentDescription = null,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Find a verified doctor",
+                    style = SettingsType.RowTitle,
+                    color = OmniSetRowTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (isOmniPlus) {
+                        "Browse the doctor directory and start a consultation"
+                    } else {
+                        "Consult a licensed doctor with Omni+"
+                    },
+                    style = SettingsType.RowSubtitle,
+                    color = OmniSetRowSubtitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (!isOmniPlus) {
+                Text(
+                    text = "Omni+",
+                    style = FeedType.Meta12,
+                    color = OmniAuthHeading,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                Spacer(Modifier.width(BadgeGap))
+            }
+
+            Image(
+                painter = painterResource(R.drawable.ic_set_arrow_right),
+                contentDescription = null,
+                modifier = Modifier.size(ChevronSize),
+            )
         }
     }
 }

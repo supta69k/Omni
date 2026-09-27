@@ -176,6 +176,13 @@ fun NutritionScreen(
     onAnalyzeMeal: (String) -> Unit = {},
     onConfirmAiMeal: (Meal) -> Unit = {},
     onDismissAiMeal: () -> Unit = {},
+    /**
+     * Whether the signed-in user has active Omni+. AI meal analysis is an Omni+ feature: a free user
+     * picking "Use AI" is sent to the paywall ([onNeedsPremium]) and the AI sheet never opens, so no
+     * Gemini call is ever made for them. Defaults to true so previews still exercise the AI flow.
+     */
+    isOmniPlusActive: Boolean = true,
+    onNeedsPremium: () -> Unit = {},
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
 ) {
@@ -364,9 +371,14 @@ fun NutritionScreen(
         LogMethodSheet(
             visible = logMethodOpen,
             onUseAi = {
-                onDismissAiMeal()
                 logMethodOpen = false
-                aiOpen = true
+                if (isOmniPlusActive) {
+                    onDismissAiMeal()
+                    aiOpen = true
+                } else {
+                    // Free user: straight to the paywall, and the AI sheet never opens — no Gemini call.
+                    onNeedsPremium()
+                }
             },
             onManual = {
                 logMethodOpen = false

@@ -181,7 +181,10 @@ private fun OmniApp() {
             )
         } ?: OmniHeaderState(userName = "")
     }
-    val header = headerUser.copy(unreadNotifications = unreadNotifications)
+    // The Omni+ mark on the shared header comes from the one central access flow, so every tab that
+    // draws the header shows it (or not) consistently and flips the instant the entitlement changes.
+    val omniPlusActive by container.revenueCatRepository.isOmniPlusActive.collectAsStateWithLifecycle()
+    val header = headerUser.copy(unreadNotifications = unreadNotifications, omniPlus = omniPlusActive)
 
     // rememberSaveable, not remember: configChanges already keeps this across a rotation, but a
     // low-memory process kill recreates the Activity from a bundle, and a router that came back on
@@ -496,7 +499,8 @@ private fun OmniApp() {
                         currentDoctorPhotoUrl = doctor?.photoUrl
                         screen = AppScreen.DoctorProfile
                     },
-                    onBack = { screen = AppScreen.OmniPlus },
+                    // The directory's primary door is now the Chat screen, so back returns there.
+                    onBack = { screen = AppScreen.Messages },
                 )
             }
 
@@ -922,6 +926,7 @@ private fun OmniApp() {
                 val nutrition: NutritionViewModel = viewModel(factory = AppContainer.factory())
                 val state by nutrition.uiState.collectAsStateWithLifecycle()
                 val aiMeal by nutrition.aiMeal.collectAsStateWithLifecycle()
+                val nutritionOmniPlus by nutrition.isOmniPlusActive.collectAsStateWithLifecycle()
 
                 // The day on screen follows the chip, so the goals passed here — which belong to the
                 // account — are what the rings and the gauge draw against, whatever day is selected.
@@ -958,6 +963,8 @@ private fun OmniApp() {
                     onAnalyzeMeal = nutrition::analyzeMeal,
                     onConfirmAiMeal = nutrition::confirmAiMeal,
                     onDismissAiMeal = nutrition::dismissAiMeal,
+                    isOmniPlusActive = nutritionOmniPlus,
+                    onNeedsPremium = { screen = AppScreen.OmniPlus },
                     isRefreshing = state.isRefreshing,
                     onRefresh = nutrition::refresh,
                 )
@@ -973,11 +980,28 @@ private fun OmniApp() {
 
                 val open = state.open
                 if (open != null) {
-                    GuideDetailScreen(
-                        state = open,
-                        onToggleStep = guides::toggleStep,
-                        onBack = guides::closeGuide,
-                    )
+                    // CPR, Choking and Severe Bleeding have the animated redesign (Figma 276-6239 /
+                    // 304-867 / 304-1025), each with its own hero GIF; every other guide keeps the
+                    // tick-box detail screen.
+                    val heroRes = when (open.guide.id) {
+                        "cpr" -> com.example.omni.R.raw.cpr_hero
+                        "choking" -> com.example.omni.R.raw.choking_hero
+                        "bleeding" -> com.example.omni.R.raw.bleeding_hero
+                        else -> null
+                    }
+                    if (heroRes != null) {
+                        com.example.omni.ui.firstaid.AnimatedGuideScreen(
+                            state = open,
+                            heroRes = heroRes,
+                            onBack = guides::closeGuide,
+                        )
+                    } else {
+                        GuideDetailScreen(
+                            state = open,
+                            onToggleStep = guides::toggleStep,
+                            onBack = guides::closeGuide,
+                        )
+                    }
                 } else {
                     GuidesScreen(
                         state = state,
@@ -993,6 +1017,28 @@ private fun OmniApp() {
             // screen, so there is one rule for where a signed-out app goes, not two.
             AppScreen.Setting -> {
                 val photoUpload by session.photoUpload.collectAsStateWithLifecycle()
+
+                // Central Omni+ state drives the promo-vs-current-plan swap. Plan label, upgrade
+                // eligibility and the Play "manage" destination all come from RevenueCat's CustomerInfo.
+                val settingsOmniPlus by container.revenueCatRepository.isOmniPlusActive
+                    .collectAsStateWithLifecycle()
+                val settingsSub by container.revenueCatRepository.subscription
+                    .collectAsStateWithLifecycle()
+                val settingsPackages by container.revenueCatRepository.packages
+                    .collectAsStateWithLifecycle()
+                val yearlyPackageId = settingsPackages.firstOrNull {
+                    val s = (it.id + " " + it.name).lowercase()
+                    "year" in s || "annual" in s
+                }?.id
+                val planLabel = when (settingsSub?.period) {
+                    com.example.omni.data.revenuecat.OmniPlusPeriod.MONTHLY -> "Monthly"
+                    com.example.omni.data.revenuecat.OmniPlusPeriod.YEARLY -> "Yearly"
+                    else -> null
+                }
+                val canUpgrade = settingsOmniPlus &&
+                    settingsSub?.period == com.example.omni.data.revenuecat.OmniPlusPeriod.MONTHLY &&
+                    yearlyPackageId != null
+                val settingsActivity = context as? Activity
 
                 // The avatar picker lives here for `ComposePost`'s reason and one more: the launcher
                 // needs an Activity, which this is the only holder of (§6 rule 10). The pick is copied
@@ -1034,6 +1080,27 @@ private fun OmniApp() {
                     onDailyGoals = { screen = AppScreen.Goals },
                     onApplyForVerification = { screen = AppScreen.Verification },
                     onOmniPlus = { screen = AppScreen.OmniPlus },
+                    omniPlusActive = settingsOmniPlus,
+                    omniPlusPlan = planLabel,
+                    canUpgradeToYearly = canUpgrade,
+                    onManageSubscription = {
+                        // RevenueCat's managementURL when it has one (Play subscription page); the
+                        // generic Play subscriptions screen otherwise (e.g. Test Store has no URL).
+                        val url = settingsSub?.managementUrl
+                            ?: "https://play.google.com/store/account/subscriptions"
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }
+                    },
+                    onUpgradeToYearly = {
+                        val act = settingsActivity
+                        val pkg = yearlyPackageId
+                        if (act != null && pkg != null) {
+                            // Same purchase flow as the paywall; CustomerInfo refreshes on completion
+                            // and the central state flips the card to Yearly in-session.
+                            scope.launch { container.revenueCatRepository.purchase(act, pkg) }
+                        }
+                    },
                     onPushNotificationsChange = { enabled ->
                         val uid = container.authRepository.currentUid ?: return@SettingScreen
                         scope.launch {
@@ -1273,6 +1340,15 @@ private fun OmniApp() {
                                 selfName = user?.name.orEmpty(),
                                 selfPhotoUrl = user?.photoUrl,
                             )
+                        },
+                        // Omni+ opens the directory directly; a free user is sent to the paywall. Same
+                        // central Omni+ state the entry's appearance is drawn from.
+                        onVerifiedDoctors = {
+                            screen = if (state.isOmniPlusActive) {
+                                AppScreen.DoctorDirectory
+                            } else {
+                                AppScreen.OmniPlus
+                            }
                         },
                     )
                 }
