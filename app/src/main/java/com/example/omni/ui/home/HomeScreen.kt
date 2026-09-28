@@ -93,7 +93,11 @@ fun HomeScreen(
     fiberGoal: Float = DefaultFiberGoal,
     sleepHours: Float = 6.5f,
     sleepGoal: Float = DefaultSleepGoal,
-    cprPercent: Int = 0,
+    /** The recommended first-aid guide: its id (for the tap), its name, and how far it is read. */
+    recommendedGuideId: String? = null,
+    recommendedGuideTitle: String = "CPR",
+    recommendedGuidePercent: Int = 0,
+    onOpenGuide: (String) -> Unit = {},
     onExploreFirstAid: () -> Unit = {},
     onAddGlass: () -> Unit = {},
     onEnableStepTracking: () -> Unit = {},
@@ -161,17 +165,38 @@ fun HomeScreen(
 
                     AdaptiveRow(
                         horizontalSpacing = DashboardStackGap,
-                    ) { columnIndex, _ ->
-                        when (columnIndex) {
-                            0 -> Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
+                    ) { columnIndex, columnCount ->
+                        if (columnCount <= 1) {
+                            // Portrait is a single column, so all three recommendation cards stack here.
+                            // The first-aid card used to live only in the landscape second column, which
+                            // portrait never renders — that is why it went missing on phones.
+                            Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
                                 FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
                                 SleepCard(
                                     hours = sleepHours,
                                     goalHours = sleepGoal,
                                     onLog = onOpenSleep,
                                 )
+                                CprCard(
+                                    title = "Learn Basic $recommendedGuideTitle",
+                                    onClick = recommendedGuideId?.let { id -> { onOpenGuide(id) } },
+                                )
                             }
-                            else -> CprCard(percent = cprPercent)
+                        } else {
+                            when (columnIndex) {
+                                0 -> Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
+                                    FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
+                                    SleepCard(
+                                        hours = sleepHours,
+                                        goalHours = sleepGoal,
+                                        onLog = onOpenSleep,
+                                    )
+                                }
+                                else -> CprCard(
+                                    title = "Learn Basic $recommendedGuideTitle",
+                                    onClick = recommendedGuideId?.let { id -> { onOpenGuide(id) } },
+                                )
+                            }
                         }
                     }
 
@@ -249,7 +274,7 @@ private val DashboardGap = 20.dp
 private val DashboardStackGap = 24.dp
 
 /** Breathing room so the last card can scroll clear of the floating bar. */
-private val ContentBottomGap = 24.dp
+private val ContentBottomGap = 56.dp
 
 /** The bento row is 166 + 10 + 207 = 383; weights keep that ratio at any width. */
 private const val WaterCardWeight = 166f

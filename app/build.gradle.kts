@@ -18,7 +18,10 @@ android {
     defaultConfig {
         applicationId = "com.example.omni"
         minSdk = 26
-        targetSdk = 37
+        // A stable, widely-shipping target so the release APK installs on every current phone when
+        // sideloaded. compileSdk stays on the latest (37) for the newest APIs; targetSdk is the lever
+        // Android uses for install compatibility, and 35 (Android 15) is supported everywhere Android 8+.
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -73,6 +76,21 @@ android {
         release {
             optimization {
                 enable = false
+            }
+            // Sign the release APK with the upload keystore (read from the gitignored
+            // keystore.properties) so it installs cleanly when shared, rather than being an unsigned
+            // or debug-only build. Guarded so the project still configures if the file is absent.
+            val keystorePropsFile = rootProject.file("keystore.properties")
+            if (keystorePropsFile.exists()) {
+                val keystoreProps = Properties().apply {
+                    keystorePropsFile.inputStream().use { load(it) }
+                }
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                    storePassword = keystoreProps.getProperty("storePassword")
+                    keyAlias = keystoreProps.getProperty("keyAlias")
+                    keyPassword = keystoreProps.getProperty("keyPassword")
+                }
             }
         }
     }

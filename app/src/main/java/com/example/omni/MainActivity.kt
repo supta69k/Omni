@@ -200,6 +200,9 @@ private fun OmniApp() {
      */
     var profileUid by rememberSaveable { mutableStateOf<String?>(null) }
 
+    /** A first-aid guide the Home recommendation card asked to open, consumed once by the FirstAid screen. */
+    var pendingGuideId by rememberSaveable { mutableStateOf<String?>(null) }
+
     /**
      * Email address for verification screen — passed from SignUp after account creation,
      * or from SignIn for unverified accounts.
@@ -571,7 +574,15 @@ private fun OmniApp() {
                     fiberGoal = user?.fiberGoal ?: DefaultFiberGoal,
                     sleepHours = state.sleepHours,
                     sleepGoal = user?.sleepGoal ?: DefaultSleepGoal,
-                    cprPercent = state.cprPercent,
+                    recommendedGuideId = state.recommendedGuideId,
+                    recommendedGuideTitle = state.recommendedGuideTitle,
+                    recommendedGuidePercent = state.recommendedGuidePercent,
+                    // Opens the recommended guide itself, not just the list — the First Aid screen
+                    // picks it up and opens it (see the FirstAid branch's LaunchedEffect).
+                    onOpenGuide = { id ->
+                        pendingGuideId = id
+                        screen = AppScreen.FirstAid
+                    },
                     onAddGlass = { home.addGlass(waterGoal) },
                     onEnableStepTracking = stepPermission::openSystemSettings,
                     // The sleep card leaves for the detailed diary rather than opening the old hours-only
@@ -977,6 +988,15 @@ private fun OmniApp() {
             AppScreen.FirstAid -> {
                 val guides: GuidesViewModel = viewModel(factory = AppContainer.factory())
                 val state by guides.uiState.collectAsStateWithLifecycle()
+
+                // Opening a specific guide from Home's recommendation card: consume the pending id once
+                // so the guide opens straight to its detail, and clear it so back returns to the list.
+                LaunchedEffect(pendingGuideId) {
+                    pendingGuideId?.let { id ->
+                        guides.openGuide(id)
+                        pendingGuideId = null
+                    }
+                }
 
                 val open = state.open
                 if (open != null) {

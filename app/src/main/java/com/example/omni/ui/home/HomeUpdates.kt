@@ -506,34 +506,39 @@ internal fun SleepCard(
  * someone to "read the 2-min guide" after they had read it would be worse than a plain sentence.
  */
 @Composable
-internal fun CprCard(percent: Int = 0, modifier: Modifier = Modifier) {
-    val clamped = percent.coerceIn(0, 100)
-    val bar = progressBarOf(clamped / 100f)
+internal fun CprCard(
+    title: String = "Learn Basic CPR Today",
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    UpdateCard(
+        verticalPadding = 12.dp,
+        innerGap = 8.dp,
+        // Tappable when the dashboard hands in a target guide — the whole card opens it, like SleepCard.
+        modifier = if (onClick != null) modifier.pressEffect().clickable(onClick = onClick) else modifier,
+    ) {
+        Text(
+            text = title,
+            style = HomeType.CardTitle,
+            color = OmniCardInk,
+            maxLines = 1,
+        )
 
-    UpdateCard(verticalPadding = 5.dp, innerGap = 5.dp, modifier = modifier) {
-        UpdateHeader(title = "Learn Basic CPR Today", value = "$clamped%", glyph = null)
-
-        AnimatedUpdateProgress(trackHeight = 10.667.dp, progress = clamped / 100f)
-
-        UpdateAxis(height = 19.464.dp, endLabel = "100%")
-
-        // "Action Needed" is the widest chip of the three, so this is the row where the footnote has
-        // least to work with — 260 of the 353 inner width. The sentence needs 334.7 on one line, so it
-        // still breaks into the two the design shows, just at a later word than Figma's 206 box picks.
-        // Both of the other two sentences are shorter than this one and share a row with a narrower chip.
+        // No progress bar or axis here: this card rotates to a different first-aid guide each day, so a
+        // percentage read-out would be noise. It is a recommendation, not a tracker.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = cprFootnote(clamped),
+                text = cprFootnote(0),
                 style = HomeType.CardFootnoteWrapped,
                 color = OmniFootnote,
                 maxLines = 3,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            StatusChip(statusFor(clamped / 100f))
+            StatusChip(Status.ActionNeeded)
         }
     }
 }

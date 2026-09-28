@@ -34,3 +34,9 @@ firebase-debug.*.log
 
 # Figma MCP personal access token — loaded by figma-developer-mcp via --env, never commit it.
 .figma.env
+
+# Release signing — never commit the keystore or its passwords
+omni-release.jks
+*.jks
+*.keystore
+keystore.properties

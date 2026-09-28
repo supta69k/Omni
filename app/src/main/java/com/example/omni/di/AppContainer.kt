@@ -290,6 +290,8 @@ class AppContainer private constructor(
                         current.metricsRepository,
                         current.stepsRepository,
                         current.guideProgressRepository,
+                        // Same compiled-in bundle the guides screen uses — no preview/real split.
+                        BundledGuideRepository,
                     ) as T
                 NutritionViewModel::class.java ->
                     NutritionViewModel(

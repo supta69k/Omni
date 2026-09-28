@@ -8,8 +8,8 @@ import com.example.omni.data.model.DailyMetrics
 import com.example.omni.data.model.todayKey
 import com.example.omni.data.model.todayKeyFlow
 import com.example.omni.data.repo.AuthRepository
-import com.example.omni.data.repo.CprGuideId
 import com.example.omni.data.repo.GuideProgressRepository
+import com.example.omni.data.repo.GuideRepository
 import com.example.omni.data.repo.MetricsRepository
 import com.example.omni.data.repo.StepsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,7 +36,9 @@ import kotlin.math.max
  * @property stepPermissionNeeded the device has a pedometer but the app has not been allowed to read it.
  *   Distinct from "no sensor", where there is nothing to ask for and therefore nothing to offer.
  * @property fiberGrams today's fibre roll-up. 0 until Phase 6 logs a meal, which is the honest reading.
- * @property cprPercent how far the CPR guide has been read. 0 until Phase 7 can record a step.
+ * @property recommendedGuideTitle the first-aid guide the dashboard is nudging the user to read next —
+ *   the least-read one in the library (rotating between equally-unread guides day to day), so the card
+ *   recommends different guides rather than always CPR. [recommendedGuidePercent] is how far it is read.
  */
 data class HomeUiState(
     val glasses: Int = 0,
@@ -44,8 +46,17 @@ data class HomeUiState(
     val stepPermissionNeeded: Boolean = false,
     val fiberGrams: Float = 0f,
     val sleepHours: Float = 0f,
-    val cprPercent: Int = 0,
+    val recommendedGuideId: String? = null,
+    val recommendedGuideTitle: String = "CPR",
+    val recommendedGuidePercent: Int = 0,
     val isRefreshing: Boolean = false,
+)
+
+/** One first-aid guide the dashboard is recommending: which one, its name, and how far it is read. */
+data class RecommendedGuide(
+    val id: String,
+    val title: String,
+    val percent: Int,
 )
 
 /**
@@ -66,7 +77,11 @@ class HomeViewModel(
     private val metricsRepository: MetricsRepository,
     private val stepsRepository: StepsRepository,
     private val guideProgressRepository: GuideProgressRepository,
+    private val guideRepository: GuideRepository,
 ) : ViewModel() {
+
+    /** The bundled first-aid library — read once, it does not change while the app runs. */
+    private val guides = guideRepository.list()
 
     /** `null` whenever nobody is signed in — the key both reads restart on. */
     private val uid: StateFlow<String?> = authRepository.sessionUid
@@ -140,21 +155,35 @@ class HomeViewModel(
             }
 
     /**
-     * How far the CPR guide has been read.
+     * The first-aid guide to recommend on the dashboard card.
      *
-     * Keyed on the session only, not on the date: a guide is not a daily thing, and re-subscribing at
-     * midnight would drop and re-open a listener for no reason.
+     * Rotates through the whole library one guide per day (by the day index), so the card surfaces a
+     * different guide roughly every 24 hours rather than always CPR — a recommendation, not a tracker,
+     * which is why the card no longer shows read progress.
+     *
+     * Keyed on the session; the day rotation is recomputed on each emission (app open), so reopening on
+     * a new day shows the next guide.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val cprPercent: Flow<Int> = uid.flatMapLatest { uid ->
+    private val recommendedGuide: Flow<RecommendedGuide?> = uid.flatMapLatest { uid ->
         if (uid == null) {
-            flowOf(0)
+            flowOf(recommendationFrom(emptyMap()))
         } else {
-            guideProgressRepository.observePercent(uid, CprGuideId).catch { cause ->
-                Log.w("Omni", "users/$uid/guideProgress/$CprGuideId could not be read", cause)
-                emit(0)
-            }
+            guideProgressRepository.observeAllPercents(uid)
+                .map { percents -> recommendationFrom(percents) }
+                .catch { cause ->
+                    Log.w("Omni", "users/$uid/guideProgress could not be read for the home card", cause)
+                    emit(recommendationFrom(emptyMap()))
+                }
         }
+    }
+
+    /** Rotates through the whole library one guide per day, so the card shows a different guide each day. */
+    private fun recommendationFrom(percents: Map<String, Int>): RecommendedGuide? {
+        if (guides.isEmpty()) return null
+        val dayIndex = (System.currentTimeMillis() / 86_400_000L).toInt()
+        val pick = guides[((dayIndex % guides.size) + guides.size) % guides.size]
+        return RecommendedGuide(id = pick.id, title = pick.title, percent = percents[pick.id] ?: 0)
     }
 
     /**
@@ -167,14 +196,16 @@ class HomeViewModel(
      * stored one within seconds of walking, since the sync deliberately lags.
      */
     val uiState: StateFlow<HomeUiState> =
-        combine(metrics, deviceSteps, stepPermission, cprPercent, isRefreshing) { day, local, granted, cpr, refreshing ->
+        combine(metrics, deviceSteps, stepPermission, recommendedGuide, isRefreshing) { day, local, granted, guide, refreshing ->
             HomeUiState(
                 glasses = day.waterGlasses,
                 steps = max(day.steps, local),
                 stepPermissionNeeded = granted == false && stepsRepository.isAvailable,
                 fiberGrams = day.fiberGrams,
                 sleepHours = day.sleepHours,
-                cprPercent = cpr,
+                recommendedGuideId = guide?.id,
+                recommendedGuideTitle = guide?.title ?: "CPR",
+                recommendedGuidePercent = guide?.percent ?: 0,
                 isRefreshing = refreshing,
             )
         }.stateIn(
