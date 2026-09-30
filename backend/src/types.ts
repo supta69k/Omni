@@ -63,6 +63,7 @@ export interface MealItem {
   proteinGrams: number;
   carbsGrams: number;
   fatGrams: number;
+  fiberGrams: number;
 }
 
 /** The summed nutrition across a meal's items. Always recomputed server-side from the items. */
@@ -71,6 +72,7 @@ export interface MealTotals {
   proteinGrams: number;
   carbsGrams: number;
   fatGrams: number;
+  fiberGrams: number;
 }
 
 /** The raw shape Gemini is asked to return (before server-side validation). */

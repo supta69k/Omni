@@ -36,11 +36,11 @@ function mockReqRes(body: unknown, uid: string | undefined) {
 const goodJson = JSON.stringify({
   mealName: 'Eggs, bread and peanut butter',
   items: [
-    { name: 'Egg', quantity: 2, unit: 'large', calories: 144, proteinGrams: 12.6, carbsGrams: 0.8, fatGrams: 9.6 },
-    { name: 'Bread', quantity: 2, unit: 'slice', calories: 160, proteinGrams: 6, carbsGrams: 30, fatGrams: 2 },
-    { name: 'Peanut butter', quantity: 1, unit: 'tbsp', calories: 190, proteinGrams: 8, carbsGrams: 6, fatGrams: 16 },
+    { name: 'Egg', quantity: 2, unit: 'large', calories: 144, proteinGrams: 12.6, carbsGrams: 0.8, fatGrams: 9.6, fiberGrams: 0 },
+    { name: 'Bread', quantity: 2, unit: 'slice', calories: 160, proteinGrams: 6, carbsGrams: 30, fatGrams: 2, fiberGrams: 3.6 },
+    { name: 'Peanut butter', quantity: 1, unit: 'tbsp', calories: 190, proteinGrams: 8, carbsGrams: 6, fatGrams: 16, fiberGrams: 0.9 },
   ],
-  totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 },
+  totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0, fiberGrams: 0 },
   estimated: true,
   needsClarification: false,
   clarificationQuestion: null,
@@ -97,6 +97,32 @@ describe('validateAnalysis', () => {
     expect(result.totals.proteinGrams).toBeCloseTo(12.6 + 6 + 8, 5); // 26.6
     expect(result.totals.carbsGrams).toBeCloseTo(0.8 + 30 + 6, 5); // 36.8
     expect(result.totals.fatGrams).toBeCloseTo(9.6 + 2 + 16, 5); // 27.6
+  });
+
+  it('(7, 8) sums fiberGrams into the recomputed totals like any other macro', () => {
+    const result = validateAnalysis(JSON.parse(goodJson));
+    expect(result.totals.fiberGrams).toBeCloseTo(0 + 3.6 + 0.9, 5); // 4.5
+    expect(result.items[1].fiberGrams).toBe(3.6);
+  });
+
+  it('treats an absent fiberGrams as 0, so an older model shape still validates', () => {
+    const noFiber = {
+      ...JSON.parse(goodJson),
+      items: [{ name: 'X', quantity: 1, unit: 'x', calories: 10, proteinGrams: 1, carbsGrams: 1, fatGrams: 1 }],
+    };
+    const result = validateAnalysis(noFiber);
+    expect(result.items[0].fiberGrams).toBe(0);
+    expect(result.totals.fiberGrams).toBe(0);
+  });
+
+  it('(5) rejects a negative fiberGrams', () => {
+    const bad = { ...JSON.parse(goodJson), items: [{ name: 'X', quantity: 1, unit: 'x', calories: 10, proteinGrams: 1, carbsGrams: 1, fatGrams: 1, fiberGrams: -2 }] };
+    expect(() => validateAnalysis(bad)).toThrow(/invalid nutrition values/i);
+  });
+
+  it('rejects a fiberGrams above the macro cap', () => {
+    const bad = { ...JSON.parse(goodJson), items: [{ name: 'X', quantity: 1, unit: 'x', calories: 10, proteinGrams: 1, carbsGrams: 1, fatGrams: 1, fiberGrams: 3000 }] };
+    expect(() => validateAnalysis(bad)).toThrow(/unreasonable fiber value/i);
   });
 
   it('(5) rejects negative calories', () => {

@@ -197,7 +197,7 @@ export function validateAnalysis(raw: unknown): MealAnalysisResult {
     return {
       mealName,
       items: [],
-      totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 },
+      totals: { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0, fiberGrams: 0 },
       estimated: true,
       needsClarification: true,
       clarificationQuestion:
@@ -247,6 +247,17 @@ export function validateAnalysis(raw: unknown): MealAnalysisResult {
       throw new InvalidAnalysisError(`Item "${name}" has an unreasonable macro value`);
     }
 
+    // Fiber is a first-class value but an OPTIONAL one: an older model shape (or a cached response
+    // from before the schema change) may omit it entirely, and that means 0 rather than an error.
+    // Only a *present but unusable* value — negative, non-finite, absurd — is rejected.
+    const fiberGrams = it.fiberGrams === undefined ? 0 : finiteNonNegative(it.fiberGrams);
+    if (fiberGrams === null) {
+      throw new InvalidAnalysisError(`Item "${name}" has invalid nutrition values`);
+    }
+    if (fiberGrams > MAX_MACRO_GRAMS) {
+      throw new InvalidAnalysisError(`Item "${name}" has an unreasonable fiber value`);
+    }
+
     return {
       name,
       quantity: round(quantity, 2),
@@ -255,6 +266,7 @@ export function validateAnalysis(raw: unknown): MealAnalysisResult {
       proteinGrams: round(proteinGrams),
       carbsGrams: round(carbsGrams),
       fatGrams: round(fatGrams),
+      fiberGrams: round(fiberGrams),
     };
   });
 
@@ -281,14 +293,16 @@ export function computeTotals(items: MealItem[]): MealTotals {
       proteinGrams: acc.proteinGrams + it.proteinGrams,
       carbsGrams: acc.carbsGrams + it.carbsGrams,
       fatGrams: acc.fatGrams + it.fatGrams,
+      fiberGrams: acc.fiberGrams + it.fiberGrams,
     }),
-    { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 },
+    { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0, fiberGrams: 0 },
   );
   return {
     calories: Math.round(totals.calories),
     proteinGrams: round(totals.proteinGrams),
     carbsGrams: round(totals.carbsGrams),
     fatGrams: round(totals.fatGrams),
+    fiberGrams: round(totals.fiberGrams),
   };
 }
 
