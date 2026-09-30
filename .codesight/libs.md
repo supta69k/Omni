@@ -1,0 +1,50 @@
+# Libraries
+
+- `backend\src\comment.ts` — function createCommentHandler: (deps) => void, interface CommentDeps
+- `backend\src\config.ts` — function validateConfig: () => void, const config
+- `backend\src\email-template.ts` — function generateOtpEmailHtml: (data) => string, function generateOtpEmailText: (data) => string
+- `backend\src\fcm.ts`
+  - class FirestoreFcmService
+  - class NoOpFcmService
+  - interface FcmService
+- `backend\src\gemini.ts`
+  - function describeGeminiFailure: (bodyText) => string
+  - class GeminiUnavailableError
+  - class GeminiRateLimitError
+  - class RestGeminiClient
+  - interface GeminiClient
+  - const MEAL_SYSTEM_PROMPT
+  - _...1 more_
+- `backend\src\like.ts` — function createLikeHandler: (deps) => void, interface LikeDeps
+- `backend\src\meal-analyze.ts`
+  - function normalizeUnit: (unit) => QuantityKind
+  - function maxQuantityForUnit: (unit) => number
+  - function analyzeMealSchema: (maxTextLength) => void
+  - function parseGeminiJson: (raw) => unknown
+  - function validateAnalysis: (raw) => MealAnalysisResult
+  - function computeTotals: (items) => MealTotals
+  - _...3 more_
+- `backend\src\message.ts` — function createMessageHandler: (deps) => void, interface MessageDeps
+- `backend\src\rate-limiter.ts`
+  - class FirestoreRateLimiter
+  - interface RateLimitConfig
+  - interface RateLimitInfo
+  - interface RateLimitError
+- `backend\src\revenuecat.ts`
+  - function createRevenueCatService: (deps) => RevenueCatService
+  - interface RevenueCatDeps
+  - interface RevenueCatService
+- `backend\src\sendgrid.ts`
+  - function initializeSendGrid: () => void
+  - function isSendGridConfigured: () => boolean
+  - function sendOtpEmail: (data) => Promise<void>
+- `backend\src\utils.ts`
+  - function generateOtp: () => string
+  - function hashOtp: (otp) => string
+  - function verifyOtpHash: (otp, hash) => boolean
+  - function generateEmailVerificationLink: (auth, email, firebaseHostingUrl) => Promise<string>
+  - function formatOtpForDisplay: (otp) => string
+  - function getRemainingSeconds: (expiresAt) => number
+  - _...1 more_
+- `backend\src\verification.ts` — function createVerificationHandlers: (deps) => void, interface VerificationDeps
+- `scripts\navbar-fix.py` — function replace: (path, old, new) -> None
