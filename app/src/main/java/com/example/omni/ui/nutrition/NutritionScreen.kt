@@ -54,6 +54,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -900,10 +901,12 @@ private fun FoodLogEntry(meal: Meal, onClick: () -> Unit) {
                     style = NutritionType.FoodName,
                     color = OmniNutriFoodName,
                     maxLines = 1,
-                    softWrap = false,
-                    // A name can outgrow the box now that it is user-typed, so this is where the clamp
-                    // lives rather than inside the entry sheet.
-                    modifier = Modifier.weight(1f, fill = false),
+                    overflow = TextOverflow.Ellipsis,
+                    // A filled weight, not `fill = false` + `softWrap = false`: the name takes exactly
+                    // the width the calories-and-chips block leaves, so a long name ellipsises at its
+                    // own edge instead of measuring past it into the numbers, and the block's position
+                    // is the same whether the name is short or at full length.
+                    modifier = Modifier.weight(1f).padding(end = NameCaloriesGap),
                 )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(CaloriesGap),
@@ -1150,6 +1153,12 @@ private val EntryRuleHeight = 1.dp
 
 /** 340 − (240 + 45 + 6 + 107) resolves to 6 between "404cal" and the first chip. */
 private val CaloriesGap = 6.dp
+
+/**
+ * The name's breathing room before the calories: the row's own 6 rhythm, applied inside the name's
+ * weight box so even a name truncated at full length never touches the numbers.
+ */
+private val NameCaloriesGap = 6.dp
 
 private val ChipWidth = 33.dp
 private val ChipHeight = 17.dp
