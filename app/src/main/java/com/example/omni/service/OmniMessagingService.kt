@@ -33,7 +33,8 @@ import kotlinx.coroutines.launch
  * on [scope], which lives as long as the process. That is acceptable precisely because the work is one
  * short Firestore write whose offline queue survives the process anyway.
  */
-class OmniMessagingService : FirebaseMessagingService() {
+class
+OmniMessagingService : FirebaseMessagingService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
