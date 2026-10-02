@@ -316,7 +316,12 @@ class FeedViewModel(
                             Log.w("Omni", "Comments on $id could not be read", cause)
                             emit(emptyList())
                         }
-                        .map { list -> id to list.map { it.toRow() } }
+                        .combine(pendingComments) { list, pending ->
+                            // Optimistic echoes sit at the top (newest first), before the server's
+                            // own list; [pruneDeliveredComments] has already removed any echo whose
+                            // server twin arrived, so a comment is one row and never a duplicate.
+                            id to (pending.map { it.toRow() } + list.map { it.toRow() })
+                        }
                 }
             }
 
@@ -589,10 +594,12 @@ class FeedViewModel(
 
     fun openComments(postId: String) {
         commentsOpenId.value = postId
+        pendingComments.value = emptyList()
     }
 
     fun closeComments() {
         commentsOpenId.value = null
+        pendingComments.value = emptyList()
     }
 
     /**
@@ -606,17 +613,71 @@ class FeedViewModel(
      * The uid is the signed-in account's, taken here and never from a parameter: the rules require
      * `authorId == request.auth.uid`, and a caller has no way to name someone else.
      */
+    /**
+     * Optimistic outgoing comments — shown the instant [addComment] is called, before the HTTP
+     * round-trip to the backend commits them to Firestore.
+     *
+     * Comments are written by the Render backend, not the client's Firestore cache, so without the
+     * echo the sender stares at an unchanged sheet until Render answers — seconds on a cold free-tier
+     * dyno, and *nothing at all* when the backend's post-commit notification step made the call fail
+     * even though the comment had been saved (the recipient saw it, the sender did not). Mirrors the
+     * messaging fix in [com.example.omni.ui.messages.MessagesViewModel].
+     *
+     * Reconciled by content in [pruneDeliveredComments]: the moment the server copy of an echo arrives
+     * on the listener, the matching optimistic one is dropped, so a comment is one row, never two.
+     * Cleared whenever the sheet opens or closes, so an echo never leaks into another post's sheet.
+     */
+    private val pendingComments = MutableStateFlow<List<Comment>>(emptyList())
+
+    /** Distinguishes otherwise-identical optimistic comments; never shown. */
+    private var pendingCommentSeq = 0L
+
+    /** Drops from [pendingComments] any optimistic comment the server has now delivered. */
+    private fun pruneDeliveredComments(server: List<Comment>) {
+        val current = pendingComments.value
+        if (current.isEmpty()) return
+        val counts = HashMap<Pair<String, String>, Int>()
+        server.forEach { c -> counts[c.authorId to c.body] = (counts[c.authorId to c.body] ?: 0) + 1 }
+        val remaining = current.filter { echo ->
+            val key = echo.authorId to echo.body
+            val n = counts[key] ?: 0
+            if (n > 0) {
+                counts[key] = n - 1
+                false
+            } else {
+                true
+            }
+        }
+        if (remaining.size != current.size) pendingComments.value = remaining
+    }
+
     fun addComment(body: String, onResult: (String?) -> Unit = {}) {
         val uid = authRepository.currentUid
             ?: return onResult("You are signed out. Sign in and try again.")
         val postId = commentsOpenId.value ?: return onResult("That post is no longer open.")
-        if (body.isBlank()) return onResult("Write something first.")
+        val trimmed = body.trim()
+        if (trimmed.isEmpty()) return onResult("Write something first.")
         val name = author.name.ifBlank { "You" }
+
+        // Optimistic echo: the row appears now, stamped with the authenticated uid so it matches its
+        // server twin for reconciliation.
+        val echo = Comment(
+            id = "pending-${pendingCommentSeq++}",
+            authorId = uid,
+            authorName = name,
+            body = trimmed,
+            createdAt = System.currentTimeMillis(),
+        )
+        pendingComments.value = pendingComments.value + echo
+
         viewModelScope.launch {
             try {
-                feedRepository.addComment(uid, postId, name, body)
+                feedRepository.addComment(uid, postId, name, trimmed)
                 onResult(null)
             } catch (cause: Exception) {
+                // The write did not land. Drop the echo so the sheet does not imply it did; if it
+                // secretly did land, the listener still delivers the real copy.
+                pendingComments.value = pendingComments.value.filterNot { it.id == echo.id }
                 Log.w("Omni", "Commenting on $postId failed", cause)
                 onResult("Your comment wasn't posted — ${cause.reason()}")
             }
