@@ -71,8 +71,8 @@ integration goes one layer deeper than a paywall:
 ### Android app
 
 1. **Firebase config** — in the Firebase console add an Android app and download
-   `google-services.json` into `app/`. The file shipped in this repo is the reference project's
-   public client config (it is not a secret; your backend rules are what protect the data).
+   `google-services.json` into `app/`. The file is **gitignored** — it is public client config (it
+   is not a secret; your backend rules are what protect the data), but each setup needs its own.
 2. **RevenueCat public key** — add to `local.properties` (never committed):
    ```properties
    REVENUECAT_API_KEY=goog_YourRevenueCatPublicSdkKey

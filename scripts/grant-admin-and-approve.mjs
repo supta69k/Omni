@@ -16,7 +16,10 @@
 // It: signs you in, self-grants admin via /admin/grant, signs in again for a fresh token that carries
 // the new claim, then approves the doctor.
 
-const WEB_API_KEY = process.env.OMNI_WEB_API_KEY || "AIzaSyCqaEfzgI-0LT4ZuLMz9NcvpclI79SvEtE";
+// The Firebase WEB API key is public-by-design (it ships in the app), but it is read from the
+// environment here rather than hardcoded — hardcoded keys in source trip secret scanners and let the
+// key drift per project.
+const WEB_API_KEY = process.env.OMNI_WEB_API_KEY;
 const BACKEND_URL = process.env.OMNI_BACKEND_URL || "https://omni-jx01.onrender.com";
 
 const doctorUid = process.argv[2];
@@ -29,6 +32,7 @@ function fail(msg) {
   process.exit(1);
 }
 if (!doctorUid) fail("Pass the doctor's uid as the first argument (no < > brackets).");
+if (!WEB_API_KEY) fail("Set OMNI_WEB_API_KEY (the Firebase Web API key — Project Settings → General).");
 if (!email || !password) fail("Set OMNI_ADMIN_EMAIL and OMNI_ADMIN_PASSWORD.");
 
 async function signIn() {
