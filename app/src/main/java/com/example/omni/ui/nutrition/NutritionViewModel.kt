@@ -3,16 +3,20 @@ package com.example.omni.ui.nutrition
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.omni.data.model.CoachState
 import com.example.omni.data.model.DailyMetrics
 import com.example.omni.data.model.DayNutrition
 import com.example.omni.data.model.Meal
 import com.example.omni.data.model.MealAnalysis
 import com.example.omni.data.model.MealAnalysisError
 import com.example.omni.data.model.MealAnalysisResult
+import com.example.omni.data.model.todayKey
 import com.example.omni.data.model.todayKeyFlow
 import com.example.omni.data.model.toDayNutrition
 import com.example.omni.data.model.weekEndingOn
 import com.example.omni.data.repo.AuthRepository
+import com.example.omni.data.repo.CoachRepository
+import com.example.omni.data.repo.CoachResult
 import com.example.omni.data.repo.MealAnalysisRepository
 import com.example.omni.data.repo.MealRepository
 import com.example.omni.data.repo.MetricsRepository
@@ -144,6 +148,7 @@ class NutritionViewModel(
     private val mealRepository: MealRepository,
     private val mealAnalysisRepository: MealAnalysisRepository,
     private val revenueCatRepository: com.example.omni.data.revenuecat.RevenueCatRepository,
+    private val coachRepository: CoachRepository,
 ) : ViewModel() {
 
     /**
@@ -360,6 +365,45 @@ class NutritionViewModel(
     /** Closes the AI flow without saving — from the input sheet, an error, or a review the user backed out of. */
     fun dismissAiMeal() {
         _aiMeal.value = AiMealState.Idle
+    }
+
+    // ---- AI Food Coach (Phase 13) ------------------------------------------------------------------
+
+    private val _coachState = MutableStateFlow<CoachState>(CoachState.Idle)
+    val coachState: StateFlow<CoachState> = _coachState
+
+    /**
+     * Opens the coach sheet and fetches today's guidance in one motion. The backend owns every rule
+     * (identity, the week's data, the meter, the entitlement); the client only renders what the
+     * server decided — [CoachState.LimitReached] is the free tier's "used up", rendered as the way
+     * in to Omni+ rather than as an error.
+     */
+    fun openCoach() {
+        if (_coachState.value is CoachState.Loading) return
+        _coachState.value = CoachState.Loading
+        fetchCoachGuidance()
+    }
+
+    /** Retries a failed session — the same fetch, without the opening state change. */
+    fun retryCoach() {
+        if (_coachState.value is CoachState.Loading) return
+        _coachState.value = CoachState.Loading
+        fetchCoachGuidance()
+    }
+
+    fun dismissCoach() {
+        _coachState.value = CoachState.Idle
+    }
+
+    private fun fetchCoachGuidance() {
+        viewModelScope.launch {
+            val result = coachRepository.requestDailyGuidance(todayKey())
+            _coachState.value = when (result) {
+                is CoachResult.Success -> CoachState.Ready(result.guidance)
+                CoachResult.LimitReached -> CoachState.LimitReached
+                is CoachResult.Failure -> CoachState.Failed(result.error)
+            }
+        }
     }
 
     /** Ignores a tap on a future chip rather than trusting the UI to have disabled it. */

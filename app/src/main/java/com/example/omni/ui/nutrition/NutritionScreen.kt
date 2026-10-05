@@ -184,6 +184,12 @@ fun NutritionScreen(
      */
     isOmniPlusActive: Boolean = true,
     onNeedsPremium: () -> Unit = {},
+    /** The AI Food Coach's state machine + its callbacks (the sheet renders the server's decision). */
+    coachState: com.example.omni.data.model.CoachState = com.example.omni.data.model.CoachState.Idle,
+    onOpenCoach: () -> Unit = {},
+    onRetryCoach: () -> Unit = {},
+    onDismissCoach: () -> Unit = {},
+    onCoachNeedsPremium: () -> Unit = {},
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
 ) {
@@ -197,6 +203,7 @@ fun NutritionScreen(
     // `aiOpen` gates the AI flow's own sheet, whose *content* is driven by [aiMeal] from the ViewModel.
     var logMethodOpen by remember { mutableStateOf(false) }
     var aiOpen by remember { mutableStateOf(false) }
+    var coachOpen by remember { mutableStateOf(false) }
 
     val pagerState = rememberPagerState(pageCount = { 2 })
     // Held apart from the remember key list so the ring pages are rebuilt only when a reading changes,
@@ -292,6 +299,40 @@ fun NutritionScreen(
                             Spacer(Modifier.height(FoodLogGap))
 
                             FoodLogHeader(onLog = { logMethodOpen = true })
+
+                            // The AI Food Coach's entry — one slim row above the log; the sheet renders
+                            // whatever the server decided (guidance, the daily limit, or a failure).
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(OmniNutriDaySurface)
+                                    .clickable {
+                                        onOpenCoach()
+                                        coachOpen = true
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "AI Coach",
+                                        style = NutritionType.FoodCalories,
+                                        color = OmniCardInk,
+                                    )
+                                    Text(
+                                        text = "Your daily guidance · Omni+",
+                                        style = NutritionType.FoodCalories,
+                                        color = OmniNutriMacroLabel,
+                                    )
+                                }
+                                Image(
+                                    painter = painterResource(R.drawable.ic_set_arrow_right),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
 
                             if (meals.isEmpty()) {
                                 Spacer(Modifier.height(EmptyGap))
@@ -399,6 +440,21 @@ fun NutritionScreen(
             onDismiss = {
                 aiOpen = false
                 onDismissAiMeal()
+            },
+        )
+
+        CoachSheet(
+            visible = coachOpen,
+            state = coachState,
+            onSeeOmniPlus = {
+                coachOpen = false
+                onDismissCoach()
+                onCoachNeedsPremium()
+            },
+            onRetry = onRetryCoach,
+            onDismiss = {
+                coachOpen = false
+                onDismissCoach()
             },
         )
     }

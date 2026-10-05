@@ -30,7 +30,11 @@ import com.example.omni.data.repo.BundledGuideRepository
 import com.example.omni.data.repo.GuideRepository
 import com.example.omni.data.repo.HospitalRepository
 import com.example.omni.data.repo.LocationRepository
+import com.example.omni.data.model.CoachGuidance
+import com.example.omni.data.repo.CoachRepository
+import com.example.omni.data.repo.CoachResult
 import com.example.omni.data.repo.MealAnalysisRepository
+import com.example.omni.data.repo.RenderCoachRepository
 import com.example.omni.data.repo.MealRepository
 import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.MessageRepository
@@ -107,6 +111,7 @@ class AppContainer private constructor(
     val metricsRepository: MetricsRepository,
     val mealRepository: MealRepository,
     val mealAnalysisRepository: MealAnalysisRepository,
+    val coachRepository: CoachRepository,
     val sleepRepository: SleepRepository,
     val guideProgressRepository: GuideProgressRepository,
     val feedRepository: FeedRepository,
@@ -196,6 +201,7 @@ class AppContainer private constructor(
                 // AI meal analysis speaks HTTPS to the Omni Render backend (the Gemini key lives there,
                 // never in the APK). Not lazy: it only builds an OkHttp client, same as the auth repo.
                 mealAnalysisRepository = RenderMealAnalysisRepository(FirebaseAuth.getInstance()),
+                coachRepository = RenderCoachRepository(FirebaseAuth.getInstance()),
                 sleepRepository = FirestoreSleepRepository(firestore, metricsRepo),
                 guideProgressRepository = FirestoreGuideProgressRepository(firestore),
                 feedRepository = FirestoreFeedRepository(firestore, FirebaseAuth.getInstance()),
@@ -241,6 +247,7 @@ class AppContainer private constructor(
                 metricsRepository = PreviewMetricsRepository(),
                 mealRepository = PreviewMealRepository(),
                 mealAnalysisRepository = PreviewMealAnalysisRepository(),
+                coachRepository = PreviewCoachRepository,
                 sleepRepository = PreviewSleepRepository(),
                 guideProgressRepository = PreviewGuideProgressRepository(),
                 feedRepository = PreviewFeedRepository(),
@@ -300,6 +307,7 @@ class AppContainer private constructor(
                         current.mealRepository,
                         current.mealAnalysisRepository,
                         current.revenueCatRepository,
+                        current.coachRepository,
                     ) as T
                 GuidesViewModel::class.java ->
                     GuidesViewModel(
@@ -403,4 +411,22 @@ class AppContainer private constructor(
             }
         }
     }
+}
+
+
+/**
+ * Previews never reach the network for coaching — the sheet renders this fixed guidance, shaped
+ * exactly like the backend's answer so the state machine exercises the same path.
+ */
+private val PreviewCoachRepository = object : CoachRepository {
+    override suspend fun requestDailyGuidance(today: String): CoachResult = CoachResult.Success(
+        CoachGuidance(
+            summary = "Preview guidance — log a few days and your coach will start spotting patterns.",
+            focus = "balance",
+            tips = listOf("Log a meal to begin.", "Set your Daily Goals in Settings.", "Keep the phone nearby."),
+            starter = true,
+            used = 0,
+            limit = 1,
+        ),
+    )
 }

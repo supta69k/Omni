@@ -22,6 +22,14 @@ export interface RevenueCatDeps {
 
 export interface RevenueCatService {
   grantDoctorEntitlement(appUserId: string): Promise<boolean>;
+
+  /**
+   * Whether the customer currently holds the Omni+ entitlement — the server-side check the AI
+   * Coach's metering runs before spending Gemini quota. Fail-closed: a missing secret key or a
+   * failing call reads as FREE, so an outage can only ever downgrade a subscriber to the daily
+   * limit for a moment — it can never grant premium to a free user.
+   */
+  hasOmniPlus(appUserId: string): Promise<boolean>;
 }
 
 export function createRevenueCatService(deps: RevenueCatDeps): RevenueCatService {
@@ -63,6 +71,31 @@ export function createRevenueCatService(deps: RevenueCatDeps): RevenueCatService
         console.log('[RC_COMP] granted ' + OMNI_PLUS_ENTITLEMENT + ' to ' + appUserId + ' (' + deps.doctorCompDuration + ')');
       }
       return granted;
+    },
+
+    async hasOmniPlus(appUserId: string): Promise<boolean> {
+      if (!deps.secretApiKey) {
+        // Fail-closed: without the secret key the answer is FREE. An outage or a missing
+        // configuration can only ever downgrade a subscriber to the daily limit for a moment —
+        // it can never grant premium to a free user.
+        console.warn('[RC_ENTITLEMENT_SKIPPED] REVENUECAT_SECRET_API_KEY is not set — treating ' + appUserId + ' as FREE');
+        return false;
+      }
+      try {
+        const response = await fetch(`${RC_BASE}/subscribers/${encodeURIComponent(appUserId)}`, {
+          headers: { Authorization: `Bearer ${deps.secretApiKey}` },
+        });
+        if (!response.ok) {
+          console.error('[RC_ENTITLEMENT_ERROR] uid=' + appUserId + ' status=' + response.status);
+          return false;
+        }
+        const body = (await response.json()) as { subscriber?: { entitlements?: Record<string, { isActive?: boolean }> } };
+        const entitlement = body?.subscriber?.entitlements?.[OMNI_PLUS_ENTITLEMENT];
+        return entitlement?.isActive === true;
+      } catch (error) {
+        console.error('[RC_ENTITLEMENT_UNEXPECTED] uid=' + appUserId, error);
+        return false;
+      }
     },
   };
 }

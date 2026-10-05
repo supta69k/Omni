@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Generated health-report PDFs, shared out via FileProvider. -->
+    <cache-path name="health_reports" path="health-reports/" />
+</paths>

@@ -108,6 +108,19 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="omni_general" />
+
+        <!-- Shares the generated health-report PDF out of cache without granting the whole app's
+             files. `grantUriPermissions` is what lets the share intent hand a read-only URI to
+             another app without the report ever touching shared storage. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

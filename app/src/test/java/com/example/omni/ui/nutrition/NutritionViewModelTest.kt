@@ -8,6 +8,10 @@ import com.example.omni.data.model.MealAnalysisItem
 import com.example.omni.data.model.MealAnalysisResult
 import com.example.omni.data.model.MealAnalysisTotals
 import com.example.omni.data.model.MealSlot
+import com.example.omni.data.model.CoachGuidance
+import com.example.omni.data.model.CoachState
+import com.example.omni.data.repo.CoachRepository
+import com.example.omni.data.repo.CoachResult
 import com.example.omni.data.repo.MealAnalysisRepository
 import com.example.omni.data.repo.MealRepository
 import com.example.omni.data.repo.MetricsRepository
@@ -76,12 +80,16 @@ class NutritionViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = NutritionViewModel(auth, metrics, meals, analyzer, omniPlus)
+    private fun viewModel() = NutritionViewModel(auth, metrics, meals, analyzer, omniPlus, coach)
+
+    /** The coach's transport fake — records what was requested, answers what a test tells it to. */
+    private val coach = FakeCoachRepository()
 
     /** A free (non-Omni+) account, for the AI gate test. */
     private fun freeViewModel() = NutritionViewModel(
         auth, metrics, meals, analyzer,
         com.example.omni.data.revenuecat.PreviewRevenueCatRepository(),
+        FakeCoachRepository(),
     )
 
     /** Keeps `uiState` hot so the week strip (and thus `dateKey`) is built — `WhileSubscribed` needs a collector. */
@@ -474,4 +482,21 @@ private class FakeMetricsRepository : MetricsRepository {
     override suspend fun addGlass(uid: String, date: String) = Unit
     override suspend fun setSteps(uid: String, date: String, steps: Int) = Unit
     override suspend fun setSleepHours(uid: String, date: String, hours: Float) = Unit
+}
+
+
+/** The coach transport's in-memory twin: answers what a test tells it, records what was asked. */
+private class FakeCoachRepository : CoachRepository {
+    var result: CoachResult = CoachResult.Success(
+        CoachGuidance(
+            summary = "Your steps are trending up while fiber lags behind.",
+            focus = "fiber",
+            tips = listOf("Add a pear at breakfast.", "Swap white rice for brown.", "Keep the morning walk."),
+            starter = false,
+            used = 1,
+            limit = 1,
+        ),
+    )
+
+    override suspend fun requestDailyGuidance(today: String): CoachResult = result
 }

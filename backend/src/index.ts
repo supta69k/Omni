@@ -18,6 +18,7 @@ import { createRevenueCatService } from './revenuecat.js';
 import { createLikeHandler } from './like.js';
 import { createCommentHandler } from './comment.js';
 import { createMessageHandler } from './message.js';
+import { createCoachHandler } from './coach.js';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -110,6 +111,16 @@ const verificationHandlers = createVerificationHandlers({ db, auth, fcm: fcmServ
 const likeHandler = createLikeHandler({ db, fcm: fcmService });
 const commentHandler = createCommentHandler({ db, fcm: fcmService });
 const messageHandler = createMessageHandler({ db, fcm: fcmService });
+
+// Phase 13: the AI Food Coach — one metered server call per free user per day, unlimited for Omni+.
+// The server reads the week's own days documents (the client is never trusted for the data), meters
+// before any Gemini spend, and charges only on a *successful* generation.
+const coachHandler = createCoachHandler({
+  db,
+  gemini: geminiClient,
+  revenueCat: revenueCatService,
+  freeDailyLimit: 1,
+});
 
 // POST /otp/send - Send 6-digit OTP to user's email
 app.post('/otp/send', authenticate, validateRequest(sendOtpSchema), async (req: Request, res: Response) => {
@@ -303,6 +314,9 @@ app.post('/verification/reject', authenticate, verificationHandlers.reject);
 app.post('/posts/:postId/like', authenticate, likeHandler.toggleLike);
 app.post('/posts/:postId/comments', authenticate, commentHandler.addComment);
 app.post('/conversations/:conversationId/messages', authenticate, messageHandler.sendMessage);
+
+// Phase 13: the AI Food Coach — one metered server call per free user per day, unlimited for Omni+.
+app.post('/ai/coach/daily', authenticate, coachHandler.coachDaily);
 
 // Admin bootstrap — sets {admin: true} custom claim. Restricted to a hardcoded bootstrap uid.
 // Call once, then remove the ADMIN_BOOTSTRAP_UID env var to permanently disable.

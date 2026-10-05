@@ -103,6 +103,56 @@ export const MEAL_RESPONSE_SCHEMA = {
   required: ['mealName', 'items', 'totals', 'estimated', 'needsClarification'],
 } as const;
 
+// ---- AI Coach (Phase 13) ------------------------------------------------------------------------
+
+/** One logged day as the coach sees it — the shape the client's week arrives in. */
+export interface CoachDayPayload {
+  date: string;
+  steps: number;
+  sleepHours: number;
+  waterGlasses: number;
+  fiberGrams: number;
+  calories: number;
+  /** False when no document existed for the day — "no data", not "ate nothing". */
+  logged: boolean;
+}
+
+export interface CoachPayload {
+  goals: { steps: number; sleepHours: number; waterGlasses: number; fiberGrams: number; calories: number };
+  days: CoachDayPayload[];
+}
+
+export const COACH_SYSTEM_PROMPT = [
+  'You are a supportive daily health coach inside a health app.',
+  'You receive the user\'s last 7 days of logged metrics (steps, sleep hours, water glasses, fiber',
+  'grams, calories — "logged": false means the day has no data at all) and their goals.',
+  '',
+  'Rules:',
+  '- Write a short, warm, non-judgmental summary of the week (2-3 sentences, max 600 characters).',
+  '- Pick exactly ONE "focus" metric that most needs attention this week; choose "balance" when',
+  '  everything looks fine. Use only: steps, sleep, water, fiber, calories, balance.',
+  '- Give exactly 3 short, concrete, actionable tips (max 200 characters each). Tips must be about',
+  '  the logged data, never generic filler.',
+  '- Days with "logged": false carry no information — never treat them as good or bad days.',
+  '- These are ESTIMATES and observations, never medical advice. Do NOT diagnose, prescribe, or',
+  '  mention medications, symptoms, or conditions.',
+  '- Never shame the user. Missed goals get encouragement, not criticism.',
+  '- Return ONLY the structured JSON defined by the schema. No markdown, no prose, no code fences.',
+].join('\n');
+
+export const COACH_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    focus: { type: 'string', enum: ['steps', 'sleep', 'water', 'fiber', 'calories', 'balance'] },
+    tips: { type: 'array', items: { type: 'string' }, minItems: 3, maxItems: 3 },
+  },
+  required: ['summary', 'focus', 'tips'],
+} as const;
+
+/** A coach answer wants a little more voice than a nutrition estimate — but not free rein. */
+export const CoachTemperature = 0.6;
+
 /**
  * A Google API error reason, reduced to something safe to write to a log line.
  *
@@ -173,8 +223,30 @@ export class RestGeminiClient implements GeminiClient {
   ) {}
 
   async analyzeMeal(mealText: string): Promise<string> {
-    // An unset GEMINI_API_KEY reaches here as an empty string (index.ts passes `apiKey ?? ''`) and
-    // would otherwise be indistinguishable from any other rejection. Name it explicitly.
+    // Low temperature: estimation should be steady, not creative.
+    return this.generate(MEAL_SYSTEM_PROMPT, MEAL_RESPONSE_SCHEMA, mealText, 0.2);
+  }
+
+  async coachGuidance(payload: CoachPayload): Promise<string> {
+    // A coach answer wants a little more voice than an estimate — but not free rein.
+    return this.generate(COACH_SYSTEM_PROMPT, COACH_RESPONSE_SCHEMA, JSON.stringify(payload), CoachTemperature);
+  }
+
+  /**
+   * One structured-output call to the Generative Language API — the single fetch every Gemini
+   * feature shares, so the wire format, the error mapping and the no-secrets logging rule each
+   * live in exactly one place and cannot drift apart.
+   *
+   * An unset GEMINI_API_KEY reaches here as an empty string (index.ts passes `apiKey ?? ''`) and
+   * would otherwise be indistinguishable from any other rejection. Named explicitly, and checked
+   * before a single round-trip is spent on a key we already know is absent.
+   */
+  private async generate(
+    systemPrompt: string,
+    responseSchema: object,
+    userText: string,
+    temperature: number,
+  ): Promise<string> {
     if (!this.apiKey) {
       logGeminiFailure('none', 'MISSING_API_KEY');
       throw new GeminiUnavailableError();
@@ -185,13 +257,12 @@ export class RestGeminiClient implements GeminiClient {
       `?key=${this.apiKey}`;
 
     const body = {
-      systemInstruction: { parts: [{ text: MEAL_SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: mealText }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userText }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: MEAL_RESPONSE_SCHEMA,
-        // Low temperature: estimation should be steady, not creative.
-        temperature: 0.2,
+        responseSchema,
+        temperature,
       },
     };
 

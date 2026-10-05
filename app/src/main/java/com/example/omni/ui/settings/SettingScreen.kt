@@ -133,6 +133,8 @@ fun SettingScreen(
     onDailyGoals: () -> Unit = {},
     onPushNotificationsChange: (Boolean) -> Unit = {},
     onOfflineCacheChange: (Boolean) -> Unit = {},
+    /** Exports the month's health report as a shareable PDF — Omni+ gated in the router. */
+    onExportHealthReport: () -> Unit = {},
     onApplyForVerification: () -> Unit = {},
     onOmniPlus: () -> Unit = {},
     /** Omni+ active state — swaps the promo card for the current-plan card. Central RevenueCat state. */
@@ -228,6 +230,7 @@ fun SettingScreen(
                                 onPushNotificationsChange = onPushNotificationsChange,
                                 offlineCache = offlineCache,
                                 onOfflineCacheChange = onOfflineCacheChange,
+                                onExportHealthReport = onExportHealthReport,
                             )
                         }
                     }
@@ -254,6 +257,7 @@ fun SettingScreen(
                         onPushNotificationsChange = onPushNotificationsChange,
                         offlineCache = offlineCache,
                         onOfflineCacheChange = onOfflineCacheChange,
+                        onExportHealthReport = onExportHealthReport,
                     )
                 }
 
@@ -364,10 +368,23 @@ private fun PreferencesGroup(
     onPushNotificationsChange: (Boolean) -> Unit,
     offlineCache: Boolean,
     onOfflineCacheChange: (Boolean) -> Unit,
+    onExportHealthReport: () -> Unit,
 ) {
     SettingsGroup(label = "Preferences", modifier = modifier) {
         // First in the group because it is the only row here that changes what the other
         // screens *say* — the two below it change what the app does in the background.
+        SettingsRow(
+            title = "Export Health Report",
+            subtitle = "A monthly PDF summary for your doctor · Omni+",
+            textWidth = 201.dp,
+            onClick = onExportHealthReport,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_set_arrow_right),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+        }
         SettingsRow(
             title = "Daily Goals",
             subtitle = "Water, steps, sleep, food",

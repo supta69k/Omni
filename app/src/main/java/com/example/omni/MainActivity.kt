@@ -103,6 +103,7 @@ import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.service.OmniMessagingService
 import com.example.omni.service.OmniTrackingService
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -1147,6 +1148,51 @@ private fun OmniApp() {
                                 container.notificationRepository.setOfflineCacheEnabled(uid, enabled)
                             } catch (cause: Exception) {
                                 Log.w("Omni", "The offline-cache preference could not be saved", cause)
+                            }
+                        }
+                    },
+                    onExportHealthReport = {
+                        // Omni+ is the report's gate: the row is the perk, and a free user's tap is
+                        // the way in to the paywall rather than a dead end (the same rule the
+                        // Verified Doctors entry follows).
+                        if (!settingsOmniPlus) {
+                            screen = AppScreen.OmniPlus
+                            return@SettingScreen
+                        }
+                        val uid = container.authRepository.currentUid ?: return@SettingScreen
+                        val user = user
+                        scope.launch {
+                            try {
+                                val month = java.time.YearMonth.now().toString()
+                                val days = container.metricsRepository
+                                    .observeMonth(uid, month)
+                                    .first()
+                                val report = com.example.omni.domain.HealthReport.build(
+                                    month = month,
+                                    displayName = user?.name.orEmpty().ifBlank { "Omni member" },
+                                    waterGoal = user?.waterGoal ?: com.example.omni.data.model.DefaultWaterGoal,
+                                    stepsGoal = user?.stepsGoal ?: com.example.omni.data.model.DefaultStepsGoal,
+                                    sleepGoal = user?.sleepGoal ?: com.example.omni.data.model.DefaultSleepGoal,
+                                    fiberGoal = user?.fiberGoal ?: com.example.omni.data.model.DefaultFiberGoal,
+                                    calorieGoal = user?.calorieGoal ?: com.example.omni.data.model.DefaultCalorieGoal,
+                                    daysByDate = days,
+                                    generatedAtLabel = java.time.LocalDate.now()
+                                        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy")),
+                                )
+                                val file = com.example.omni.report.HealthReportPdfWriter(context).write(report)
+                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file,
+                                )
+                                val share = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(share, "Share health report"))
+                            } catch (cause: Exception) {
+                                Log.w("Omni", "The health report could not be generated", cause)
                             }
                         }
                     },
