@@ -7,7 +7,14 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * One hospital in the public directory — the `hospitals/{id}` document (BACKEND_PLAN §7).
+ * One facility in the public SOS directory — a `hospitals/{id}` or a `pharmacies/{id}` document
+ * (BACKEND_PLAN §7).
+ *
+ * One shape for both halves of the directory on purpose: the two collections are seeded by the same
+ * script from the same OpenStreetMap export, carry the same fields, and are measured, sorted, routed,
+ * dialled and labelled by exactly the same code — the only thing that differs is the colour of the
+ * pin. [isPharmacy] is set by the mapper, never stored: a document's collection is its kind, and a
+ * stored flag could contradict it.
  *
  * The collection is seeded once from OpenStreetMap data (see `tools/seed-hospitals.md` in the repo
  * root) and is read-only for clients, which is what makes it work offline: Firestore's cache holds
@@ -25,18 +32,20 @@ data class Hospital(
     val phone: String? = null,
     val rating: Double? = null,
     val distanceKm: Double? = null,
+    val isPharmacy: Boolean = false,
 )
 
-fun DocumentSnapshot.toHospital(): Hospital? {
+fun DocumentSnapshot.toHospital(isPharmacy: Boolean = false): Hospital? {
     if (!exists()) return null
     return Hospital(
         id = id,
         name = getString("name").orEmpty(),
-        type = getString("type").orEmpty().ifBlank { "Hospital" },
+        type = getString("type").orEmpty().ifBlank { if (isPharmacy) "Pharmacy" else "Hospital" },
         lat = (get("lat") as? Number)?.toDouble() ?: 0.0,
         lng = (get("lng") as? Number)?.toDouble() ?: 0.0,
         phone = getString("phone")?.takeIf { it.isNotBlank() },
         rating = (get("rating") as? Number)?.toDouble()?.takeIf { it.isFinite() && it > 0.0 },
+        isPharmacy = isPharmacy,
     )
 }
 

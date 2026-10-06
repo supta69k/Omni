@@ -150,6 +150,14 @@ import kotlin.math.sin
  *  3. A recenter control, [RecenterSize] round in the sheet surface, drawn from the palette because the
  *     design ships no crosshair asset. It hides itself when there is no fix to centre on.
  *
+ * **The directory is facilities, not just hospitals (`UI_ARCHITECTURE.md` §6 rule 9).** The
+ * `pharmacies` collection rides the same pipeline — seeded by the same script, mapped to the same
+ * [Hospital] shape, measured and sorted by the same ViewModel — so the sheet's rail and the map's
+ * pins carry both. The design's sheet title "Nearest Hospitals" becomes "Nearest Facilities" to stay
+ * truthful about a list that now mixes the two, matching the subtitle's own "Found N facilities
+ * within 8 km"; the pharmacy pins are the call button's teal with a "P" where the hospital pin wears
+ * its "H". Nothing else the design draws moves.
+ *
  * Nothing the design *does* draw moves.
  */
 @Composable
@@ -635,13 +643,13 @@ private fun mapNotice(
     styleError != null -> MapNotice(styleError)
 
     locationStatus == LocationStatus.Blocked -> MapNotice(
-        "Location is blocked for Omni, so hospitals can't be sorted by distance.",
+        "Location is blocked for Omni, so the directory can't be sorted by distance.",
         "Settings",
         onOpenAppSettings,
     )
 
     locationStatus == LocationStatus.Denied -> MapNotice(
-        "Allow location and Omni will find the hospital nearest you.",
+        "Allow location and Omni will find the facility nearest you.",
         "Allow",
         onRequestLocation,
     )
@@ -653,13 +661,13 @@ private fun mapNotice(
     )
 
     directorySize == 0 && !loading -> MapNotice(
-        "The hospital directory hasn't reached this phone yet. 999 works without it.",
+        "The facilities directory hasn't reached this phone yet. 999 works without it.",
         "Call 999",
         onCallEmergency,
     )
 
     query.isNotBlank() && visible == 0 -> MapNotice(
-        "No hospital in the directory matches that search.",
+        "Nothing in the directory matches that search.",
         "Clear",
         onClearQuery,
     )
@@ -870,7 +878,7 @@ private fun HospitalSheet(
         // The handle is a link in the source, so it is what closes the sheet again.
         Image(
             painter = painterResource(R.drawable.ic_hosp_grab),
-            contentDescription = "Hide the hospitals",
+            contentDescription = "Hide the facilities",
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = GrabTop)
@@ -889,7 +897,7 @@ private fun HospitalSheet(
                 .width(HospitalCardWidth),
         ) {
             Text(
-                text = "Nearest Hospitals",
+                text = "Nearest Facilities",
                 style = MapType.SheetTitle,
                 color = OmniSheetTitle,
                 maxLines = 1,
@@ -907,7 +915,7 @@ private fun HospitalSheet(
                 // does not quote the query back: a 60-character one would not fit the two lines the
                 // design leaves here, and the field above still shows it.
                 text = when {
-                    directorySize == 0 -> "The hospital directory hasn't reached this phone yet"
+                    directorySize == 0 -> "The facilities directory hasn't reached this phone yet"
                     hospitals.isEmpty() -> "Nothing in the directory matches that search"
                     hasLocation -> "Found ${hospitals.size} facilities within 8 km"
                     else -> "${hospitals.size} facilities — turn on location to sort by distance"
@@ -937,7 +945,7 @@ private fun HospitalSheet(
                 // A directory that exists and a search that matched none of it. Nothing is wrong, so
                 // nothing shouts: the tray's own grey, and the way back is to drop the filter.
                 hospitals.isEmpty() -> EmptyRail(
-                    message = "Clear the search to see every hospital near you again.",
+                    message = "Clear the search to see every facility near you again.",
                     icon = R.drawable.ic_feed_search,
                     label = "Clear the Search",
                     fill = OmniHospitalCard,
@@ -1198,8 +1206,13 @@ private fun HospitalCard(
             icon = R.drawable.ic_hosp_call,
             // OpenStreetMap carries a number for maybe half of these. Naming the fallback rather than
             // dialling it silently is the difference between a button that lies and one that does not
-            // (`UI_ARCHITECTURE.md` §6 rule 9).
-            label = if (hospital.phone != null) "Call the Hospital" else "Call 999",
+            // (`UI_ARCHITECTURE.md` §6 rule 9). The label names the kind it is calling, since the rail
+            // now mixes hospitals and pharmacies.
+            label = when {
+                hospital.phone == null -> "Call 999"
+                hospital.isPharmacy -> "Call the Pharmacy"
+                else -> "Call the Hospital"
+            },
             fill = OmniCallButton,
             // The source sets this #302E2E on the first card and pure black on the second; the two
             // are indistinguishable at 18px, so the ink token carries both.
@@ -1265,7 +1278,8 @@ private fun HospitalAction(
 /**
  * The preview default — the design's own two cards, promoted to the shared [Hospital] model so
  * `@DevicePreviews` renders the sheet exactly as Figma drew it while the real screen passes live
- * directory data.
+ * directory data — plus one pharmacy, so the preview also shows the merged directory's other kind
+ * and the teal card state it arrives in.
  */
 private val DefaultHospitals = listOf(
     Hospital(
@@ -1286,6 +1300,15 @@ private val DefaultHospitals = listOf(
         lng = 91.8123,
         rating = 4.3,
         distanceKm = 2.1,
+    ),
+    Hospital(
+        id = "city-point-pharmacy",
+        name = "City Point Pharmacy",
+        type = "Pharmacy • 24/7",
+        lat = 22.3451,
+        lng = 91.8012,
+        isPharmacy = true,
+        distanceKm = 1.4,
     ),
 )
 

@@ -17,6 +17,7 @@ import com.example.omni.data.repo.EmergencyContactRepository
 import com.example.omni.data.repo.HospitalRepository
 import com.example.omni.data.repo.LocationRepository
 import com.example.omni.data.repo.NotificationRepository
+import com.example.omni.data.repo.PharmacyRepository
 import com.example.omni.data.repo.RoutingRepository
 import com.example.omni.data.repo.SosRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -105,9 +106,9 @@ sealed interface RouteStatus {
 /**
  * Everything the SOS screen renders.
  *
- * @property hospitals the directory around the user, nearest first, already filtered by [query]. The
- *   map's markers and the sheet's cards read the *same* list, so a search that hides a card hides its
- *   pin too.
+ * @property hospitals the merged directory — hospitals and pharmacies — around the user, nearest
+ *   first, already filtered by [query]. The map's markers and the sheet's cards read the *same*
+ *   list, so a search that hides a card hides its pin too.
  * @property directorySize how many hospitals existed before [query] filtered them, which is what tells
  *   "your search matched nothing" apart from "the directory has not been seeded".
  * @property nearestId the closest hospital of all, or `null` with no fix — the pin that gets the
@@ -148,7 +149,9 @@ data class SosUiState(
 /** How the location permission was last answered, as far as this ViewModel has been told. */
 private enum class PermissionState { Unknown, Granted, Denied, Blocked }
 
-/** One pass over the directory, before the parts that have nothing to do with the map are added. */
+/**
+ * One pass over the directory, before the parts that have nothing to do with the map are added.
+ */
 private data class MapSlice(
     val hospitals: List<Hospital>,
     val directorySize: Int,
@@ -159,6 +162,71 @@ private data class MapSlice(
     val query: String,
     val routeStatus: RouteStatus,
 )
+
+/**
+ * The map's own arithmetic, decided once and tested pure (see `SosDirectoryTest`).
+ *
+ * Measure against the fix, trim to the radius — with the fallback that keeps a radius that found
+ * nothing from producing an empty emergency screen — filter by the search, then choose what the
+ * sheet and the camera land on. Deliberately free of Android types: the fix arrives as two nullable
+ * doubles so the whole decision runs on the JVM with a list of data classes and nothing else.
+ */
+internal data class DirectorySlice(
+    val visible: List<Hospital>,
+    val nearbySize: Int,
+    val nearestId: String?,
+    val selected: Hospital?,
+)
+
+/** Name or type — "Metro" and "Pharmacy" are both things a user would reasonably type. */
+internal fun Hospital.matches(query: String): Boolean =
+    name.contains(query, ignoreCase = true) || type.contains(query, ignoreCase = true)
+
+internal fun selectFacilities(
+    all: List<Hospital>,
+    fixLat: Double?,
+    fixLng: Double?,
+    typed: String,
+    chosenId: String?,
+    nearbyRadiusKm: Double,
+    fallbackCount: Int,
+): DirectorySlice {
+    // With no fix there is no "nearest" and no distance: measuring from a stand-in centre would
+    // print a confident "0.4 km" for somebody standing in another district.
+    val hasFix = fixLat != null && fixLng != null
+    val measured = if (!hasFix) {
+        all.sortedBy { it.name }
+    } else {
+        all.map { it.withDistanceFrom(fixLat, fixLng) }.sortedBy { it.distanceKm }
+    }
+
+    val nearby = if (!hasFix) {
+        measured
+    } else {
+        measured
+            .filter { (it.distanceKm ?: Double.MAX_VALUE) <= nearbyRadiusKm }
+            // A radius that finds nothing must still find something: an empty emergency screen is
+            // never the right answer while a facility exists anywhere in the directory.
+            .ifEmpty { measured.take(fallbackCount) }
+    }
+
+    val nearestId = if (hasFix) nearby.firstOrNull()?.id else null
+    val visible = if (typed.isBlank()) nearby else nearby.filter { it.matches(typed) }
+
+    // The selection, in order of preference: what the user tapped, the nearest, the first thing on
+    // the map. The fallbacks are what make "the nearest facility is selected on open" true without
+    // a write, and what keeps a card on screen when a search hides the tapped pin.
+    val selected = visible.firstOrNull { it.id == chosenId }
+        ?: visible.firstOrNull { it.id == nearestId }
+        ?: visible.firstOrNull()
+
+    return DirectorySlice(
+        visible = visible,
+        nearbySize = nearby.size,
+        nearestId = nearestId,
+        selected = selected,
+    )
+}
 
 /**
  * The SOS map's reads and writes (BACKEND_PLAN §11 Phase 9).
@@ -179,9 +247,9 @@ private data class MapSlice(
  *  - **The GPS subscription** lives inside the `uiState` graph, so `WhileSubscribed` tears it down a
  *    few seconds after the screen leaves. Nothing here is collected in an `init` block for exactly that
  *    reason.
- *  - **The Firestore listener** is [HospitalRepository.observeAll] — location-independent, so walking
- *    never restarts it. Distances, the radius and the sort are all computed locally against the live
- *    fix, which is free.
+ *  - **The Firestore listeners** are [HospitalRepository.observeAll] and its pharmacy twin —
+ *    location-independent, so walking never restarts them. Distances, the radius and the sort are
+ *    all computed locally against the live fix, which is free.
  *  - **The routing call** only repeats when the destination changes or the user has left the route's
  *    origin by [RerouteThresholdMeters]. A phone on a table re-routes never.
  *
@@ -191,6 +259,7 @@ private data class MapSlice(
 class SosViewModel(
     private val authRepository: AuthRepository,
     private val hospitalRepository: HospitalRepository,
+    private val pharmacyRepository: PharmacyRepository,
     private val locationRepository: LocationRepository,
     private val routingRepository: RoutingRepository,
     private val sosRepository: SosRepository,
@@ -273,16 +342,24 @@ class SosViewModel(
     }
 
     /**
-     * The whole directory, once.
+     * The whole directory — hospitals and pharmacies — once.
      *
-     * Not keyed on the location: see [HospitalRepository.observeAll]. Everything positional about these
-     * hospitals is computed downstream, where it costs nothing to redo on every step the user takes.
+     * Not keyed on the location: see [HospitalRepository.observeAll]. Two independent listeners feed
+     * one merged list, so a pharmacy import that fails or is slow to first sync cannot delay or
+     * empty the hospital half, which is the one an emergency actually needs. Everything positional
+     * about the list is computed downstream, where it costs nothing to redo on every step the user
+     * takes.
      */
-    private val directory: Flow<List<Hospital>> = hospitalRepository.observeAll()
-        .catch { cause ->
+    private val directory: Flow<List<Hospital>> = combine(
+        hospitalRepository.observeAll().catch { cause ->
             Log.w("Omni", "The hospital directory could not be read", cause)
             emit(emptyList())
-        }
+        },
+        pharmacyRepository.observeAll().catch { cause ->
+            Log.w("Omni", "The pharmacy directory could not be read", cause)
+            emit(emptyList())
+        },
+    ) { hospitals, pharmacies -> hospitals + pharmacies }
 
     /**
      * The search box, damped.
@@ -313,9 +390,10 @@ class SosViewModel(
     }
 
     /**
-     * The map's own arithmetic: measure, trim, search, choose.
+     * The map's own arithmetic: measure, trim, search, choose — decided in [selectFacilities], pure
+     * and unit-tested; this lambda only marries it to the flows.
      *
-     * Split from [uiState] only because `combine` takes five typed flows and this screen has eight
+     * Split from [uiState] because `combine` takes five typed flows and this screen has eight
      * inputs; the two halves are one derivation.
      */
     private val mapState: Flow<MapSlice> = combine(
@@ -325,39 +403,21 @@ class SosViewModel(
         selectedId,
         routeStatus,
     ) { all, fix, typed, chosenId, route ->
-        // With no fix there is no "nearest" and no distance: measuring from a stand-in centre would
-        // print a confident "0.4 km" for somebody standing in another district.
-        val measured = if (fix == null) {
-            all.sortedBy { it.name }
-        } else {
-            all.map { it.withDistanceFrom(fix.latitude, fix.longitude) }.sortedBy { it.distanceKm }
-        }
-
-        val nearby = if (fix == null) {
-            measured
-        } else {
-            measured
-                .filter { (it.distanceKm ?: Double.MAX_VALUE) <= NearbyRadiusKm }
-                // A radius that finds nothing must still find something: an empty emergency screen is
-                // never the right answer while a hospital exists anywhere in the directory.
-                .ifEmpty { measured.take(FallbackCount) }
-        }
-
-        val nearestId = if (fix == null) null else nearby.firstOrNull()?.id
-        val visible = if (typed.isBlank()) nearby else nearby.filter { it.matches(typed) }
-
-        // The selection, in order of preference: what the user tapped, the nearest, the first thing on
-        // the map. The fallbacks are what make "the nearest hospital is selected on open" true without
-        // a write, and what keeps a card on screen when a search hides the tapped pin.
-        val selected = visible.firstOrNull { it.id == chosenId }
-            ?: visible.firstOrNull { it.id == nearestId }
-            ?: visible.firstOrNull()
+        val slice = selectFacilities(
+            all = all,
+            fixLat = fix?.latitude,
+            fixLng = fix?.longitude,
+            typed = typed,
+            chosenId = chosenId,
+            nearbyRadiusKm = NearbyRadiusKm,
+            fallbackCount = FallbackCount,
+        )
 
         MapSlice(
-            hospitals = visible,
-            directorySize = nearby.size,
-            selected = selected,
-            nearestId = nearestId,
+            hospitals = slice.visible,
+            directorySize = slice.nearbySize,
+            selected = slice.selected,
+            nearestId = slice.nearestId,
             userLocation = fix?.toLatLng(),
             fix = fix,
             query = typed,
@@ -624,10 +684,6 @@ class SosViewModel(
         const val RerouteThresholdMeters = 150.0
 
         fun Location.toLatLng(): LatLng = LatLng(latitude, longitude)
-
-        /** Name or type — "Metro" and "Clinic" are both things a user would reasonably type. */
-        fun Hospital.matches(query: String): Boolean =
-            name.contains(query, ignoreCase = true) || type.contains(query, ignoreCase = true)
 
         fun locationStatus(
             permission: PermissionState,

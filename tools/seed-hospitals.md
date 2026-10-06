@@ -1,19 +1,40 @@
-# Seeding the `hospitals` collection (Phase 9)
+# Seeding the SOS directory: `hospitals` and `pharmacies` (Phase 9)
 
-The SOS screen reads a public, read-only Firestore collection called `hospitals`, seeded from real
-OpenStreetMap data (Chittagong + Dhaka, ~15 km around each city centre; © OpenStreetMap
-contributors, ODbL — carry that credit in the project report).
+The SOS screen reads public, read-only Firestore collections called `hospitals` and `pharmacies`,
+seeded from real OpenStreetMap data (Chittagong + Dhaka, ~15 km around each city centre; ©
+OpenStreetMap contributors, ODbL — carry that credit in the project report).
+
+Both collections share one document schema (`name`, `type`, `lat`, `lng`, `phone`, `rating`,
+`source`, plus the OSM provenance fields) and are read by the app through the same mapper
+(`DocumentSnapshot.toHospital()`), which is why one script seeds both.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `hospitals_raw.json` | The raw Overpass API response (200 nodes). Do not edit by hand. |
+| `hospitals_raw.json` | The raw Overpass API response for hospitals (200 nodes). Do not edit by hand. |
 | `hospitals_seed.json` | The same data shaped as records (177 kept; 23 had no name). |
-| `hospitals_import.jsonl` | **The seed data the script reads.** One compact JSON object per line. |
-| `seed-hospitals.mjs` | **The seeding script.** Firebase Admin SDK, idempotent, batched. |
-| `package.json` | The script's only dependency (`firebase-admin`). |
+| `hospitals_import.jsonl` | **The hospital seed data the script reads.** One compact JSON object per line. |
+| `pharmacies_raw.json` | The raw Overpass response for pharmacies (2204 nodes), from `fetch-pharmacies.mjs`. |
+| `pharmacies_import.jsonl` | **The pharmacy seed data the script reads** (2204 records, 12 open 24/7). |
+| `fetch-pharmacies.mjs` | The pharmacy downloader — Overpass → the two `pharmacies_*` files. Re-runnable. |
+| `seed-hospitals.mjs` | **The seeding script** for both collections. Firebase Admin SDK, idempotent, batched. |
+| `package.json` | The scripts' only dependency (`firebase-admin`). |
 | `service-account.json` | *You download this* — the private key. Gitignored; never commit it. |
+
+## Seeding the pharmacies
+
+```
+node fetch-pharmacies.mjs                                  # Overpass → pharmacies_raw.json + .jsonl
+node seed-hospitals.mjs --collection pharmacies \
+    --data pharmacies_import.jsonl --raw pharmacies_raw.json --dry-run
+node seed-hospitals.mjs --collection pharmacies \
+    --data pharmacies_import.jsonl --raw pharmacies_raw.json
+```
+
+The same idempotence rules as the hospital import: deterministic `osm-<node id>` document ids,
+merge writes, no deletes. `fetch-pharmacies.mjs` throttles itself to one Overpass query per hour
+(`.pharmacies-fetched-at` marker file).
 
 ## How to run the seed (one-time setup, ~5 minutes)
 

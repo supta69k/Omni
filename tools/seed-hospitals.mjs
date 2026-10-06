@@ -1,14 +1,19 @@
 /**
- * One-shot, re-runnable importer for the `hospitals` Firestore collection.
+ * One-shot, re-runnable importer for the SOS directory's Firestore collections.
  *
- * Reads `hospitals_import.jsonl` (177 real Chittagong + Dhaka hospitals, © OpenStreetMap
- * contributors, ODbL) and writes one document per hospital into project `omni-2c987`.
- *
- * ## Usage — from the tools/ folder
+ * Reads a JSONL file (© OpenStreetMap contributors, ODbL) and writes one document per record into
+ * project `omni-2c987`. It seeds the **hospitals** collection by default and the **pharmacies**
+ * collection by flag:
  *
  *     npm install
- *     node seed-hospitals.mjs --dry-run     # validates and reports; touches no network
- *     node seed-hospitals.mjs               # the real import
+ *     node seed-hospitals.mjs --dry-run                        # validate the hospital directory
+ *     node seed-hospitals.mjs                                  # import the hospital directory
+ *     node seed-hospitals.mjs --collection pharmacies \
+ *         --data pharmacies_import.jsonl --raw pharmacies_raw.json
+ *
+ * The pharmacy records are produced by `fetch-pharmacies.mjs` and share the hospitals' exact schema,
+ * which is why one script seeds both: the app reads both collections with the same mapper
+ * (`DocumentSnapshot.toHospital()`), so a field the app reads is a field both imports must write.
  *
  * `--dry-run` never loads the credential and never opens a connection, so it is safe to run at any
  * time. Add `--verbose` to list every skipped record instead of the first few.
@@ -42,14 +47,20 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DATA_PATH = join(HERE, "hospitals_import.jsonl");
-const OSM_PATH = join(HERE, "hospitals_raw.json");
+
+/** `--collection hospitals`, `--data hospitals_import.jsonl`, `--raw hospitals_raw.json` override. */
+function argValue(flag, fallback) {
+  const index = process.argv.indexOf(flag);
+  return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
+}
+
+const COLLECTION = argValue("--collection", "hospitals");
+const DATA_PATH = join(HERE, argValue("--data", "hospitals_import.jsonl"));
+const OSM_PATH = join(HERE, argValue("--raw", "hospitals_raw.json"));
 const APP_CONFIG_PATH = join(HERE, "..", "app", "google-services.json");
 const KEY_PATH = process.env.GOOGLE_APPLICATION_CREDENTIALS
   ? resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS)
   : join(HERE, "service-account.json");
-
-const COLLECTION = "hospitals";
 
 /** Firestore's hard limit is 500 operations per batch; 400 leaves room and keeps commits small. */
 const BATCH_LIMIT = 400;

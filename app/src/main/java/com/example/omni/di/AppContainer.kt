@@ -29,6 +29,8 @@ import com.example.omni.data.repo.GuideProgressRepository
 import com.example.omni.data.repo.BundledGuideRepository
 import com.example.omni.data.repo.GuideRepository
 import com.example.omni.data.repo.HospitalRepository
+import com.example.omni.data.repo.PharmacyRepository
+import com.example.omni.data.repo.FirestorePharmacyRepository
 import com.example.omni.data.repo.LocationRepository
 import com.example.omni.data.model.CoachGuidance
 import com.example.omni.data.repo.CoachRepository
@@ -124,6 +126,7 @@ class AppContainer private constructor(
     val verificationRepository: VerificationRepository,
     val doctorRepository: DoctorRepository,
     private val hospitalRepositoryProvider: () -> HospitalRepository,
+    private val pharmacyRepositoryProvider: () -> PharmacyRepository,
     private val sosRepositoryProvider: () -> SosRepository,
     private val locationRepositoryProvider: () -> LocationRepository,
     private val routingRepositoryProvider: () -> RoutingRepository,
@@ -170,6 +173,9 @@ class AppContainer private constructor(
      */
     val hospitalRepository: HospitalRepository by lazy { hospitalRepositoryProvider() }
 
+    /** Same lazy rationale as [hospitalRepository] — no preview fake, so never build it eagerly. */
+    val pharmacyRepository: PharmacyRepository by lazy { pharmacyRepositoryProvider() }
+
     /**
      * RevenueCat subscription state — lazy because it needs the Application context and must not
      * be constructed in preview mode (where no Application exists). Initialized after
@@ -214,6 +220,7 @@ class AppContainer private constructor(
                 verificationRepository = FirestoreVerificationRepository(firestore),
                 doctorRepository = FirestoreDoctorRepository(firestore),
                 hospitalRepositoryProvider = { FirestoreHospitalRepository(firestore) },
+                pharmacyRepositoryProvider = { FirestorePharmacyRepository(firestore) },
                 sosRepositoryProvider = { FirestoreSosRepository(firestore) },
                 locationRepositoryProvider = { LocationRepository(appContext) },
                 routingRepositoryProvider = { OsrmRoutingRepository(BuildConfig.OSRM_BASE_URL) },
@@ -263,6 +270,7 @@ class AppContainer private constructor(
                 // design's own two hospitals comes from SosScreen's defaults, not from here. Behind a
                 // provider so no preview ever reaches Firebase to find that out.
                 hospitalRepositoryProvider = { FirestoreHospitalRepository(FirebaseFirestore.getInstance()) },
+                pharmacyRepositoryProvider = { FirestorePharmacyRepository(FirebaseFirestore.getInstance()) },
                 sosRepositoryProvider = { throw NotImplementedError("sosEvents are not available in previews") },
                 locationRepositoryProvider = { throw NotImplementedError("Location is not available in previews") },
                 // A straight line between two points — enough for a preview to draw the polyline and
@@ -344,6 +352,7 @@ class AppContainer private constructor(
                     SosViewModel(
                         current.authRepository,
                         current.hospitalRepository,
+                        current.pharmacyRepository,
                         current.locationRepository,
                         current.routingRepository,
                         current.sosRepository,

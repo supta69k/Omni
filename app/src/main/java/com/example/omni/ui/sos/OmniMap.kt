@@ -67,7 +67,9 @@ import org.maplibre.android.geometry.LatLng as MapLatLng
  * to the 415dp artboard, so `LocalDensity` would quietly hand the map a figure a few percent off — and
  * MapLibre, being an Android View, measures in real screen pixels regardless.
  *
- * @param selectedId the hospital whose card is open — drawn as the dark pin.
+ * @param hospitals the directory slice to draw — the merged hospital + pharmacy list, already
+ *   measured, trimmed and searched by the ViewModel.
+ * @param selectedId the facility whose card is open — drawn as the dark pin.
  * @param nearestId the closest hospital of all — drawn haloed, whether or not it is selected.
  * @param recenterTick bumped by the ViewModel whenever the camera should return to the user. A counter
  *   rather than a callback because Compose re-runs effects on *values*, and "recentre again" has to be
@@ -300,17 +302,22 @@ fun OmniMap(
 // ---- Style installation ------------------------------------------------------------------------
 
 /**
- * Adds Omni's three sources and seven layers on top of whatever the vector style brought.
+ * Adds Omni's sources and layers on top of whatever the vector style brought.
  *
  * Order is z-order: the route goes above the roads it follows, the user dot above the route it starts
- * from, and the pins above everything. The three pin layers share one source and differ only in their
- * filter, which is what makes selecting a hospital a property change on one feature rather than a
- * marker being destroyed and rebuilt.
+ * from, and the pins above everything. The six pin layers share one source and differ only in their
+ * filter — state × kind — which is what makes selecting a facility a property change on one feature
+ * rather than a marker being destroyed and rebuilt. Pharmacies draw after hospitals so that, where
+ * pins collide, the teal one wins the overlap: the hospitals are the longer-standing half of the
+ * directory and a pharmacy covering a hospital would hide the thing a SOS is likelier to be about.
  */
 private fun Style.installOmniLayers(context: Context) {
     addImage(PinImagePlain, OmniMapPins.bitmap(context, StatePlain))
     addImage(PinImageNearest, OmniMapPins.bitmap(context, StateNearest))
     addImage(PinImageSelected, OmniMapPins.bitmap(context, StateSelected))
+    addImage(PinImagePharmacyPlain, OmniMapPins.bitmap(context, StatePlain, pharmacy = true))
+    addImage(PinImagePharmacyNearest, OmniMapPins.bitmap(context, StateNearest, pharmacy = true))
+    addImage(PinImagePharmacySelected, OmniMapPins.bitmap(context, StateSelected, pharmacy = true))
 
     addSource(GeoJsonSource(RouteSourceId, FeatureCollection.fromFeatures(emptyList())))
     addSource(GeoJsonSource(UserSourceId, FeatureCollection.fromFeatures(emptyList())))
@@ -353,22 +360,31 @@ private fun Style.installOmniLayers(context: Context) {
         ),
     )
 
-    addLayer(pinLayer(HospitalLayerId, PinImagePlain, StatePlain, strong = false))
-    addLayer(pinLayer(NearestLayerId, PinImageNearest, StateNearest, strong = true))
-    addLayer(pinLayer(SelectedLayerId, PinImageSelected, StateSelected, strong = true))
+    addLayer(pinLayer(HospitalLayerId, PinImagePlain, StatePlain, KindHospital, strong = false))
+    addLayer(pinLayer(NearestLayerId, PinImageNearest, StateNearest, KindHospital, strong = true))
+    addLayer(pinLayer(SelectedLayerId, PinImageSelected, StateSelected, KindHospital, strong = true))
+    addLayer(pinLayer(PharmacyLayerId, PinImagePharmacyPlain, StatePlain, KindPharmacy, strong = false))
+    addLayer(pinLayer(PharmacyNearestLayerId, PinImagePharmacyNearest, StateNearest, KindPharmacy, strong = true))
+    addLayer(pinLayer(PharmacySelectedLayerId, PinImagePharmacySelected, StateSelected, KindPharmacy, strong = true))
 }
 
 /**
  * One state's pins and their labels.
  *
- * The icon never drops out — `allow-overlap` plus `ignore-placement`, because a hospital that vanishes
+ * The icon never drops out — `allow-overlap` plus `ignore-placement`, because a facility that vanishes
  * because a label wanted the space is unacceptable on this screen. The *label* is the opposite:
  * `optional` and non-overlapping, so a dense district loses text rather than turning into a solid block
  * of it.
  *
- * @param strong the nearest and the selected hospital, whose labels are inked and a point larger.
+ * @param strong the nearest and the selected facility, whose labels are inked and a point larger.
  */
-private fun pinLayer(id: String, image: String, state: String, strong: Boolean): SymbolLayer =
+private fun pinLayer(
+    id: String,
+    image: String,
+    state: String,
+    kind: String,
+    strong: Boolean,
+): SymbolLayer =
     SymbolLayer(id, HospitalSourceId).withProperties(
         PropertyFactory.iconImage(image),
         PropertyFactory.iconAllowOverlap(true),
@@ -393,33 +409,40 @@ private fun pinLayer(id: String, image: String, state: String, strong: Boolean):
         PropertyFactory.textOptional(true),
         PropertyFactory.textAllowOverlap(false),
     ).also { layer ->
-        layer.setFilter(Expression.eq(Expression.get(StateProperty), Expression.literal(state)))
+        layer.setFilter(
+            Expression.all(
+                Expression.eq(Expression.get(StateProperty), Expression.literal(state)),
+                Expression.eq(Expression.get(KindProperty), Expression.literal(kind)),
+            ),
+        )
     }
 
 // ---- Features ----------------------------------------------------------------------------------
 
 /**
- * The directory as map features, each tagged with the state that decides which layer draws it.
+ * The directory as map features, each tagged with the state that decides which layer draws it and
+ * the kind that decides which colour it wears.
  *
- * The label is the hospital and its live distance — the design's own callout ("Savlon: (3.6km)") — with
- * the nearest one saying so in words, because a halo tells the eye *which* pin is special and only text
- * says *why*.
+ * The label is the facility and its live distance — the design's own callout ("Savlon: (3.6km)") —
+ * with the nearest one saying so in words, because a halo tells the eye *which* pin is special and
+ * only text says *why*.
  */
 private fun hospitalFeatures(
     hospitals: List<Hospital>,
     selectedId: String?,
     nearestId: String?,
 ): FeatureCollection = FeatureCollection.fromFeatures(
-    hospitals.map { hospital ->
-        val state = when (hospital.id) {
+    hospitals.map { facility ->
+        val state = when (facility.id) {
             selectedId -> StateSelected
             nearestId -> StateNearest
             else -> StatePlain
         }
-        Feature.fromGeometry(Point.fromLngLat(hospital.lng, hospital.lat)).apply {
-            addStringProperty(IdProperty, hospital.id)
+        Feature.fromGeometry(Point.fromLngLat(facility.lng, facility.lat)).apply {
+            addStringProperty(IdProperty, facility.id)
             addStringProperty(StateProperty, state)
-            addStringProperty(LabelProperty, hospital.mapLabel(isNearest = hospital.id == nearestId))
+            addStringProperty(KindProperty, if (facility.isPharmacy) KindPharmacy else KindHospital)
+            addStringProperty(LabelProperty, facility.mapLabel(isNearest = facility.id == nearestId))
         }
     },
 )
@@ -497,9 +520,17 @@ private fun MapLibreMap.frame(
     if (animate) animateCamera(update, CameraMillis) else moveCamera(update)
 }
 
-/** The id of the hospital rendered under [screen], or `null` for a tap on open map. */
+/** The id of the facility rendered under [screen], or `null` for a tap on open map. */
 private fun MapLibreMap.pinAt(screen: PointF): String? =
-    queryRenderedFeatures(screen, SelectedLayerId, NearestLayerId, HospitalLayerId)
+    queryRenderedFeatures(
+        screen,
+        SelectedLayerId,
+        NearestLayerId,
+        HospitalLayerId,
+        PharmacySelectedLayerId,
+        PharmacyNearestLayerId,
+        PharmacyLayerId,
+    )
         .firstNotNullOfOrNull { it.getStringProperty(IdProperty) }
 
 private fun LatLng.toMapLatLng(): MapLatLng = MapLatLng(lat, lng)

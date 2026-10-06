@@ -81,17 +81,27 @@ internal const val UserDotLayerId = "omni-user-dot"
 internal const val HospitalLayerId = "omni-hospital"
 internal const val NearestLayerId = "omni-hospital-nearest"
 internal const val SelectedLayerId = "omni-hospital-selected"
+internal const val PharmacyLayerId = "omni-pharmacy"
+internal const val PharmacyNearestLayerId = "omni-pharmacy-nearest"
+internal const val PharmacySelectedLayerId = "omni-pharmacy-selected"
 
-/** The three images the pin layers draw, one per state. */
+/** The six images the pin layers draw — three states for each half of the directory. */
 internal const val PinImagePlain = "omni-pin"
 internal const val PinImageNearest = "omni-pin-nearest"
 internal const val PinImageSelected = "omni-pin-selected"
+internal const val PinImagePharmacyPlain = "omni-pin-pharmacy"
+internal const val PinImagePharmacyNearest = "omni-pin-pharmacy-nearest"
+internal const val PinImagePharmacySelected = "omni-pin-pharmacy-selected"
 
-/** The feature property the three pin layers filter on. */
+/** The feature properties the pin layers filter on: state × kind, six layers over one source. */
 internal const val StateProperty = "state"
 internal const val StatePlain = "plain"
 internal const val StateNearest = "nearest"
 internal const val StateSelected = "selected"
+
+internal const val KindProperty = "kind"
+internal const val KindHospital = "hospital"
+internal const val KindPharmacy = "pharmacy"
 
 /** The rest of what each hospital feature carries. */
 internal const val IdProperty = "id"
@@ -116,9 +126,13 @@ internal object OmniMapPins {
 
     /**
      * @param state one of [StatePlain], [StateNearest], [StateSelected].
+     * @param pharmacy true for the pharmacy half of the directory — the same teardrop in the call
+     *   button's teal, carrying a "P". The fill, not the shape, is the legend: both halves of the
+     *   directory are medical facilities, and the map already teaches teal as Omni's own colour.
      */
-    fun bitmap(context: Context, state: String): Bitmap {
+    fun bitmap(context: Context, state: String, pharmacy: Boolean = false): Bitmap {
         val density = context.resources.displayMetrics.density
+        val glyphChar = if (pharmacy) "P" else "H"
         val spec = when (state) {
             StateSelected -> PinSpec(
                 widthDp = 40f,
@@ -126,20 +140,23 @@ internal object OmniMapPins {
                 fill = OmniInk,
                 halo = OmniCallButton,
                 glyph = OmniBackground,
+                glyphText = glyphChar,
             )
             StateNearest -> PinSpec(
                 widthDp = 38f,
                 heightDp = 49f,
-                fill = OmniAlertRed,
+                fill = if (pharmacy) OmniCallButton else OmniAlertRed,
                 halo = OmniHeroPink,
                 glyph = OmniBackground,
+                glyphText = glyphChar,
             )
             else -> PinSpec(
                 widthDp = 30f,
                 heightDp = 39f,
-                fill = OmniAlertRed,
+                fill = if (pharmacy) OmniCallButton else OmniAlertRed,
                 halo = null,
                 glyph = OmniBackground,
+                glyphText = glyphChar,
             )
         }
         return spec.render(density)
@@ -152,6 +169,8 @@ internal object OmniMapPins {
         /** The ring around the head that says "this one" — absent on a plain pin. */
         val halo: Color?,
         val glyph: Color,
+        /** The letter in the head: "H" for hospital, "P" for pharmacy. */
+        val glyphText: String,
     ) {
         fun render(density: Float): Bitmap {
             // The shadow needs room to fall outside the shape, or it is clipped into a hard edge.
@@ -198,8 +217,8 @@ internal object OmniMapPins {
             canvas.drawPath(path, body)
             canvas.drawPath(path, outline)
 
-            // "H" for hospital — the design's own marker glyph, and the one symbol that reads at 30dp
-            // without a legend.
+            // "H" for hospital, "P" for pharmacy — the design's own marker glyph, and the one symbol
+            // that reads at 30dp without a legend.
             val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = glyph.toArgb()
                 textAlign = Paint.Align.CENTER
@@ -207,7 +226,7 @@ internal object OmniMapPins {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
             val baseline = cx - (label.descent() + label.ascent()) / 2f
-            canvas.drawText("H", cx, baseline, label)
+            canvas.drawText(glyphText, cx, baseline, label)
 
             return bitmap
         }
