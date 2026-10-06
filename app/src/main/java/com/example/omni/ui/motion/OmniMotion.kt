@@ -1,5 +1,7 @@
 package com.example.omni.ui.motion
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
@@ -42,6 +44,34 @@ import androidx.compose.ui.input.pointer.pointerInput
  * - Accessible: motion must never be required to understand or operate the app.
  */
 object OmniMotion {
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // REDUCED MOTION
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+
+    /*
+     * Android exposes a "remove animations" accessibility toggle as
+     * `Settings.Global.TRANSITION_ANIMATION_SCALE`. When the flag below is false every animation
+     * spec in this object collapses to an instant step and `pressEffect` stops scaling, so a user
+     * who disabled system animations gets no motion — the same respect the platform itself gives.
+     * The flag is flipped once at startup by [com.example.omni.OmniApplication] (it needs a
+     * Context), reading:
+     *
+     *     Settings.Global.getFloat(
+     *         context.contentResolver,
+     *         Settings.Global.TRANSITION_ANIMATION_SCALE,
+     *     ) == 0f
+     *
+     * `@JvmStatic` keeps that one-shot call a plain `OmniMotion.animationsEnabled = false`.
+     */
+    @Volatile
+    var animationsEnabled: Boolean = true
+
+    /**
+     * The spec returned while reduced motion is on. A zero-duration tween is an instant jump: the
+     * final frame is still drawn, it is simply not eased toward.
+     */
+    private fun <T> reducedSpec(): FiniteAnimationSpec<T> = tween(durationMillis = 0)
 
     // ─────────────────────────────────────────────────────────────────────────────────────────
     // DURATIONS (milliseconds)
@@ -89,25 +119,34 @@ object OmniMotion {
     fun <T> instant(): FiniteAnimationSpec<T> = tween(durationMillis = DurationInstant, easing = EasingStandard)
 
     /** Fast content entrance: cards, list items, subtle slides. */
-    fun <T> fast(): FiniteAnimationSpec<T> = tween(durationMillis = DurationFast, easing = EasingStandard)
+    fun <T> fast(): FiniteAnimationSpec<T> =
+        if (animationsEnabled) tween(durationMillis = DurationFast, easing = EasingStandard) else reducedSpec()
 
     /** Medium transitions: sheets, dialogs, navigation, state changes. */
-    fun <T> medium(): FiniteAnimationSpec<T> = tween(durationMillis = DurationMedium, easing = EasingStandard)
+    fun <T> medium(): FiniteAnimationSpec<T> =
+        if (animationsEnabled) tween(durationMillis = DurationMedium, easing = EasingStandard) else reducedSpec()
 
     /** Slow emphasis: success confirmation, important state change. */
-    fun <T> slow(): FiniteAnimationSpec<T> = tween(durationMillis = DurationSlow, easing = EasingEmphasized)
+    fun <T> slow(): FiniteAnimationSpec<T> =
+        if (animationsEnabled) tween(durationMillis = DurationSlow, easing = EasingEmphasized) else reducedSpec()
 
     /** Progress rings and bars: smooth growth without feeling sluggish. */
-    fun <T> progress(): FiniteAnimationSpec<T> = tween(durationMillis = DurationProgress, easing = EasingStandard)
+    fun <T> progress(): FiniteAnimationSpec<T> =
+        if (animationsEnabled) tween(durationMillis = DurationProgress, easing = EasingStandard) else reducedSpec()
 
     /**
      * Spring animation for physical-feeling interactions: bottom nav indicator, drag-released sheets.
      * Lower stiffness than Compose's default spring — feels more settled, less bouncy.
      */
-    fun <T> spring(): FiniteAnimationSpec<T> = spring(
-        dampingRatio = Spring.DampingRatioNoBouncy,
-        stiffness = Spring.StiffnessMediumLow,
-    )
+    fun <T> spring(): FiniteAnimationSpec<T> =
+        if (animationsEnabled) {
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            )
+        } else {
+            reducedSpec()
+        }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────
     // INTERACTION FEEDBACK
@@ -136,7 +175,7 @@ object OmniMotion {
      * ```
      */
     fun Modifier.pressEffect(enabled: Boolean = true): Modifier = composed {
-        if (!enabled) return@composed this
+        if (!enabled || !animationsEnabled) return@composed this
 
         var pressed by remember { mutableStateOf(false) }
         val scale = if (pressed) PressScale else 1f
@@ -182,7 +221,8 @@ object OmniMotion {
      * }
      * ```
      */
-    fun staggerDelay(index: Int): Int = index * StaggerDelayMillis
+    fun staggerDelay(index: Int): Int =
+        if (animationsEnabled) index * StaggerDelayMillis else 0
 
     // ─────────────────────────────────────────────────────────────────────────────────────────
     // ENTRANCE ANIMATIONS
@@ -192,26 +232,38 @@ object OmniMotion {
      * Standard content entrance: fade in from 0 to 1 alpha.
      * Use for cards, sections, and content that should appear gracefully.
      */
-    fun fadeInEnter() = androidx.compose.animation.fadeIn(animationSpec = fast())
+    fun fadeInEnter(): EnterTransition =
+        if (animationsEnabled) androidx.compose.animation.fadeIn(animationSpec = fast()) else EnterTransition.None
 
     /**
      * Standard content exit: fade out from 1 to 0 alpha.
      */
-    fun fadeOutExit() = androidx.compose.animation.fadeOut(animationSpec = fast())
+    fun fadeOutExit(): ExitTransition =
+        if (animationsEnabled) androidx.compose.animation.fadeOut(animationSpec = fast()) else ExitTransition.None
 
     /**
      * Slide in from bottom with fade — good for sheets and modal content.
      */
-    fun slideUpEnter() = androidx.compose.animation.slideInVertically(
-        animationSpec = medium(),
-        initialOffsetY = { it / 4 }, // Start 25% down
-    ) + fadeInEnter()
+    fun slideUpEnter(): EnterTransition =
+        if (animationsEnabled) {
+            androidx.compose.animation.slideInVertically(
+                animationSpec = medium(),
+                initialOffsetY = { it / 4 }, // Start 25% down
+            ) + fadeInEnter()
+        } else {
+            EnterTransition.None
+        }
 
     /**
      * Slide out to bottom with fade.
      */
-    fun slideDownExit() = androidx.compose.animation.slideOutVertically(
-        animationSpec = medium(),
-        targetOffsetY = { it / 4 },
-    ) + fadeOutExit()
+    fun slideDownExit(): ExitTransition =
+        if (animationsEnabled) {
+            androidx.compose.animation.slideOutVertically(
+                animationSpec = medium(),
+                targetOffsetY = { it / 4 },
+            ) + fadeOutExit()
+        } else {
+            ExitTransition.None
+        }
 }

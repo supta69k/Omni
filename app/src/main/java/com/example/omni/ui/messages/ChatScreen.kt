@@ -2,6 +2,7 @@ package com.example.omni.ui.messages
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +49,7 @@ import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DesignFrameWidth
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.VerifiedBadge
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.theme.FeedType
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniBackground
@@ -225,7 +231,20 @@ fun ChatScreen(
                     key = { it.id },
                     contentType = { BubbleKey },
                 ) { message ->
-                    MessageBubble(message = message, mine = message.senderId == state.selfUid)
+                    // A bubble fades and slides in once, when it is new to this composition. The
+                    // keyed items block means only the arriving message is a new composition: the
+                    // bubbles above it are reused, so they animate exactly once each.
+                    var visible by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        visible = true
+                    }
+                    AnimatedVisibility(
+                        visible = visible,
+                        enter = OmniMotion.slideUpEnter(),
+                        exit = OmniMotion.slideDownExit(),
+                    ) {
+                        MessageBubble(message = message, mine = message.senderId == state.selfUid)
+                    }
                 }
             }
 

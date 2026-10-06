@@ -135,6 +135,8 @@ fun SettingScreen(
     onOfflineCacheChange: (Boolean) -> Unit = {},
     /** Exports the month's health report as a shareable PDF — Omni+ gated in the router. */
     onExportHealthReport: () -> Unit = {},
+    /** Opens the Health Insights Hub — this month against last, streaks and best days. */
+    onOpenInsights: () -> Unit = {},
     onApplyForVerification: () -> Unit = {},
     onOmniPlus: () -> Unit = {},
     /** Omni+ active state — swaps the promo card for the current-plan card. Central RevenueCat state. */
@@ -231,6 +233,7 @@ fun SettingScreen(
                                 offlineCache = offlineCache,
                                 onOfflineCacheChange = onOfflineCacheChange,
                                 onExportHealthReport = onExportHealthReport,
+                                onOpenInsights = onOpenInsights,
                             )
                         }
                     }
@@ -258,6 +261,7 @@ fun SettingScreen(
                         offlineCache = offlineCache,
                         onOfflineCacheChange = onOfflineCacheChange,
                         onExportHealthReport = onExportHealthReport,
+                        onOpenInsights = onOpenInsights,
                     )
                 }
 
@@ -369,10 +373,23 @@ private fun PreferencesGroup(
     offlineCache: Boolean,
     onOfflineCacheChange: (Boolean) -> Unit,
     onExportHealthReport: () -> Unit,
+    onOpenInsights: () -> Unit,
 ) {
     SettingsGroup(label = "Preferences", modifier = modifier) {
         // First in the group because it is the only row here that changes what the other
         // screens *say* — the two below it change what the app does in the background.
+        SettingsRow(
+            title = "Health Insights",
+            subtitle = "This month against last · streaks",
+            textWidth = 201.dp,
+            onClick = onOpenInsights,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_set_arrow_right),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+            )
+        }
         SettingsRow(
             title = "Export Health Report",
             subtitle = "A monthly PDF summary for your doctor · Omni+",

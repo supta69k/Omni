@@ -2,6 +2,7 @@ package com.example.omni
 
 import android.app.Application
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -10,6 +11,7 @@ import coil3.gif.AnimatedImageDecoder
 import coil3.gif.GifDecoder
 import com.example.omni.di.AppContainer
 import com.example.omni.service.OmniTrackingService
+import com.example.omni.ui.motion.OmniMotion
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +35,14 @@ class OmniApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         AppContainer.init(this)
+        // The system's "remove animations" accessibility toggle, read once here because the motion
+        // system is a Context-free singleton and this is the only place with one. See
+        // `OmniMotion.animationsEnabled`.
+        OmniMotion.animationsEnabled = Settings.Global.getFloat(
+            contentResolver,
+            Settings.Global.TRANSITION_ANIMATION_SCALE,
+            1f,
+        ) > 0f
         // The tracking service owns the step pipeline; started on every app open so a process MIUI
         // killed comes back with it. A no-op while ACTIVITY_RECOGNITION is missing — the service is
         // started again the moment the permission is granted.

@@ -70,6 +70,7 @@ fun DoctorDirectoryScreen(
     state: DoctorDirectoryUiState,
     onDoctorClick: (String) -> Unit,
     onBack: () -> Unit,
+    onSelectSpecialty: (String?) -> Unit = {},
 ) {
     DesignFrame {
         Box(
@@ -130,14 +131,14 @@ fun DoctorDirectoryScreen(
                             SpecialtyChip(
                                 label = "All",
                                 selected = state.selectedSpecialty == null,
-                                onClick = { /* TODO: wire to ViewModel */ },
+                                onClick = { onSelectSpecialty(null) },
                             )
                         }
                         items(state.specialties) { specialty ->
                             SpecialtyChip(
                                 label = specialty,
                                 selected = state.selectedSpecialty == specialty,
-                                onClick = { /* TODO: wire to ViewModel */ },
+                                onClick = { onSelectSpecialty(specialty) },
                             )
                         }
                     }
@@ -434,7 +435,7 @@ private val PreviewDirectoryState = DoctorDirectoryUiState(
 @Composable
 private fun DoctorDirectoryPreview() {
     OmniTheme {
-        DoctorDirectoryScreen(state = PreviewDirectoryState, onDoctorClick = {}, onBack = {})
+        DoctorDirectoryScreen(state = PreviewDirectoryState, onDoctorClick = {}, onBack = {}, onSelectSpecialty = {})
     }
 }
 
@@ -442,7 +443,7 @@ private fun DoctorDirectoryPreview() {
 @Composable
 private fun DoctorDirectoryLoadingPreview() {
     OmniTheme {
-        DoctorDirectoryScreen(state = DoctorDirectoryUiState(), onDoctorClick = {}, onBack = {})
+        DoctorDirectoryScreen(state = DoctorDirectoryUiState(), onDoctorClick = {}, onBack = {}, onSelectSpecialty = {})
     }
 }
 
@@ -454,6 +455,7 @@ private fun DoctorDirectoryEmptyPreview() {
             state = DoctorDirectoryUiState(isLoading = false),
             onDoctorClick = {},
             onBack = {},
+            onSelectSpecialty = {},
         )
     }
 }

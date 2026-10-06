@@ -81,6 +81,7 @@ import com.example.omni.ui.home.HomeViewModel
 import com.example.omni.ui.messages.MessagesViewModel
 import com.example.omni.ui.notifications.NotificationsViewModel
 import com.example.omni.ui.nutrition.NutritionViewModel
+import com.example.omni.ui.insights.InsightsViewModel
 import com.example.omni.ui.settings.EmergencyContactsViewModel
 import com.example.omni.ui.settings.GoalsViewModel
 import com.example.omni.ui.settings.PersonalInformationViewModel
@@ -393,6 +394,11 @@ class AppContainer private constructor(
                     SleepViewModel(
                         current.authRepository,
                         current.sleepRepository,
+                    ) as T
+                InsightsViewModel::class.java ->
+                    InsightsViewModel(
+                        current.authRepository,
+                        current.metricsRepository,
                     ) as T
                 OmniPlusViewModel::class.java ->
                     OmniPlusViewModel(

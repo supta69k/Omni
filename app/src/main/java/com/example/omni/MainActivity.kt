@@ -20,10 +20,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -77,6 +73,8 @@ import com.example.omni.ui.profile.ProfileScreen
 import com.example.omni.ui.profile.ProfileViewModel
 import com.example.omni.ui.onboarding.OnboardingScreen
 import com.example.omni.ui.settings.EmergencyContactsViewModel
+import com.example.omni.ui.insights.InsightsScreen
+import com.example.omni.ui.insights.InsightsViewModel
 import com.example.omni.ui.settings.GoalsScreen
 import com.example.omni.ui.settings.GoalsViewModel
 import com.example.omni.ui.settings.PersonalInformationScreen
@@ -95,6 +93,7 @@ import com.example.omni.ui.omniplus.DoctorDirectoryScreen
 import com.example.omni.ui.omniplus.DoctorDirectoryViewModel
 import com.example.omni.ui.omniplus.DoctorProfileScreen
 import com.example.omni.ui.omniplus.DoctorProfileViewModel
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.omniplus.OmniPlusPaywallScreen
 import com.example.omni.ui.omniplus.OmniPlusViewModel
 import com.example.omni.ui.sos.SosScreen
@@ -354,10 +353,13 @@ private fun OmniApp() {
 
     // Pages simply crossfade into one another. The old horizontal slide fought the bottom bar's
     // morph-in-place animation — one screen flew sideways while the pill stayed put — so it is gone.
-    // A quiet fade lets the eye stay on the navbar, which is where the motion now lives.
+    // A quiet fade lets the eye stay on the navbar, which is where the motion now lives. The spec
+    // comes from OmniMotion rather than a local constant so the page turn honours reduced motion
+    // like every other transition: `fast()` is this same 200ms standard-ease fade, or instant when
+    // the user has turned system animations off.
     Crossfade(
             targetState = screen,
-            animationSpec = tween(PageFadeMillis, easing = FastOutSlowInEasing),
+            animationSpec = OmniMotion.fast(),
             label = "omniScreen",
         ) { current ->
         when (current) {
@@ -503,6 +505,7 @@ private fun OmniApp() {
                         currentDoctorPhotoUrl = doctor?.photoUrl
                         screen = AppScreen.DoctorProfile
                     },
+                    onSelectSpecialty = viewModel::selectSpecialty,
                     // The directory's primary door is now the Chat screen, so back returns there.
                     onBack = { screen = AppScreen.Messages },
                 )
@@ -939,6 +942,7 @@ private fun OmniApp() {
                 val state by nutrition.uiState.collectAsStateWithLifecycle()
                 val aiMeal by nutrition.aiMeal.collectAsStateWithLifecycle()
                 val nutritionOmniPlus by nutrition.isOmniPlusActive.collectAsStateWithLifecycle()
+                val coachState by nutrition.coachState.collectAsStateWithLifecycle()
 
                 // The day on screen follows the chip, so the goals passed here — which belong to the
                 // account — are what the rings and the gauge draw against, whatever day is selected.
@@ -977,6 +981,11 @@ private fun OmniApp() {
                     onDismissAiMeal = nutrition::dismissAiMeal,
                     isOmniPlusActive = nutritionOmniPlus,
                     onNeedsPremium = { screen = AppScreen.OmniPlus },
+                    coachState = coachState,
+                    onOpenCoach = nutrition::openCoach,
+                    onRetryCoach = nutrition::retryCoach,
+                    onDismissCoach = nutrition::dismissCoach,
+                    onCoachNeedsPremium = { screen = AppScreen.OmniPlus },
                     isRefreshing = state.isRefreshing,
                     onRefresh = nutrition::refresh,
                 )
@@ -1196,6 +1205,7 @@ private fun OmniApp() {
                             }
                         }
                     },
+                    onOpenInsights = { screen = AppScreen.HealthInsights },
                     onLogOut = {
                         // The token goes with the session. Left behind, the next push for this account
                         // would land on a phone somebody else is now signed into.
@@ -1212,6 +1222,35 @@ private fun OmniApp() {
                             container.authRepository.signOut()
                         }
                     },
+                )
+            }
+
+            // The Health Insights Hub — opened from Settings, so back returns there. Its own ViewModel
+            // listens to both months; the goals belong to the account and are told from the profile
+            // (BACKEND_PLAN §4 rule 3), the same way the sleep diary is told its hours.
+            AppScreen.HealthInsights -> {
+                val insights: InsightsViewModel = viewModel(factory = AppContainer.factory())
+                val state by insights.uiState.collectAsStateWithLifecycle()
+
+                LaunchedEffect(
+                    user?.waterGoal,
+                    user?.stepsGoal,
+                    user?.sleepGoal,
+                    user?.fiberGoal,
+                    user?.calorieGoal,
+                ) {
+                    insights.onGoals(
+                        waterGoal = user?.waterGoal ?: DefaultWaterGoal,
+                        stepsGoal = user?.stepsGoal ?: DefaultStepsGoal,
+                        sleepGoal = user?.sleepGoal ?: DefaultSleepGoal,
+                        fiberGoal = user?.fiberGoal ?: DefaultFiberGoal,
+                        calorieGoal = user?.calorieGoal ?: DefaultCalorieGoal,
+                    )
+                }
+
+                InsightsScreen(
+                    state = state,
+                    onBack = { screen = AppScreen.Setting },
                 )
             }
 
@@ -1735,9 +1774,6 @@ private val SecondaryTabScreens = TabScreens - AppScreen.Home
 /** Confirmation for the one action whose result is invisible — the reset email has been requested. */
 private const val ResetSentMessage = "Reset link sent. Check your email."
 
-/** How long one page takes to crossfade into the next. Short enough to feel instant. */
-private const val PageFadeMillis = 200
-
 /**
  * Declared in the order the user moves through them: the launch gate, the entry flow, the four
  * bottom-bar destinations in the bar's own left-to-right order, then the three the header opens. Kept
@@ -1763,4 +1799,6 @@ private enum class AppScreen {
     DoctorProfile,
     /** Text-based doctor consultation chat. */
     DoctorConsultation,
+    /** Health Insights Hub — this month against last, streaks and best days. */
+    HealthInsights,
 }
