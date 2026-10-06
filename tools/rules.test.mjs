@@ -669,6 +669,16 @@ describe('hospitals', () => {
   })
 })
 
+describe('pharmacies', () => {
+  it('is readable by any signed-in client and writable by none', async () => {
+    await seed('pharmacies/osm-1', { name: 'Lazz Pharma' })
+    await assertSucceeds(getDoc(doc(alice, 'pharmacies/osm-1')))
+    await assertFails(getDoc(doc(anon, 'pharmacies/osm-1')))
+    await assertFails(updateDoc(doc(alice, 'pharmacies/osm-1'), { name: 'not a pharmacy' }))
+    await assertFails(deleteDoc(doc(admin, 'pharmacies/osm-1')))
+  })
+})
+
 describe('stories', () => {
   it('lets an author publish and take down their own story', async () => {
     await assertSucceeds(setDoc(doc(alice, 'stories/s1'), { authorId: ALICE, createdAt: 1 }))

@@ -175,6 +175,10 @@ fun SosScreen(
     routeStatus: RouteStatus = RouteStatus.Idle,
     locationStatus: LocationStatus = LocationStatus.Locating,
     query: String = "",
+    /** The sheet's chip selection — which half of the directory the rail and the pins show. */
+    filter: FacilityFilter = FacilityFilter.All,
+    /** Whether the account may see pharmacies at all; a free account's sheet hides that chip. */
+    pharmaciesAvailable: Boolean = true,
     /**
      * How many hospitals the directory holds *before* the radius and the search cut it down. Zero and
      * [hospitals] empty is "nothing has downloaded"; non-zero and [hospitals] empty is "nothing matches",
@@ -192,6 +196,8 @@ fun SosScreen(
     loading: Boolean = false,
     onNavigate: (OmniNavItem) -> Unit = {},
     onQueryChange: (String) -> Unit = {},
+    /** A sheet chip: All, Hospitals or Pharmacies — re-scopes the rail and the pins together. */
+    onFilterChange: (FacilityFilter) -> Unit = {},
     onSelectHospital: (String) -> Unit = {},
     /** Routes to this hospital, selecting it on the way — one tap from any card on the rail. */
     onFindRoute: (Hospital) -> Unit = {},
@@ -419,11 +425,14 @@ fun SosScreen(
                     hasLocation = userLocation != null,
                     routeStatus = routeStatus,
                     query = query,
+                    filter = filter,
+                    pharmaciesAvailable = pharmaciesAvailable,
                     directorySize = directorySize,
                     contactCount = contactCount,
                     sheetHeight = sheetHeight,
                     onDismiss = { sheetOpen = false },
                     onSelect = onSelectHospital,
+                    onFilterChange = onFilterChange,
                     onFindRoute = onFindRoute,
                     onCall = onCallHospital,
                     onCallEmergency = onCallEmergency,
@@ -855,6 +864,8 @@ private fun HospitalSheet(
     hasLocation: Boolean,
     routeStatus: RouteStatus,
     query: String,
+    filter: FacilityFilter,
+    pharmaciesAvailable: Boolean,
     directorySize: Int,
     contactCount: Int,
     /** Height the sheet is allowed to occupy — [SheetHeight] in portrait, capped to the viewport in landscape. */
@@ -862,6 +873,7 @@ private fun HospitalSheet(
     modifier: Modifier = Modifier,
     onDismiss: () -> Unit = {},
     onSelect: (String) -> Unit = {},
+    onFilterChange: (FacilityFilter) -> Unit = {},
     onFindRoute: (Hospital) -> Unit = {},
     onCall: (Hospital) -> Unit = {},
     onCallEmergency: () -> Unit = {},
@@ -930,6 +942,20 @@ private fun HospitalSheet(
 
             Spacer(Modifier.height(HospitalRailGap))
 
+            // The chips. **This row does not exist in Figma** (§6 rule 11) — the directory grew a
+            // second kind, and a rail that mixes them needs the design's own way to see one at a
+            // time. Assembled from parts the sheet already owns: the pill shape and 13px type of
+            // the search field's "Clear", the card's #F5F5F5 for an idle chip, ink for the chosen
+            // one — the same inversion the selected map pin makes. The Pharmacies chip only exists
+            // for an account that can use it (§6 rule 10).
+            FacilityFilterRow(
+                filter = filter,
+                pharmaciesAvailable = pharmaciesAvailable,
+                onFilterChange = onFilterChange,
+            )
+
+            Spacer(Modifier.height(FilterRailGap))
+
             when {
                 // The one state BACKEND_PLAN §11 Phase 9 refuses to leave dead: "always keep the
                 // emergency dial button working regardless of network state". Every other route out
@@ -945,14 +971,21 @@ private fun HospitalSheet(
                     onClick = onCallEmergency,
                 )
 
-                // A directory that exists and a search that matched none of it. Nothing is wrong, so
-                // nothing shouts: the tray's own grey, and the way back is to drop the filter.
+                // A directory that exists and a search or filter that matched none of it. Nothing
+                // is wrong, so nothing shouts: the tray's own grey, and the way back is to drop
+                // whichever of the two narrowed it.
                 hospitals.isEmpty() -> EmptyRail(
-                    message = "Clear the search to see every facility near you again.",
+                    message = when {
+                        query.isNotBlank() -> "Clear the search to see every facility near you again."
+                        filter != FacilityFilter.All -> "Nothing of that kind is near you — clear the filter to see every facility again."
+                        else -> "Clear the search to see every facility near you again."
+                    },
                     icon = R.drawable.ic_feed_search,
-                    label = "Clear the Search",
+                    label = if (query.isNotBlank() || filter == FacilityFilter.All) "Clear the Search" else "Clear the Filter",
                     fill = OmniHospitalCard,
-                    onClick = onClearQuery,
+                    onClick = {
+                        if (query.isNotBlank()) onClearQuery() else onFilterChange(FacilityFilter.All)
+                    },
                 )
 
                 else -> {
@@ -1011,6 +1044,49 @@ private fun HospitalSheet(
                     else -> "Alert $contactCount saved contacts"
                 },
                 modifier = Modifier.size(AlertIconSize),
+            )
+        }
+    }
+}
+
+/**
+ * The rail's kind filter — All / Hospitals / Pharmacies, one selected at a time.
+ *
+ * Height 26 like the feed's follow pill, radius 13, [MapType.HospitalType]'s 13px — the search
+ * field's own type, since these chips sit in its column. Selected = ink fill, the map's selected-pin
+ * reading; idle = the card's grey on the sheet's off-white.
+ */
+@Composable
+private fun FacilityFilterRow(
+    filter: FacilityFilter,
+    pharmaciesAvailable: Boolean,
+    onFilterChange: (FacilityFilter) -> Unit,
+) {
+    val chips = buildList {
+        add(FacilityFilter.All to "All")
+        add(FacilityFilter.Hospitals to "Hospitals")
+        if (pharmaciesAvailable) add(FacilityFilter.Pharmacies to "Pharmacies")
+    }
+
+    Row(
+        modifier = Modifier.width(HospitalCardWidth),
+        horizontalArrangement = Arrangement.spacedBy(FilterChipGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for ((kind, label) in chips) {
+            val selected = kind == filter
+            Text(
+                text = label,
+                style = MapType.HospitalType,
+                color = if (selected) OmniOnInk else OmniInk,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier
+                    .pressEffect()
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(if (selected) OmniInk else OmniHospitalCard)
+                    .clickable(enabled = !selected, onClick = { onFilterChange(kind) })
+                    .padding(horizontal = FilterChipPaddingH, vertical = FilterChipPaddingV),
             )
         }
     }
@@ -1330,6 +1406,12 @@ private val SearchGap = 12.dp
 /** `Search Container`, centred: (415 − 325) / 2 = 45, which is its own x. */
 private val SearchWidth = 325.dp
 private val SearchHeight = 43.dp
+
+/** The filter chips — a 26dp pill (the feed's own) with the search pill's 12 between rows. */
+private val FilterChipGap = 8.dp
+private val FilterChipPaddingH = 12.dp
+private val FilterChipPaddingV = 5.dp
+private val FilterRailGap = 16.dp
 
 /** The pill's own 12 gap, reused between it and the notice under it. */
 private val NoticeGap = 12.dp

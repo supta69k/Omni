@@ -81,6 +81,24 @@ enum class LocationStatus {
 }
 
 /**
+ * Which half of the directory the sheet's rail and the map's pins show.
+ *
+ * The filter scopes everything — radius, fallback, nearest, search — to the chosen kind, so
+ * "Pharmacies" really answers "where is the nearest *pharmacy*", not "which of the nearest
+ * facilities happen to be pharmacies". The sheet's chips are the only writer.
+ */
+enum class FacilityFilter {
+    /** Both halves of the directory, distance-sorted together. The screen's opening state. */
+    All,
+
+    /** Hospitals only — the design's original rail, unchanged. */
+    Hospitals,
+
+    /** Pharmacies only — the Omni+ half of the directory. */
+    Pharmacies,
+}
+
+/**
  * The state of the one route the map draws.
  *
  * A sealed type rather than `route: Route?` + `routeError: String?`, because "loading" and "failed" and
@@ -127,6 +145,14 @@ data class SosUiState(
     val locationStatus: LocationStatus = LocationStatus.Locating,
     val query: String = "",
     val routeStatus: RouteStatus = RouteStatus.Idle,
+    /** The sheet's chip selection — which half of the directory the rail and pins show. */
+    val filter: FacilityFilter = FacilityFilter.All,
+    /**
+     * Whether the account may see the pharmacy half at all. A free account's sheet hides the
+     * Pharmacies chip rather than showing one that would only ever be empty (`UI_ARCHITECTURE.md`
+     * §6 rule 10); the perk itself is advertised on the Omni+ paywall.
+     */
+    val pharmaciesAvailable: Boolean = false,
     /**
      * Bumped every time the camera should fly back to the user — the recentre button, and the first fix
      * of the session. A counter rather than a `Unit` event because Compose keys on values, and the
@@ -151,6 +177,18 @@ data class SosUiState(
 private enum class PermissionState { Unknown, Granted, Denied, Blocked }
 
 /**
+ * The five raw flows, married before [selectFacilities] decides anything from them — the first
+ * `combine`'s output, so the filter (a sixth flow) can join without a six-flow `combine`.
+ */
+private data class DirectoryInputs(
+    val all: List<Hospital>,
+    val fix: Location?,
+    val typed: String,
+    val chosenId: String?,
+    val routeStatus: RouteStatus,
+)
+
+/**
  * One pass over the directory, before the parts that have nothing to do with the map are added.
  */
 private data class MapSlice(
@@ -162,6 +200,7 @@ private data class MapSlice(
     val fix: Location?,
     val query: String,
     val routeStatus: RouteStatus,
+    val filter: FacilityFilter = FacilityFilter.All,
 )
 
 /**
@@ -189,6 +228,7 @@ internal fun selectFacilities(
     fixLng: Double?,
     typed: String,
     chosenId: String?,
+    filter: FacilityFilter,
     nearbyRadiusKm: Double,
     fallbackCount: Int,
 ): DirectorySlice {
@@ -211,8 +251,23 @@ internal fun selectFacilities(
             .ifEmpty { measured.take(fallbackCount) }
     }
 
-    val nearestId = if (hasFix) nearby.firstOrNull()?.id else null
-    val visible = if (typed.isBlank()) nearby else nearby.filter { it.matches(typed) }
+    // The radius slice, scoped to the chip the user picked. A scoped slice that comes up empty
+    // gets the same mercy the unfiltered one had — the closest few of that kind — so "Pharmacies"
+    // in a hospital district still names the nearest ones instead of showing nothing at all.
+    val scoped = when (filter) {
+        FacilityFilter.All -> nearby
+        FacilityFilter.Hospitals -> nearby.filterNot { it.isPharmacy }
+        FacilityFilter.Pharmacies -> nearby.filter { it.isPharmacy }
+    }.ifEmpty {
+        when (filter) {
+            FacilityFilter.All -> nearby
+            FacilityFilter.Hospitals -> measured.filterNot { it.isPharmacy }.take(fallbackCount)
+            FacilityFilter.Pharmacies -> measured.filter { it.isPharmacy }.take(fallbackCount)
+        }
+    }
+
+    val nearestId = if (hasFix) scoped.firstOrNull()?.id else null
+    val visible = if (typed.isBlank()) scoped else scoped.filter { it.matches(typed) }
 
     // The selection, in order of preference: what the user tapped, the nearest, the first thing on
     // the map. The fallbacks are what make "the nearest facility is selected on open" true without
@@ -223,6 +278,8 @@ internal fun selectFacilities(
 
     return DirectorySlice(
         visible = visible,
+        // Reported unfiltered on purpose: the sheet's "hasn't reached this phone yet" state must
+        // mean the directory itself arrived empty, never "your filter found nothing here".
         nearbySize = nearby.size,
         nearestId = nearestId,
         selected = selected,
@@ -277,6 +334,8 @@ class SosViewModel(
     private val selectedId = MutableStateFlow<String?>(null)
 
     private val query = MutableStateFlow("")
+
+    private val filter = MutableStateFlow(FacilityFilter.All)
 
     private val routeStatus = MutableStateFlow<RouteStatus>(RouteStatus.Idle)
 
@@ -412,10 +471,10 @@ class SosViewModel(
 
     /**
      * The map's own arithmetic: measure, trim, search, choose — decided in [selectFacilities], pure
-     * and unit-tested; this lambda only marries it to the flows.
+     * and unit-tested; these lambdas only marry it to the flows.
      *
-     * Split from [uiState] because `combine` takes five typed flows and this screen has eight
-     * inputs; the two halves are one derivation.
+     * Split from [uiState] because `combine` takes five typed flows and this screen has more
+     * inputs than that; the halves are one derivation.
      */
     private val mapState: Flow<MapSlice> = combine(
         directory,
@@ -424,27 +483,32 @@ class SosViewModel(
         selectedId,
         routeStatus,
     ) { all, fix, typed, chosenId, route ->
-        val slice = selectFacilities(
-            all = all,
-            fixLat = fix?.latitude,
-            fixLng = fix?.longitude,
-            typed = typed,
-            chosenId = chosenId,
-            nearbyRadiusKm = NearbyRadiusKm,
-            fallbackCount = FallbackCount,
-        )
-
-        MapSlice(
-            hospitals = slice.visible,
-            directorySize = slice.nearbySize,
-            selected = slice.selected,
-            nearestId = slice.nearestId,
-            userLocation = fix?.toLatLng(),
-            fix = fix,
-            query = typed,
-            routeStatus = route,
-        )
+        DirectoryInputs(all, fix, typed, chosenId, route)
     }
+        .combine(filter) { inputs, filter ->
+            val slice = selectFacilities(
+                all = inputs.all,
+                fixLat = inputs.fix?.latitude,
+                fixLng = inputs.fix?.longitude,
+                typed = inputs.typed,
+                chosenId = inputs.chosenId,
+                filter = filter,
+                nearbyRadiusKm = NearbyRadiusKm,
+                fallbackCount = FallbackCount,
+            )
+
+            MapSlice(
+                hospitals = slice.visible,
+                directorySize = slice.nearbySize,
+                selected = slice.selected,
+                nearestId = slice.nearestId,
+                userLocation = inputs.fix?.toLatLng(),
+                fix = inputs.fix,
+                query = inputs.typed,
+                routeStatus = inputs.routeStatus,
+                filter = filter,
+            )
+        }
         // ...then overwrite the query with the *undebounced* one. [debouncedQuery] is what filtered
         // the list, and that is all it should ever be: a search box whose text arrives 250 ms after
         // the key was pressed drops characters, because every keystroke re-renders the field with the
@@ -467,6 +531,7 @@ class SosViewModel(
             locationStatus = locationStatus(permission, servicesOn, slice.userLocation != null),
             query = slice.query,
             routeStatus = slice.routeStatus,
+            filter = slice.filter,
             recenterTick = recenterTick,
             alert = contacts.takeIf { it.isNotEmpty() }?.let { list ->
                 SosAlert(phones = list.map { it.phone }, body = alertBody(slice.fix))
@@ -474,6 +539,9 @@ class SosViewModel(
             loading = false,
         )
     }
+        .combine(revenueCatRepository.isOmniPlusActive) { state, pharmaciesAvailable ->
+            state.copy(pharmaciesAvailable = pharmaciesAvailable)
+        }
         .catch { cause ->
             Log.w("Omni", "The SOS screen's state could not be assembled", cause)
             emit(SosUiState(loading = false))
@@ -506,6 +574,14 @@ class SosViewModel(
     /** The search field. Filtering happens [SearchDebounceMillis] later; the text is immediate. */
     fun onQueryChange(text: String) {
         query.value = text.take(MaxQueryLength)
+    }
+
+    /**
+     * A sheet chip. Selecting re-scopes the map and the rail together — one filter, two views —
+     * and the selection re-derives from the scoped list, exactly as a search does.
+     */
+    fun onSelectFilter(filter: FacilityFilter) {
+        this.filter.value = filter
     }
 
     /**

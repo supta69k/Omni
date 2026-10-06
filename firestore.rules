@@ -224,6 +224,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The pharmacy directory — the hospitals directory's twin: same schema, same seeder
+    // (`tools/seed-hospitals.mjs --collection pharmacies`), same read-only contract. Without a
+    // match here the collection is denied by default and the app's listener silently degrades to
+    // an empty pharmacy layer, which is the one failure a directory must not be allowed to hide.
+    match /pharmacies/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // The Omni+ doctor directory — the hospitals directory's sibling: verified doctors written
     // from the console or an import script, never from the app. Read-only for signed-in clients,
     // which keeps the directory available offline through Firestore's cache after the first sync.

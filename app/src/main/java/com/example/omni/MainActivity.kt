@@ -881,6 +881,9 @@ private fun OmniApp() {
                     onActivate = sos::onActivated,
                     onQueryChange = sos::onQueryChange,
                     onSelectHospital = sos::onSelectHospital,
+                    filter = sosState.filter,
+                    pharmaciesAvailable = sosState.pharmaciesAvailable,
+                    onFilterChange = sos::onSelectFilter,
                     onRecenter = sos::onRecenter,
                     // The route is drawn *in* the app now, over MapLibre tiles. What used to be a
                     // `geo:` hand-off to Google Maps is gone: it left the app in the middle of an

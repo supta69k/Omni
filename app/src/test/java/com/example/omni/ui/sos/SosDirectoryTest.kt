@@ -56,6 +56,7 @@ class SosDirectoryTest {
             fixLng = null,
             typed = "",
             chosenId = null,
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
@@ -74,6 +75,7 @@ class SosDirectoryTest {
             fixLng = 0.0,
             typed = "",
             chosenId = null,
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
@@ -96,6 +98,7 @@ class SosDirectoryTest {
             fixLng = 0.0,
             typed = "",
             chosenId = null,
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
@@ -112,6 +115,7 @@ class SosDirectoryTest {
             fixLng = 0.0,
             typed = "",
             chosenId = null,
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
@@ -127,6 +131,7 @@ class SosDirectoryTest {
             fixLng = 0.0,
             typed = "pharma",
             chosenId = null,
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
@@ -146,6 +151,7 @@ class SosDirectoryTest {
             fixLng = 0.0,
             typed = "",
             chosenId = "mid",
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
@@ -161,11 +167,60 @@ class SosDirectoryTest {
             fixLng = 0.0,
             typed = "pharma",
             chosenId = "near",
+            filter = FacilityFilter.All,
             nearbyRadiusKm = 8.0,
             fallbackCount = 3,
         )
 
         // "near" was tapped but the search hid it; the sheet must still carry a card.
         assertEquals("pharma", slice.selected?.id)
+    }
+
+    @Test
+    fun `the pharmacy chip scopes the radius, the nearest and the selection to pharmacies`() {
+        val slice = selectFacilities(
+            all = directory,
+            fixLat = 0.0,
+            fixLng = 0.0,
+            typed = "",
+            chosenId = null,
+            filter = FacilityFilter.Pharmacies,
+            nearbyRadiusKm = 8.0,
+            fallbackCount = 3,
+        )
+
+        // "near" (a hospital) is closer, but the Pharmacies chip must not let a hospital be the
+        // nearest or the selection — the chip answers "where is the nearest pharmacy".
+        assertEquals(listOf("pharma"), slice.visible.map { it.id })
+        assertEquals("pharma", slice.nearestId)
+        assertEquals("pharma", slice.selected?.id)
+        // The empty-state banner reads the *unfiltered* nearby count, so a chip that found nothing
+        // must never be mistaken for "the directory hasn't reached this phone yet".
+        assertEquals(3, slice.nearbySize)
+    }
+
+    @Test
+    fun `a filter that finds nothing in the radius falls back to the closest of that kind`() {
+        // Push the only pharmacy out to ~2,200 km: the 8 km radius slice holds hospitals only.
+        val remotePharmacy = directory.map {
+            if (it.isPharmacy) it.copy(lat = 0.0, lng = 20.0) else it
+        }
+
+        val slice = selectFacilities(
+            all = remotePharmacy,
+            fixLat = 0.0,
+            fixLng = 0.0,
+            typed = "",
+            chosenId = null,
+            filter = FacilityFilter.Pharmacies,
+            nearbyRadiusKm = 8.0,
+            fallbackCount = 2,
+        )
+
+        // The kind gets the same mercy the unfiltered list had — the closest few of that kind,
+        // never nothing. The two visible cards are the directory's one pharmacy and nothing else
+        // of the other kind leaking in.
+        assertEquals(listOf("pharma"), slice.visible.map { it.id })
+        assertEquals("pharma", slice.nearestId)
     }
 }
