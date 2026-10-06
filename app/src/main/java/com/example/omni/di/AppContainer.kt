@@ -353,6 +353,7 @@ class AppContainer private constructor(
                         current.authRepository,
                         current.hospitalRepository,
                         current.pharmacyRepository,
+                        current.revenueCatRepository,
                         current.locationRepository,
                         current.routingRepository,
                         current.sosRepository,

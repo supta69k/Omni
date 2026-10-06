@@ -156,7 +156,10 @@ import kotlin.math.sin
  * pins carry both. The design's sheet title "Nearest Hospitals" becomes "Nearest Facilities" to stay
  * truthful about a list that now mixes the two, matching the subtitle's own "Found N facilities
  * within 8 km"; the pharmacy pins are the call button's teal with a "P" where the hospital pin wears
- * its "H". Nothing else the design draws moves.
+ * its "H". Pharmacies are an Omni+ perk (the paywall names it): a free account's directory is
+ * hospitals only, because the ViewModel never opens the pharmacy listener without the entitlement —
+ * while hospitals, distances, routes and 999 are never gated, on a screen whose own rule is that
+ * nothing blocks a way out. Nothing else the design draws moves.
  *
  * Nothing the design *does* draw moves.
  */

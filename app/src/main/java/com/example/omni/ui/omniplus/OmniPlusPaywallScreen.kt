@@ -304,6 +304,7 @@ fun OmniPlusPaywallScreen(
                                             FeatureCheckRow("Verified doctor consultations")
                                             FeatureCheckRow("Priority support — skip the queue")
                                             FeatureCheckRow("Advanced insights on your health data")
+                                            FeatureCheckRow("Nearby pharmacies on the SOS map")
                                             FeatureCheckRow("Exclusive Ai acess")
                                         }
                                     }

@@ -19,6 +19,7 @@ import com.example.omni.data.repo.LocationRepository
 import com.example.omni.data.repo.NotificationRepository
 import com.example.omni.data.repo.PharmacyRepository
 import com.example.omni.data.repo.RoutingRepository
+import com.example.omni.data.revenuecat.RevenueCatRepository
 import com.example.omni.data.repo.SosRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -260,6 +261,7 @@ class SosViewModel(
     private val authRepository: AuthRepository,
     private val hospitalRepository: HospitalRepository,
     private val pharmacyRepository: PharmacyRepository,
+    private val revenueCatRepository: RevenueCatRepository,
     private val locationRepository: LocationRepository,
     private val routingRepository: RoutingRepository,
     private val sosRepository: SosRepository,
@@ -342,7 +344,29 @@ class SosViewModel(
     }
 
     /**
-     * The whole directory — hospitals and pharmacies — once.
+     * The pharmacy half of the directory — an Omni+ perk, gated at the *listener*.
+     *
+     * A free account never opens the `pharmacies` subscription at all: the perk's 2,200-odd
+     * documents are not first-synced onto a phone that cannot show them, and a subscription lapse
+     * takes the layer off the map the moment the entitlement says so. The hospital half is
+     * deliberately **never** gated — the emergency screen's own rule is that nothing here blocks a
+     * way out, so hospitals, distances, routes and 999 stay free for everyone.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val pharmacyDirectory: Flow<List<Hospital>> = revenueCatRepository.isOmniPlusActive
+        .flatMapLatest { active ->
+            if (!active) {
+                flowOf(emptyList())
+            } else {
+                pharmacyRepository.observeAll().catch { cause ->
+                    Log.w("Omni", "The pharmacy directory could not be read", cause)
+                    emit(emptyList())
+                }
+            }
+        }
+
+    /**
+     * The whole directory — hospitals, plus pharmacies for Omni+ subscribers — once.
      *
      * Not keyed on the location: see [HospitalRepository.observeAll]. Two independent listeners feed
      * one merged list, so a pharmacy import that fails or is slow to first sync cannot delay or
@@ -355,10 +379,7 @@ class SosViewModel(
             Log.w("Omni", "The hospital directory could not be read", cause)
             emit(emptyList())
         },
-        pharmacyRepository.observeAll().catch { cause ->
-            Log.w("Omni", "The pharmacy directory could not be read", cause)
-            emit(emptyList())
-        },
+        pharmacyDirectory,
     ) { hospitals, pharmacies -> hospitals + pharmacies }
 
     /**
