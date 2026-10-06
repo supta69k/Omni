@@ -287,6 +287,25 @@ internal fun selectFacilities(
 }
 
 /**
+ * Should the map's state graph react to this fix, given the one it last reacted to?
+ *
+ * Pure, and unit-tested beside [selectFacilities]: `null` for either anchor means "no fix yet" —
+ * always react. Otherwise react only when the user has covered at least [minMeters], which puts
+ * GPS jitter (±10 m in a city canyon) below the threshold where it can flip the nearest facility
+ * back and forth, and keeps the whole directory's re-sort from running at walking pace.
+ */
+internal fun fixMovedFarEnough(
+    prevLat: Double?,
+    prevLng: Double?,
+    newLat: Double,
+    newLng: Double,
+    minMeters: Double,
+): Boolean {
+    if (prevLat == null || prevLng == null) return true
+    return LatLng(prevLat, prevLng).distanceMetersTo(LatLng(newLat, newLng)) >= minMeters
+}
+
+/**
  * The SOS map's reads and writes (BACKEND_PLAN §11 Phase 9).
  *
  * ## What changed, and why
@@ -397,8 +416,23 @@ class SosViewModel(
      */
     private val manualFix = MutableStateFlow<Location?>(null)
 
-    /** The freshest of the two, by the fix's own timestamp. */
-    private val fix: Flow<Location?> = combine(streamFix, manualFix) { streamed, manual ->
+    /**
+     * The freshest of the two, by the fix's own timestamp — the streamed half damped by
+     * [quantizeByMovement], the manual one never.
+     *
+     * The raw stream fires roughly once a second. Left alone, every tick re-measured and re-sorted
+     * the whole directory (hospitals plus ~2,200 pharmacies), rebuilt the pin GeoJSON and pushed it
+     * at the map's GL thread — work whose only visible effect at walking speed was GPS jitter
+     * shuffling which facility gets to be "nearest". The quantizer keeps this flow (the one the
+     * map's state graph reads) still until the user has actually gone somewhere. The manual fix is
+     * deliberately outside the damping: it is the swipe's own "record where I am right now", and it
+     * must land on the map in the same frame as the sheet. Callers that want the precise fix *now*
+     * regardless read [latestFix] or [streamFix] directly.
+     */
+    private val fix: Flow<Location?> = combine(
+        streamFix.quantizeByMovement(),
+        manualFix,
+    ) { streamed, manual ->
         listOfNotNull(streamed, manual).maxByOrNull { it.time }
     }
 
@@ -779,6 +813,44 @@ class SosViewModel(
          * before it becomes misleading.
          */
         const val RerouteThresholdMeters = 150.0
+
+        /**
+         * How far the user must travel before the map's state graph is allowed to move again.
+         *
+         * The streamed fix fires about once a second; each fire used to re-measure and re-sort the
+         * directory and re-upload every pin. 10 m is below the accuracy a phone fix actually has in
+         * a city — motion inside the threshold is jitter, and jitter is exactly what made the
+         * "nearest" badge flicker between two facilities on a straight street. The SOS alert body
+         * and the routing calls bypass this threshold by reading the raw fix directly.
+         */
+        const val MinFixMovementMeters = 10.0
+
+        /**
+         * Keeps the streamed fixes from reaching the map's state graph until the user has moved
+         * [MinFixMovementMeters] from the last one that got through (or one of them is the first).
+         * Stateful per collector, which is what a cold `flow {}` build wants: each `WhileSubscribed`
+         * session starts from a fresh anchor, so the first fix always lands.
+         */
+        fun Flow<Location?>.quantizeByMovement(minMeters: Double = MinFixMovementMeters): Flow<Location?> = flow {
+            var anchor: Location? = null
+            collect { fix ->
+                val previous = anchor
+                if (fix == null) {
+                    anchor = null
+                    emit(null)
+                } else if (fixMovedFarEnough(
+                        prevLat = previous?.latitude,
+                        prevLng = previous?.longitude,
+                        newLat = fix.latitude,
+                        newLng = fix.longitude,
+                        minMeters = minMeters,
+                    )
+                ) {
+                    anchor = fix
+                    emit(fix)
+                }
+            }
+        }
 
         fun Location.toLatLng(): LatLng = LatLng(latitude, longitude)
 

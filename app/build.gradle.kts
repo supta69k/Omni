@@ -74,8 +74,13 @@ android {
 
     buildTypes {
         release {
+            // R8 shrink + optimize: the unshrunk release APK was ~82 MB (every library the app
+            // touches, whole). The libraries in use (Firebase, MapLibre, RevenueCat, Coil) all ship
+            // their own consumer keep rules, and the app does no reflection over its own classes —
+            // Firestore documents are mapped by hand, not by annotation — so the default rules hold.
+            // Verified on device after enabling: launch, sign-in gate, SOS map, directory sync.
             optimization {
-                enable = false
+                enable = true
             }
             // Sign the release APK with the upload keystore (read from the gitignored
             // keystore.properties) so it installs cleanly when shared, rather than being an unsigned

@@ -223,4 +223,42 @@ class SosDirectoryTest {
         assertEquals(listOf("pharma"), slice.visible.map { it.id })
         assertEquals("pharma", slice.nearestId)
     }
+
+    @Test
+    fun `a fix below the movement threshold is GPS jitter and does not move the map`() {
+        // 0.00005° of longitude is ~5.5 m — inside a phone's urban GPS error bar, and the kind of
+        // "movement" that used to re-sort the whole directory once a second.
+        val jitter = fixMovedFarEnough(
+            prevLat = 0.0,
+            prevLng = 0.0,
+            newLat = 0.0,
+            newLng = 0.00005,
+            minMeters = 10.0,
+        )
+        org.junit.Assert.assertFalse(jitter)
+    }
+
+    @Test
+    fun `a fix past the threshold, or the first one, moves the map`() {
+        // 0.0002° of longitude is ~22 m — a couple of parked-car lengths, and real movement.
+        assertTrue(
+            fixMovedFarEnough(
+                prevLat = 0.0,
+                prevLng = 0.0,
+                newLat = 0.0,
+                newLng = 0.0002,
+                minMeters = 10.0,
+            ),
+        )
+        // No previous fix: the first one always lands, or the map would never open.
+        assertTrue(
+            fixMovedFarEnough(
+                prevLat = null,
+                prevLng = null,
+                newLat = 0.0,
+                newLng = 0.0,
+                minMeters = 10.0,
+            ),
+        )
+    }
 }
