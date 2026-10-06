@@ -1,7 +1,6 @@
 package com.example.omni.ui.auth
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -49,6 +48,7 @@ import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniTheme
+import com.example.omni.ui.motion.OmniMotion
 
 /**
  * Email verification screen — shown after signup until the user verifies their email.
@@ -204,7 +204,7 @@ fun VerifyEmailScreen(
                                         filled || isCurrentSlot -> Color(0xFF1E1E1E)
                                         else -> Color(0xFFE0E0E0)
                                     },
-                                    animationSpec = tween(150),
+                                    animationSpec = OmniMotion.fast(),
                                     label = "otpBox$index",
                                 )
 

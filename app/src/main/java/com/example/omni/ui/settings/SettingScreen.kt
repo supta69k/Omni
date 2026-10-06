@@ -78,6 +78,7 @@ import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.PlusJakartaSans
 import com.example.omni.ui.theme.SettingsType
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 
 /**
@@ -655,8 +656,16 @@ private fun PreferenceSwitch(
 ) {
     // Figma centres the knob at cx=42.5 in a 54 track, i.e. 32 from the left edge and 1 clear of the
     // right; off mirrors that to 1 from the left.
-    val knobStart by animateDpAsState(if (checked) 32.dp else 1.dp, label = "switchKnob")
-    val track by animateColorAsState(if (checked) trackOn else OmniSetToggleOff, label = "switchTrack")
+    val knobStart by animateDpAsState(
+        targetValue = if (checked) 32.dp else 1.dp,
+        animationSpec = OmniMotion.fast(),
+        label = "switchKnob",
+    )
+    val track by animateColorAsState(
+        targetValue = if (checked) trackOn else OmniSetToggleOff,
+        animationSpec = OmniMotion.fast(),
+        label = "switchTrack",
+    )
 
     Box(
         modifier = Modifier

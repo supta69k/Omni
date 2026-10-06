@@ -4,6 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,18 +29,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.data.model.HealthGoals
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.components.AdaptiveColumnGrid
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.theme.HomeType
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniCardInk
@@ -47,6 +61,7 @@ import com.example.omni.ui.theme.OmniSetToggleKnob
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.SettingsType
 import com.example.omni.ui.motion.OmniMotion.pressEffect
+
 
 /**
  * Daily Goals — the page behind Settings' "Daily Goals" row.
@@ -160,19 +175,25 @@ fun GoalsScreen(
                 SaveButton(state = state, onSave = onSave)
 
                 // Offered only while there is something to discard, so the page never carries a link
-                // that would do nothing (`UI_ARCHITECTURE.md` §6 rule 10).
-                if (state.dirty && !state.saving) {
-                    Spacer(Modifier.height(DiscardTop))
-                    Text(
-                        text = "Discard changes",
-                        style = SettingsType.RowAction,
-                        color = OmniSetRowSubtitle,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .clickable(onClick = onDiscard),
-                    )
+                // that would do nothing (`UI_ARCHITECTURE.md` §6 rule 10). Animated so its arrival
+                // and departure do not shove the button's breathing room around in one frame.
+                AnimatedVisibility(
+                    visible = state.dirty && !state.saving,
+                    enter = fadeIn(animationSpec = OmniMotion.fast()),
+                    exit = fadeOut(animationSpec = OmniMotion.fast()),
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Spacer(Modifier.height(DiscardTop))
+                        Text(
+                            text = "Discard changes",
+                            style = SettingsType.RowAction,
+                            color = OmniSetRowSubtitle,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier
+                                .clickable(onClick = onDiscard),
+                        )
+                    }
                 }
             }
 
@@ -195,6 +216,10 @@ private fun GoalCard(
     row: GoalRow,
     onStep: (GoalKind, Boolean) -> Unit,
 ) {
+    // Which way the last stepper tap moved — the reading rolls in from that side, so a number
+    // counts rather than cross-fades in place. A first render has no direction; up is the default.
+    var lastStepUp by remember { mutableStateOf(true) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -227,10 +252,19 @@ private fun GoalCard(
                 glyph = "−",
                 enabled = row.canDecrease,
                 label = "Lower the ${row.title.lowercase()} goal",
-                onClick = { onStep(row.kind, false) },
+                onClick = {
+                    lastStepUp = false
+                    onStep(row.kind, false)
+                },
             )
 
-            // The reading and its unit sit on **one baseline**, not in one bottom-aligned box.
+            // The reading rolls with the stepper: the outgoing number leaves the way the value went,
+            // the incoming one takes its place from the opposite edge, both inside the same card so
+            // the two buttons never move (`UI_ARCHITECTURE.md` §6 rule 8). The spec pair is the
+            // CoachSheet/AiMealSheet `AnimatedContent` pattern; under reduced motion every spec
+            // collapses to an instant step, as everywhere else.
+            //
+            // The reading and its unit still sit on **one baseline**, not in one bottom-aligned box.
             //
             // They were bottom-aligned, and the two do not mean the same thing here: `StepsUnit` is
             // `StepsValue.copy(fontSize = 12.sp)`, so it keeps the 21sp run's 33.29sp line height and
@@ -239,38 +273,66 @@ private fun GoalCard(
             // "13". `alignByBaseline` matches the lines the two are actually written on and lets the
             // boxes fall where they must, which is what the dashboard gets for free by drawing this
             // pair as one annotated string (see `HomeBento`).
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.Center,
+            AnimatedContent(
+                targetState = row.value to row.unit,
                 modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = row.value,
-                    style = HomeType.StepsValue,
-                    color = OmniCardInk,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.alignByBaseline(),
-                )
-                // A measured gap rather than the space character it used to lead with: at 12sp that
-                // space was barely 3dp, and it scaled with the *unit's* size rather than with the
-                // number it has to stand clear of.
-                Spacer(Modifier.width(ValueUnitGap))
-                Text(
-                    text = row.unit,
-                    style = HomeType.StepsUnit,
-                    color = OmniFootnote,
-                    maxLines = 1,
-                    softWrap = false,
-                    modifier = Modifier.alignByBaseline(),
-                )
+                transitionSpec = {
+                    if (lastStepUp) {
+                        (fadeIn(animationSpec = OmniMotion.fast()) + slideInVertically(
+                            animationSpec = OmniMotion.fast<IntOffset>(),
+                            initialOffsetY = { it / 2 },
+                        )) togetherWith (fadeOut(animationSpec = OmniMotion.fast()) + slideOutVertically(
+                            animationSpec = OmniMotion.fast<IntOffset>(),
+                            targetOffsetY = { -it / 2 },
+                        ))
+                    } else {
+                        (fadeIn(animationSpec = OmniMotion.fast()) + slideInVertically(
+                            animationSpec = OmniMotion.fast<IntOffset>(),
+                            initialOffsetY = { -it / 2 },
+                        )) togetherWith (fadeOut(animationSpec = OmniMotion.fast()) + slideOutVertically(
+                            animationSpec = OmniMotion.fast<IntOffset>(),
+                            targetOffsetY = { it / 2 },
+                        ))
+                    }
+                },
+                label = "goalReading",
+            ) { (value, unit) ->
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = value,
+                        style = HomeType.StepsValue,
+                        color = OmniCardInk,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.alignByBaseline(),
+                    )
+                    // A measured gap rather than the space character it used to lead with: at 12sp that
+                    // space was barely 3dp, and it scaled with the *unit's* size rather than with the
+                    // number it has to stand clear of.
+                    Spacer(Modifier.width(ValueUnitGap))
+                    Text(
+                        text = unit,
+                        style = HomeType.StepsUnit,
+                        color = OmniFootnote,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.alignByBaseline(),
+                    )
+                }
             }
 
             StepButton(
                 glyph = "+",
                 enabled = row.canIncrease,
                 label = "Raise the ${row.title.lowercase()} goal",
-                onClick = { onStep(row.kind, true) },
+                onClick = {
+                    lastStepUp = true
+                    onStep(row.kind, true)
+                },
             )
         }
     }
@@ -290,19 +352,31 @@ private fun StepButton(
     label: String,
     onClick: () -> Unit,
 ) {
+    // A clamp boundary flips a stepper between live and spent mid-session — e.g. Water parked on its
+    // floor of 1 — and the two greys ease through the fast spec instead of snapping.
+    val fill by animateColorAsState(
+        targetValue = if (enabled) OmniSetToggleKnob else OmniSetCardSurface,
+        animationSpec = OmniMotion.fast(),
+        label = "stepFill",
+    )
+    val tint by animateColorAsState(
+        targetValue = if (enabled) OmniCardInk else OmniFeedHint,
+        animationSpec = OmniMotion.fast(),
+        label = "stepTint",
+    )
     Box(
         modifier = Modifier
             .size(StepButtonSize)
             .pressEffect(enabled = enabled)
             .clip(RoundedCornerShape(percent = 50))
-            .background(if (enabled) OmniSetToggleKnob else OmniSetCardSurface)
+            .background(fill)
             .clickable(enabled = enabled, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = glyph,
             style = HomeType.SectionTitle,
-            color = if (enabled) OmniCardInk else OmniFeedHint,
+            color = tint,
             maxLines = 1,
         )
     }
@@ -316,6 +390,9 @@ private fun StepButton(
  * moment a stepper moves it becomes a live **Save Goals** in ink. Firestore echoing the write back is
  * what turns it grey again, so the label is reporting the account's real state rather than a flag this
  * screen set for itself.
+ *
+ * The fill eases between the two greys through the motion system's fast spec — the state change reads
+ * as the button coming alive rather than as two flat colours swapping.
  */
 @Composable
 private fun SaveButton(
@@ -323,13 +400,21 @@ private fun SaveButton(
     onSave: () -> Unit,
 ) {
     val canSave = state.dirty && !state.saving
+    // Grey → ink as the button comes alive, and back again when Firestore echoes the write — the
+    // state change eased through the motion system's fast spec (and an instant step under reduced
+    // motion), rather than snapping between two flat fills.
+    val fill by animateColorAsState(
+        targetValue = if (canSave) OmniInk else OmniFeedHint,
+        animationSpec = OmniMotion.fast(),
+        label = "goalsSaveFill",
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(ButtonHeight)
             .pressEffect(enabled = canSave)
             .clip(RoundedCornerShape(ButtonCorner))
-            .background(if (canSave) OmniInk else OmniFeedHint)
+            .background(fill)
             .clickable(enabled = canSave, onClick = onSave),
         contentAlignment = Alignment.Center,
     ) {

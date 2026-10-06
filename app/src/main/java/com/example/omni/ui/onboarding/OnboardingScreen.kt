@@ -41,6 +41,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.example.omni.R
 import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniBody
@@ -225,7 +226,7 @@ private fun PageIndicator(
                 inactiveIndex++
                 next
             }
-            val width by animateDpAsState(targetValue = targetWidth, label = "indicatorWidth")
+            val width by animateDpAsState(targetValue = targetWidth, animationSpec = OmniMotion.fast(), label = "indicatorWidth")
 
             Box(
                 modifier = Modifier

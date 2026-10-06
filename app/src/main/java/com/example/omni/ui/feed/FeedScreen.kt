@@ -58,6 +58,7 @@ import com.example.omni.data.model.compactCount
 import com.example.omni.data.model.relativeTimeOf
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.motion.OmniMotion
 import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.components.OmniHeader
@@ -1181,6 +1182,7 @@ private fun FollowPill(following: Boolean, onClick: () -> Unit) {
     // Ink when there is something to do, the softer chip once it is done — the profile's exact pair.
     val fill by animateColorAsState(
         targetValue = if (following) OmniNutriChipCarbs else OmniInk,
+        animationSpec = OmniMotion.fast(),
         label = "followFill",
     )
 
@@ -1245,10 +1247,12 @@ private fun ActionPill(
 ) {
     val fill by animateColorAsState(
         targetValue = if (emphasized) OmniInk else OmniFeedSurface,
+        animationSpec = OmniMotion.fast(),
         label = "pillFill",
     )
     val label by animateColorAsState(
         targetValue = if (emphasized) OmniBackground else OmniInk,
+        animationSpec = OmniMotion.fast(),
         label = "pillLabel",
     )
 
