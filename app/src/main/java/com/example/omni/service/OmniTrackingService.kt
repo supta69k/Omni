@@ -24,12 +24,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
  * The permanent foreground service that owns the step pipeline.
@@ -54,71 +61,149 @@ import kotlinx.coroutines.flow.onEach
 class OmniTrackingService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var isForegroundStarted = false
+    private var lastNotifiedSteps = -1
+    private var lastNotifiedGlasses = -1
+    private var lastNotificationTime = 0L
+    private var pendingUpdateJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
-        getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.tracking_channel_name),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply { description = getString(R.string.tracking_channel_description) },
-        )
-        // Foreground first — a startForegroundService must show the notification within seconds —
-        // then swap in real numbers as the pipeline produces them.
+        ensureNotificationChannel()
         startForegroundWith(steps = 0, glasses = 0)
         observePipeline()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!isForegroundStarted) {
+            startForegroundWith(steps = 0, glasses = 0)
+        }
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         scope.cancel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
         super.onDestroy()
+    }
+
+    private fun ensureNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.tracking_channel_name),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply { description = getString(R.string.tracking_channel_description) }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     /**
      * The pipeline is keyed on the session and the date — the same keys the dashboard uses — so a
      * sign-out/in or a midnight swaps the flows instead of leaking one account's state into the
      * next, and the re-collected pipeline re-seeds through [com.example.omni.data.local.seedForRollover]
-     * on its way up. `observeTodaySteps(null)` emits a flat zero: signed out, nothing counts and
-     * nothing syncs, exactly as the repository documents.
+     * on its way up. When signed out (`uid == null`), the service detaches and stops itself.
      */
     private fun observePipeline() {
         val container = AppContainer.current
         combine(container.authRepository.sessionUid, todayKeyFlow()) { uid, today -> uid to today }
             .distinctUntilChanged()
             .flatMapLatest { (uid, today) ->
-                combine(
-                    container.stepsRepository.observeTodaySteps(uid),
-                    if (uid == null) {
-                        flowOf(null)
-                    } else {
-                        container.metricsRepository.observeDay(uid, today)
-                    },
-                ) { steps, day -> steps to (day?.waterGlasses ?: 0) }
+                if (uid == null) {
+                    stopSelf()
+                    flowOf(0 to 0)
+                } else {
+                    val glassesFlow = container.metricsRepository.observeDay(uid, today)
+                        .map { it?.waterGlasses ?: 0 }
+                        .catch { cause ->
+                            Log.w(TAG, "Failed to observe water glasses for notification", cause)
+                            emit(0)
+                        }
+                        .onStart { emit(0) }
+
+                    combine(
+                        container.stepsRepository.observeTodaySteps(uid),
+                        glassesFlow,
+                    ) { steps, glasses -> steps to glasses }
+                }
             }
             .onEach { (steps, glasses) ->
-                startForegroundWith(steps = steps, glasses = glasses)
+                updateNotification(steps = steps, glasses = glasses)
             }
             .launchIn(scope)
     }
 
     private fun startForegroundWith(steps: Int, glasses: Int) {
         val notification = buildNotification(steps = steps, glasses = glasses)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // API 34 enforces the health type's permission at start; `start` gates on
-            // ACTIVITY_RECOGNITION before the service is ever launched.
-            ServiceCompat.startForeground(
-                this,
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                // API 34 enforces the health type's permission at start; `start` gates on
+                // ACTIVITY_RECOGNITION before the service is ever launched.
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            isForegroundStarted = true
+            lastNotifiedSteps = steps
+            lastNotifiedGlasses = glasses
+            lastNotificationTime = System.currentTimeMillis()
+        } catch (cause: Exception) {
+            Log.e(TAG, "Failed to start foreground notification", cause)
+        }
+    }
+
+    /**
+     * Updates the persistent notification, throttling minor step changes to at most once every
+     * [NotificationThrottleMillis] while ensuring that major jumps (>= [SignificantStepDiff]),
+     * glasses changes, and deferred final updates are delivered promptly.
+     */
+    private fun updateNotification(steps: Int, glasses: Int) {
+        if (!isForegroundStarted) {
+            startForegroundWith(steps = steps, glasses = glasses)
+            return
+        }
+
+        if (steps == lastNotifiedSteps && glasses == lastNotifiedGlasses) {
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val timeSinceLast = now - lastNotificationTime
+        val stepDiff = abs(steps - lastNotifiedSteps)
+
+        if (timeSinceLast < NotificationThrottleMillis && stepDiff < SignificantStepDiff && glasses == lastNotifiedGlasses) {
+            if (pendingUpdateJob?.isActive != true) {
+                pendingUpdateJob = scope.launch {
+                    delay(NotificationThrottleMillis - timeSinceLast)
+                    postNotification(steps, glasses)
+                }
+            }
+            return
+        }
+
+        pendingUpdateJob?.cancel()
+        postNotification(steps, glasses)
+    }
+
+    private fun postNotification(steps: Int, glasses: Int) {
+        val notification = buildNotification(steps = steps, glasses = glasses)
+        try {
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+            lastNotifiedSteps = steps
+            lastNotifiedGlasses = glasses
+            lastNotificationTime = System.currentTimeMillis()
+        } catch (cause: Exception) {
+            Log.w(TAG, "Failed to post notification update", cause)
         }
     }
 
@@ -144,12 +229,13 @@ class OmniTrackingService : Service() {
         private const val TAG = "OmniTracking"
         private const val CHANNEL_ID = "omni_tracking"
         private const val NOTIFICATION_ID = 41
+        private const val NotificationThrottleMillis = 2_000L
+        private const val SignificantStepDiff = 10
 
         /**
          * Starts the service, but only when it can legally run: on API 29+ the sensor is silent
          * without ACTIVITY_RECOGNITION, and on API 34+ *starting* a health-type foreground service
-         * without it is an exception. Callers re-invoke this after the permission is granted — the
-         * next app open or resume covers it.
+         * without it is an exception.
          */
         fun start(context: Context) {
             if (
@@ -162,7 +248,24 @@ class OmniTrackingService : Service() {
                 Log.i(TAG, "Tracking service not started — ACTIVITY_RECOGNITION not granted yet")
                 return
             }
-            ContextCompat.startForegroundService(context, Intent(context, OmniTrackingService::class.java))
+            val uid = AppContainer.current.authRepository.currentUid
+            if (uid == null) {
+                Log.i(TAG, "Tracking service not started — no authenticated user")
+                return
+            }
+            try {
+                ContextCompat.startForegroundService(context, Intent(context, OmniTrackingService::class.java))
+            } catch (cause: Exception) {
+                Log.w(TAG, "Could not start tracking service", cause)
+            }
+        }
+
+        fun stop(context: Context) {
+            try {
+                context.stopService(Intent(context, OmniTrackingService::class.java))
+            } catch (cause: Exception) {
+                Log.w(TAG, "Could not stop tracking service", cause)
+            }
         }
     }
 }

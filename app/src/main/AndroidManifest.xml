@@ -92,7 +92,7 @@
              this behind the app's Autostart toggle. -->
         <receiver
             android:name=".service.OmniBootReceiver"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />

@@ -63,7 +63,9 @@ class DeviceStepsRepository(
         // has ended. A fresh install or account switch starts with the server's number rather than zero.
         if (state.date.isEmpty() || state.date != startedOn) {
             val serverSteps = try {
-                metrics.observeDay(uid, startedOn).first()?.steps ?: 0
+                kotlinx.coroutines.withTimeoutOrNull(2_000L) {
+                    metrics.observeDay(uid, startedOn).first()?.steps
+                } ?: 0
             } catch (cause: Exception) {
                 Log.w("Omni", "Could not seed steps for $uid on $startedOn", cause)
                 0

@@ -9,6 +9,7 @@ import android.os.SystemClock
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emptyFlow
 
 /**
@@ -16,20 +17,20 @@ import kotlinx.coroutines.flow.emptyFlow
  *
  * `TYPE_STEP_COUNTER` rather than `TYPE_STEP_DETECTOR` (BACKEND_PLAN §12): the counter is maintained by
  * the sensor hub in low power whether or not this process is alive, so it keeps counting while Omni is
- * closed and the app can catch up on the next reading. The detector only fires per step, to a listener
- * that has to be registered at the time — which would need a foreground service to be worth anything.
+ * closed and the app can catch up on the next reading.
  *
- * What it emits is **steps since boot**, not steps today. [StepState.reconcile] is what turns one into
- * the other; nothing in this class knows about days.
+ * Prefers the wake-up variant of the sensor when available (`getDefaultSensor(type, true)`), falling
+ * back to the default sensor. Wake-up sensors ensure hardware FIFO events are delivered even when
+ * the application processor is asleep in the user's pocket.
  *
- * The registration itself needs no permission, but from API 29 up the OS silently withholds events
- * unless `ACTIVITY_RECOGNITION` has been granted, so callers gate this on the permission rather than
- * waiting for values that never arrive.
+ * Registers with 5-second max report latency (`5_000_000` us) to allow the hardware sensor hub to batch
+ * readings in FIFO, waking the CPU at most once every few seconds while walking to conserve battery.
  */
 class StepCounterSource(context: Context) {
 
     private val sensorManager = context.getSystemService(SensorManager::class.java)
-    private val stepCounter = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+    private val stepCounter = sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER, true)
+        ?: sensorManager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
 
     /** False on a device with no pedometer — an emulator, or plenty of budget phones. */
     val isAvailable: Boolean get() = stepCounter != null
@@ -38,9 +39,7 @@ class StepCounterSource(context: Context) {
      * Raw since-boot counts, one per sensor event.
      *
      * Registering delivers the current value almost immediately, which is what makes a cold start show
-     * the real number instead of waiting for the next step. `SENSOR_DELAY_NORMAL` is a hint the step
-     * counter's batching largely ignores; in practice events arrive in bursts of a few seconds while
-     * walking and not at all while still.
+     * the real number instead of waiting for the next step.
      */
     fun rawCounts(): Flow<Int> {
         val sensor = stepCounter ?: return emptyFlow()
@@ -48,17 +47,27 @@ class StepCounterSource(context: Context) {
         return callbackFlow {
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent) {
-                    // The value is a float only because the sensor API has one shape for everything;
-                    // this one is a whole count.
                     val raw = event.values.firstOrNull()?.toInt() ?: return
                     trySend(raw)
                 }
 
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
             }
-            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            val registered = manager.registerListener(
+                listener,
+                sensor,
+                SensorManager.SENSOR_DELAY_NORMAL,
+                BatchLatencyMicros,
+            )
+            if (!registered) {
+                manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            }
             awaitClose { manager.unregisterListener(listener) }
-        }
+        }.conflate()
+    }
+
+    private companion object {
+        const val BatchLatencyMicros = 5_000_000 // 5 seconds
     }
 }
 

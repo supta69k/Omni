@@ -69,9 +69,10 @@ fun StepState.reconcile(raw: Int, bootId: Long, date: String): StepState {
         // the counter's gain since the last reading belongs to the new day — the midnight boundary
         // inside that delta cannot be split without per-step timestamps — and re-anchoring here is
         // what threw overnight steps away. A reboot or a never-anchored state starts the day fresh.
-        if (this.date.isNotEmpty() && sameBootAs(bootId)) {
+        if (this.date.isNotEmpty() && sameBootAs(bootId) && isNextCalendarDay(this.date, date)) {
             return copy(
                 date = date,
+                anchorRaw = raw,
                 total = (raw - anchorRaw).coerceAtLeast(0),
                 syncedTotal = 0,
             )

@@ -49,7 +49,7 @@ class StepStateTest {
     // ---- the day boundary ----------------------------------------------------------------------
 
     @Test
-    fun `a live rollover attributes the since-last-reading tail to the new day`() {
+    fun `a live rollover attributes the since-last-reading tail to the new day without double counting`() {
         val yesterday = StepState()
             .reconcile(raw = 4_200, bootId = Boot, date = Today)
             .reconcile(raw = 12_000, bootId = Boot, date = Today)
@@ -58,17 +58,18 @@ class StepStateTest {
         val today = yesterday.reconcile(raw = 12_050, bootId = Boot, date = Tomorrow)
 
         // The 50 steps walked since yesterday's last reading cannot be split across midnight, so
-        // they land on the new day — which is what makes the closed-app morning count instead of
-        // starting at zero. The day still owes its write: syncedTotal resets with the day.
+        // they land on the new day. The anchorRaw updates to the reading raw (12_050) so subsequent
+        // readings calculate the delta without double counting.
         assertEquals(50, today.total)
         assertEquals(0, today.syncedTotal)
-        assertEquals(12_000, today.anchorRaw)
+        assertEquals(12_050, today.anchorRaw)
         assertEquals(Tomorrow, today.date)
 
-        // Walking continues from the carried anchor, not from the first post-midnight reading: the
-        // 150 new steps add on top of the 50 the tail already contributed.
+        // Walking continues from 12_050: 100 new steps (from 12_050 to 12_150) add on top of the
+        // 50 already counted, giving exactly 150 steps total today.
         val walked = today.reconcile(raw = 12_150, bootId = Boot, date = Tomorrow)
-        assertEquals(200, walked.total)
+        assertEquals(150, walked.total)
+        assertEquals(12_150, walked.anchorRaw)
     }
 
     // ---- account isolation on a shared device --------------------------------------------------
@@ -273,6 +274,78 @@ class StepStateTest {
 
         assertEquals(0, seeded.total)
         assertEquals(0L, seeded.bootId) // the next reading anchors wherever it lands, adding nothing
+    }
+
+    // ---- additional accuracy & pipeline regressions --------------------------------------------
+
+    @Test
+    fun `a live rollover more than one day later re-anchors rather than crediting a week of walking`() {
+        val last = StepState(date = Today, bootId = Boot, anchorRaw = 12_000, total = 7_800, syncedTotal = 7_800)
+        val nextWeek = last.reconcile(raw = 15_000, bootId = Boot, date = "2026-09-17")
+
+        // More than one day later: anchors fresh on the new day with 0 steps
+        assertEquals(0, nextWeek.total)
+        assertEquals(15_000, nextWeek.anchorRaw)
+        assertEquals("2026-09-17", nextWeek.date)
+    }
+
+    @Test
+    fun `increasing cumulative sensor count produces correct daily delta across multiple readings`() {
+        var state = StepState().reconcile(raw = 1_000, bootId = Boot, date = Today)
+        assertEquals(0, state.total)
+
+        state = state.reconcile(raw = 1_100, bootId = Boot, date = Today)
+        assertEquals(100, state.total)
+
+        state = state.reconcile(raw = 1_250, bootId = Boot, date = Today)
+        assertEquals(250, state.total)
+
+        state = state.reconcile(raw = 2_000, bootId = Boot, date = Today)
+        assertEquals(1_000, state.total)
+    }
+
+    @Test
+    fun `reopening the app and receiving same sensor reading does not double count`() {
+        val state = StepState(date = Today, bootId = Boot, anchorRaw = 5_000, total = 3_000, syncedTotal = 3_000)
+        // Reopen app, sensor emits the same raw count (5_000)
+        val reopened = state.reconcile(raw = 5_000, bootId = Boot, date = Today)
+
+        assertEquals(3_000, reopened.total)
+        assertEquals(5_000, reopened.anchorRaw)
+    }
+
+    @Test
+    fun `device reboot counter reset does not produce negative count and preserves daily total`() {
+        val beforeReboot = StepState(date = Today, bootId = Boot, anchorRaw = 10_000, total = 4_000, syncedTotal = 4_000)
+        val newBoot = Boot + 3_600_000L // 1 hour later boot
+
+        // Pedometer counter reset to 15 steps after reboot
+        val afterReboot = beforeReboot.reconcile(raw = 15, bootId = newBoot, date = Today)
+
+        assertEquals(4_015, afterReboot.total)
+        assertEquals(15, afterReboot.anchorRaw)
+        assertEquals(newBoot, afterReboot.bootId)
+    }
+
+    @Test
+    fun `account switching preserves isolation without leaking step history`() {
+        // User A was walking on this device
+        val userA = StepState(date = Today, bootId = Boot, anchorRaw = 10_000, total = 5_000, syncedTotal = 5_000)
+
+        // User B signs in on the same device with 0 steps on server
+        val userBInitial = StepState(date = Today) // unanchored
+        // Device hardware counter is still at 10_000
+        val userBAnchored = userBInitial.reconcile(raw = 10_000, bootId = Boot, date = Today)
+
+        assertEquals(0, userBAnchored.total)
+        assertEquals(10_000, userBAnchored.anchorRaw)
+
+        // User B walks 200 steps (raw becomes 10_200)
+        val userBWalked = userBAnchored.reconcile(raw = 10_200, bootId = Boot, date = Today)
+        assertEquals(200, userBWalked.total)
+
+        // User A's total remains unaffected
+        assertEquals(5_000, userA.total)
     }
 
     private companion object {

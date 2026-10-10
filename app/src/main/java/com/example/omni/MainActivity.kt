@@ -1222,6 +1222,7 @@ private fun OmniApp() {
                                     Log.w("Omni", "The FCM token could not be released on sign-out", cause)
                                 }
                             }
+                            OmniTrackingService.stop(context)
                             container.authRepository.signOut()
                         }
                     },
@@ -1520,9 +1521,10 @@ private fun rememberStepPermission(): StepPermission {
     var granted by remember { mutableStateOf(hasStepPermission(context)) }
     val asked = remember { mutableStateOf(false) }
 
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        granted = it
-        if (it) OmniTrackingService.start(context)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        val stepGranted = results[Manifest.permission.ACTIVITY_RECOGNITION] ?: hasStepPermission(context)
+        granted = stepGranted
+        if (stepGranted) OmniTrackingService.start(context)
     }
 
     // A grant made on the system settings screen never comes back through the launcher, so the answer is
@@ -1538,7 +1540,23 @@ private fun rememberStepPermission(): StepPermission {
         StepPermission(
             granted = granted,
             asked = asked,
-            ask = { launcher.launch(Manifest.permission.ACTIVITY_RECOGNITION) },
+            ask = {
+                val perms = buildList {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                        context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        add(Manifest.permission.ACTIVITY_RECOGNITION)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+                if (perms.isNotEmpty()) {
+                    launcher.launch(perms.toTypedArray())
+                }
+            },
             openSettings = {
                 context.startActivity(
                     Intent(
