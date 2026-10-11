@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,23 +37,35 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.omni.R
 import com.example.omni.data.model.CoachError
+import com.example.omni.data.model.CoachGuidance
 import com.example.omni.data.model.CoachState
+import com.example.omni.ui.DesignFrame
+import com.example.omni.ui.DevicePreviews
+import com.example.omni.ui.LocalDesignWindow
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
 import com.example.omni.ui.motion.OmniMotion
+import com.example.omni.ui.motion.OmniMotion.pressEffect
+import com.example.omni.ui.theme.BodyFont
+import com.example.omni.ui.theme.NutritionType
 import com.example.omni.ui.theme.OmniAlertRed
 import com.example.omni.ui.theme.OmniCardInk
+import com.example.omni.ui.theme.OmniFieldSurface
 import com.example.omni.ui.theme.OmniInk
 import com.example.omni.ui.theme.OmniNutriMacroLabel
 import com.example.omni.ui.theme.OmniOnInk
+import com.example.omni.ui.theme.OmniSectionTitle
 import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniSheetShadow
 import com.example.omni.ui.theme.OmniSheetSurface
+import com.example.omni.ui.theme.OmniTheme
+import com.example.omni.ui.theme.PlusJakartaSans
 
 /**
  * The AI Food Coach's sheet — the same hand-built sheet vocabulary as [AiMealSheet] (grab handle,
@@ -75,6 +90,9 @@ internal fun CoachSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val designWindow = LocalDesignWindow.current
+    val maxSheetHeight = (designWindow.heightDp * 0.88f).coerceAtLeast(320.dp)
+
     OmniSheetScaffold(
         visible = visible,
         onDismiss = onDismiss,
@@ -83,6 +101,7 @@ internal fun CoachSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxSheetHeight)
                 .shadow(10.dp, SheetShape, ambientColor = OmniSheetShadow, spotColor = OmniSheetShadow)
                 .clip(SheetShape)
                 .background(OmniSheetSurface)
@@ -96,26 +115,46 @@ internal fun CoachSheet(
             Image(
                 painter = painterResource(R.drawable.ic_hosp_grab),
                 contentDescription = "Close",
-                modifier = Modifier.width(59.dp).height(5.dp).sheetNoRipple(onClick = onDismiss),
+                modifier = Modifier
+                    .width(59.dp)
+                    .height(5.dp)
+                    .sheetNoRipple(onClick = onDismiss),
             )
+            Spacer(Modifier.height(HeadingTop))
 
-            AnimatedContent(
-                targetState = state,
-                transitionSpec = {
-                    fadeIn(animationSpec = OmniMotion.fast<Float>()) + slideInVertically(
-                        animationSpec = OmniMotion.fast<IntOffset>(),
-                        initialOffsetY = { it / 4 },
-                    ) togetherWith fadeOut(animationSpec = OmniMotion.fast<Float>())
-                },
-                label = "coachState",
-            ) { target ->
-                when (target) {
-                    CoachState.Loading -> LoadingContent()
-                    is CoachState.Ready -> ReadyContent(guidance = target.guidance)
-                    CoachState.LimitReached -> LimitContent(onSeeOmniPlus = onSeeOmniPlus)
-                    is CoachState.Failed ->
-                        FailedContent(message = target.error.message, onRetry = onRetry)
-                    CoachState.Idle -> LoadingContent()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                AnimatedContent(
+                    targetState = state,
+                    transitionSpec = {
+                        fadeIn(animationSpec = OmniMotion.fast<Float>()) + slideInVertically(
+                            animationSpec = OmniMotion.fast<IntOffset>(),
+                            initialOffsetY = { it / 4 },
+                        ) togetherWith fadeOut(animationSpec = OmniMotion.fast<Float>())
+                    },
+                    label = "coachState",
+                ) { target ->
+                    when (target) {
+                        CoachState.Loading -> LoadingContent()
+                        is CoachState.Ready -> ReadyContent(
+                            guidance = target.guidance,
+                            onDismiss = onDismiss,
+                        )
+                        CoachState.LimitReached -> LimitContent(
+                            onSeeOmniPlus = onSeeOmniPlus,
+                            onDismiss = onDismiss,
+                        )
+                        is CoachState.Failed -> FailedContent(
+                            message = target.error.message,
+                            onRetry = onRetry,
+                            onDismiss = onDismiss,
+                        )
+                        CoachState.Idle -> LoadingContent()
+                    }
                 }
             }
 
@@ -129,131 +168,368 @@ private fun LoadingContent() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = ContentGap),
+            .padding(vertical = LoadingPaddingV),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        CircularProgressIndicator(color = OmniSetApply, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.height(ContentGap))
+        CircularProgressIndicator(
+            color = OmniSetApply,
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 3.dp,
+        )
+        Spacer(Modifier.height(LoadingGap))
         Text(
             text = "Reading your week…",
-            style = CoachBody,
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                lineHeight = 21.sp,
+                letterSpacing = (-0.15).sp,
+            ),
             color = OmniNutriMacroLabel,
         )
     }
 }
 
+/**
+ * The redesigned AI Coach result view:
+ * 1. Clean header: Title + subtitle paired with the server's focus metric badge.
+ * 2. Main result: Formatted summary card with comfortable reading typography.
+ * 3. Grouped recommendations: Actionable advice items with accent markers.
+ * 4. Meter: Honest daily quota indicator.
+ * 5. Action: Full-width comfortable "Got it" button to dismiss.
+ */
 @Composable
-private fun ReadyContent(guidance: com.example.omni.data.model.CoachGuidance) {
+private fun ReadyContent(
+    guidance: CoachGuidance,
+    onDismiss: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(ContentGap),
     ) {
-        // The focus chip — the server's own "what needs attention" pick, never the client's.
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(OmniSetApply.copy(alpha = 0.14f))
-                .padding(horizontal = 12.dp, vertical = 4.dp),
+        // 1. Header: Section title & subtitle on left, Focus Chip on right
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "Focus: ${focusLabel(guidance.focus)}",
-                style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.12).sp),
-                color = OmniInk,
-            )
-        }
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    text = "AI Coach",
+                    style = NutritionType.SectionTitle,
+                    color = OmniSectionTitle,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(SubtitleTop))
+                Text(
+                    text = "Daily personalized guidance",
+                    style = TextStyle(
+                        fontFamily = BodyFont,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        letterSpacing = (-0.13).sp,
+                    ),
+                    color = OmniNutriMacroLabel,
+                    maxLines = 1,
+                )
+            }
 
-        Text(
-            text = guidance.summary,
-            style = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, letterSpacing = (-0.15).sp),
-            color = OmniCardInk,
-        )
+            Spacer(Modifier.width(12.dp))
 
-        guidance.tips.forEach { tip ->
-            Row(verticalAlignment = Alignment.Top) {
-                Text(text = "•  ", style = CoachBody, color = OmniSetApply)
-                Text(text = tip, style = CoachBody, color = OmniCardInk)
+            // The focus chip — the server's own "what needs attention" pick, never the client's.
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(OmniSetApply.copy(alpha = 0.14f))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = "Focus: ${focusLabel(guidance.focus)}",
+                    style = TextStyle(
+                        fontFamily = BodyFont,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp,
+                        letterSpacing = (-0.12).sp,
+                    ),
+                    color = OmniInk,
+                    maxLines = 1,
+                )
             }
         }
 
-        // The meter, worded for the reader — the server's own counter, rendered honestly: a free
-        // user sees their one session of the day; Omni+ sees "unlimited". Nothing is computed here.
+        Spacer(Modifier.height(HeaderToSummaryGap))
+
+        // 2. Main Result: Summary Card
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(CardCorner16))
+                .background(OmniFieldSurface)
+                .padding(horizontal = SummaryPaddingH, vertical = SummaryPaddingV),
+        ) {
+            Text(
+                text = guidance.summary,
+                style = TextStyle(
+                    fontFamily = BodyFont,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    letterSpacing = (-0.15).sp,
+                ),
+                color = OmniCardInk,
+            )
+        }
+
+        // 3. Actionable Recommendations
+        if (guidance.tips.isNotEmpty()) {
+            Spacer(Modifier.height(SectionGap))
+
+            Text(
+                text = "Key recommendations",
+                style = TextStyle(
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                    letterSpacing = (-0.14).sp,
+                ),
+                color = OmniSectionTitle,
+                maxLines = 1,
+            )
+
+            Spacer(Modifier.height(TipListTopGap))
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(TipItemGap),
+            ) {
+                guidance.tips.forEach { tip ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(TipCorner12))
+                            .background(OmniFieldSurface.copy(alpha = 0.6f))
+                            .padding(horizontal = TipPaddingH, vertical = TipPaddingV),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 7.dp)
+                                .size(6.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(OmniSetApply),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = tip,
+                            style = TextStyle(
+                                fontFamily = BodyFont,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                letterSpacing = (-0.14).sp,
+                            ),
+                            color = OmniCardInk,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(SectionGap))
+
+        // 4. Session meter
         Text(
             text = if (guidance.limit == null) {
                 "Omni+ · unlimited coaching"
             } else {
                 "${guidance.used} of ${guidance.limit} free sessions used today"
             },
-            style = TextStyle(fontSize = 11.sp, letterSpacing = (-0.11).sp),
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Normal,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                letterSpacing = (-0.12).sp,
+            ),
             color = OmniNutriMacroLabel,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(Modifier.height(ButtonTopGap))
+
+        // 5. Primary Action Button
+        CoachPrimaryButton(
+            label = "Got it",
+            onClick = onDismiss,
         )
     }
 }
 
 @Composable
-private fun LimitContent(onSeeOmniPlus: () -> Unit) {
+private fun LimitContent(
+    onSeeOmniPlus: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(ContentGap),
     ) {
         Text(
-            text = "Your daily AI Coach session is used up",
-            style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.16).sp),
+            text = "Daily session used up",
+            style = NutritionType.SectionTitle,
+            color = OmniSectionTitle,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(SubtitleTop))
+        Text(
+            text = "Your daily AI Coach session is used up. Omni+ gives unlimited daily coaching — every day, for every metric.",
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                letterSpacing = (-0.14).sp,
+            ),
+            color = OmniNutriMacroLabel,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.height(ButtonTopGap))
+
+        CoachPrimaryButton(
+            label = "See Omni+",
+            backgroundColor = OmniSetApply,
+            textColor = OmniOnInk,
+            onClick = onSeeOmniPlus,
+        )
+
+        Spacer(Modifier.height(SecondaryButtonGap))
+
+        CoachSecondaryButton(
+            label = "Dismiss",
+            onClick = onDismiss,
+        )
+    }
+}
+
+@Composable
+private fun FailedContent(
+    message: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Coaching unavailable",
+            style = NutritionType.SectionTitle,
+            color = OmniSectionTitle,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(SubtitleTop))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(CardCorner16))
+                .background(OmniFieldSurface)
+                .padding(horizontal = SummaryPaddingH, vertical = SummaryPaddingV),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = message,
+                style = TextStyle(
+                    fontFamily = BodyFont,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    letterSpacing = (-0.14).sp,
+                ),
+                color = OmniAlertRed,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        Spacer(Modifier.height(ButtonTopGap))
+
+        CoachPrimaryButton(
+            label = "Try again",
+            onClick = onRetry,
+        )
+
+        Spacer(Modifier.height(SecondaryButtonGap))
+
+        CoachSecondaryButton(
+            label = "Dismiss",
+            onClick = onDismiss,
+        )
+    }
+}
+
+@Composable
+private fun CoachPrimaryButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    backgroundColor: Color = OmniInk,
+    textColor: Color = OmniOnInk,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(ButtonHeight)
+            .clip(RoundedCornerShape(ButtonCorner))
+            .background(backgroundColor)
+            .pressEffect()
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = TextStyle(
+                fontFamily = PlusJakartaSans,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                letterSpacing = (-0.15).sp,
+            ),
+            color = textColor,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun CoachSecondaryButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(ButtonHeight)
+            .clip(RoundedCornerShape(ButtonCorner))
+            .background(OmniFieldSurface)
+            .pressEffect()
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = TextStyle(
+                fontFamily = PlusJakartaSans,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                letterSpacing = (-0.15).sp,
+            ),
             color = OmniCardInk,
-            textAlign = TextAlign.Center,
+            maxLines = 1,
         )
-        Text(
-            text = "Omni+ gives unlimited daily coaching — every day, for every metric.",
-            style = CoachBody,
-            color = OmniNutriMacroLabel,
-            textAlign = TextAlign.Center,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(OmniSetApply)
-                .clickable(onClick = onSeeOmniPlus)
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "See Omni+",
-                style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.14).sp),
-                color = OmniOnInk,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FailedContent(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(ContentGap),
-    ) {
-        Text(
-            text = message,
-            style = CoachBody,
-            color = OmniAlertRed,
-            textAlign = TextAlign.Center,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(OmniInk)
-                .clickable(onClick = onRetry)
-                .padding(vertical = 14.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "Try again",
-                style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.14).sp),
-                color = Color.White,
-            )
-        }
     }
 }
 
@@ -267,10 +543,116 @@ private fun focusLabel(focus: String): String = when (focus) {
     else -> "Balance"
 }
 
-private val CoachBody = TextStyle(fontSize = 13.sp, lineHeight = 19.sp, letterSpacing = (-0.13).sp)
-
 private val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
 private val SheetPadding = 20.dp
-private val GrabTop = 12.dp
-private val ContentGap = 12.dp
-private val SheetBottomGap = 16.dp
+private val GrabTop = 8.dp
+private val HeadingTop = 16.dp
+private val SubtitleTop = 3.dp
+private val HeaderToSummaryGap = 16.dp
+private val SectionGap = 16.dp
+private val TipListTopGap = 10.dp
+private val TipItemGap = 8.dp
+private val ButtonTopGap = 18.dp
+private val SecondaryButtonGap = 10.dp
+private val SheetBottomGap = 20.dp
+private val LoadingPaddingV = 32.dp
+private val LoadingGap = 16.dp
+private val SummaryPaddingH = 16.dp
+private val SummaryPaddingV = 14.dp
+private val TipPaddingH = 14.dp
+private val TipPaddingV = 11.dp
+private val CardCorner16 = 16.dp
+private val TipCorner12 = 12.dp
+private val ButtonCorner = 20.dp
+private val ButtonHeight = 50.dp
+
+@DevicePreviews
+@Composable
+private fun CoachSheetReadyPreview() {
+    OmniTheme {
+        DesignFrame {
+            CoachSheet(
+                visible = true,
+                state = CoachState.Ready(
+                    CoachGuidance(
+                        summary = "Your steps are trending up while fiber lags behind. Increasing hydration will also support your energy levels.",
+                        focus = "fiber",
+                        tips = listOf(
+                            "Add a pear or apple at breakfast for an easy fiber boost.",
+                            "Swap white rice for brown rice or quinoa at lunch.",
+                            "Keep your consistent 20-minute morning walk.",
+                        ),
+                        starter = false,
+                        used = 1,
+                        limit = 1,
+                    ),
+                ),
+                onSeeOmniPlus = {},
+                onRetry = {},
+                onDismiss = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Coach Sheet Long Content", showBackground = true, widthDp = 415, heightDp = 920)
+@Composable
+private fun CoachSheetLongContentPreview() {
+    OmniTheme {
+        DesignFrame {
+            CoachSheet(
+                visible = true,
+                state = CoachState.Ready(
+                    CoachGuidance(
+                        summary = "You have made remarkable progress on hydration this week, exceeding your goal on 5 out of 7 days! However, your sleep duration has averaged only 5.8 hours, and your fiber intake has remained below the recommended target. Consistent sleep will help regulate your metabolism and improve recovery.",
+                        focus = "sleep",
+                        tips = listOf(
+                            "Set a consistent wind-down routine starting 30 minutes before bed.",
+                            "Limit caffeine consumption after 2:00 PM to improve deep sleep cycles.",
+                            "Aim for at least 7.5 hours of sleep to support muscle recovery and daily energy.",
+                            "Include a small serving of magnesium-rich almonds or pumpkin seeds with your evening snack.",
+                        ),
+                        starter = false,
+                        used = 3,
+                        limit = null,
+                    ),
+                ),
+                onSeeOmniPlus = {},
+                onRetry = {},
+                onDismiss = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Coach Sheet Limit Reached", showBackground = true, widthDp = 415, heightDp = 920)
+@Composable
+private fun CoachSheetLimitPreview() {
+    OmniTheme {
+        DesignFrame {
+            CoachSheet(
+                visible = true,
+                state = CoachState.LimitReached,
+                onSeeOmniPlus = {},
+                onRetry = {},
+                onDismiss = {},
+            )
+        }
+    }
+}
+
+@Preview(name = "Coach Sheet Failed", showBackground = true, widthDp = 415, heightDp = 920)
+@Composable
+private fun CoachSheetFailedPreview() {
+    OmniTheme {
+        DesignFrame {
+            CoachSheet(
+                visible = true,
+                state = CoachState.Failed(CoachError.Unavailable),
+                onSeeOmniPlus = {},
+                onRetry = {},
+                onDismiss = {},
+            )
+        }
+    }
+}
