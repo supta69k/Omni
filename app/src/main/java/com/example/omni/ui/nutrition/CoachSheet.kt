@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,7 +33,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +51,7 @@ import com.example.omni.data.model.CoachState
 import com.example.omni.ui.DesignFrame
 import com.example.omni.ui.DevicePreviews
 import com.example.omni.ui.LocalDesignWindow
+import com.example.omni.ui.components.OmniPlusBadge
 import com.example.omni.ui.components.OmniSheetScaffold
 import com.example.omni.ui.components.sheetNoRipple
 import com.example.omni.ui.motion.OmniMotion
@@ -55,6 +59,7 @@ import com.example.omni.ui.motion.OmniMotion.pressEffect
 import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.NutritionType
 import com.example.omni.ui.theme.OmniAlertRed
+import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniCardInk
 import com.example.omni.ui.theme.OmniFieldSurface
 import com.example.omni.ui.theme.OmniInk
@@ -214,12 +219,18 @@ private fun ReadyContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f, fill = false)) {
-                Text(
-                    text = "AI Coach",
-                    style = NutritionType.SectionTitle,
-                    color = OmniSectionTitle,
-                    maxLines = 1,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "AI Coach",
+                        style = NutritionType.SectionTitle,
+                        color = OmniSectionTitle,
+                        maxLines = 1,
+                    )
+                    OmniPlusBadge()
+                }
                 Spacer(Modifier.height(SubtitleTop))
                 Text(
                     text = "Daily personalized guidance",
@@ -265,20 +276,54 @@ private fun ReadyContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(CardCorner16))
-                .background(OmniFieldSurface)
+                .border(1.dp, OmniAuthHeading.copy(alpha = 0.18f), RoundedCornerShape(CardCorner16))
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            OmniAuthHeading.copy(alpha = 0.07f),
+                            OmniFieldSurface,
+                        ),
+                    ),
+                )
                 .padding(horizontal = SummaryPaddingH, vertical = SummaryPaddingV),
         ) {
-            Text(
-                text = guidance.summary,
-                style = TextStyle(
-                    fontFamily = BodyFont,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    letterSpacing = (-0.15).sp,
-                ),
-                color = OmniCardInk,
-            )
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(OmniAuthHeading),
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = "Today's Insights",
+                        style = TextStyle(
+                            fontFamily = PlusJakartaSans,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            letterSpacing = (-0.12).sp,
+                        ),
+                        color = OmniAuthHeading,
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = guidance.summary,
+                    style = TextStyle(
+                        fontFamily = BodyFont,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        letterSpacing = (-0.15).sp,
+                    ),
+                    color = OmniCardInk,
+                )
+            }
         }
 
         // 3. Actionable Recommendations

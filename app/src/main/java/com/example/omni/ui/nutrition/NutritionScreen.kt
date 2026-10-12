@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -80,13 +81,17 @@ import com.example.omni.ui.components.OmniHeaderState
 import com.example.omni.ui.components.OmniNavBottomGap
 import com.example.omni.ui.components.OmniNavHeight
 import com.example.omni.ui.components.OmniNavItem
+import com.example.omni.ui.components.OmniPlusBadge
+import com.example.omni.ui.theme.BodyFont
 import com.example.omni.ui.theme.NutritionType
 import com.example.omni.ui.theme.OmniArcTrackGrey
 import com.example.omni.ui.theme.OmniAuthHeading
 import com.example.omni.ui.theme.OmniBackground
 import com.example.omni.ui.theme.OmniCardInk
+import com.example.omni.ui.theme.OmniFieldSurface
 import com.example.omni.ui.theme.OmniHeroPink
 import com.example.omni.ui.theme.OmniInk
+import com.example.omni.ui.theme.PlusJakartaSans
 import com.example.omni.ui.theme.OmniNutriChipCarbs
 import com.example.omni.ui.theme.OmniNutriChipFat
 import com.example.omni.ui.theme.OmniNutriChipProtein
@@ -104,7 +109,8 @@ import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.OmniWaterTeal
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.TextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -264,7 +270,7 @@ fun NutritionScreen(
                                 horizontalArrangement = Arrangement.Center,
                             ) {
                                 Text(
-                                    text = selectedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) +
+                                    text = selectedMonth.month.getDisplayName(java.time.format.TextStyle.FULL, Locale.getDefault()) +
                                         " ${selectedMonth.year}",
                                     style = NutritionType.FoodName,
                                     color = OmniInk,
@@ -300,39 +306,14 @@ fun NutritionScreen(
 
                             FoodLogHeader(onLog = { logMethodOpen = true })
 
-                            // The AI Food Coach's entry — one slim row above the log; the sheet renders
-                            // whatever the server decided (guidance, the daily limit, or a failure).
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 10.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(OmniNutriDaySurface)
-                                    .clickable {
-                                        onOpenCoach()
-                                        coachOpen = true
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "AI Coach",
-                                        style = NutritionType.FoodCalories,
-                                        color = OmniCardInk,
-                                    )
-                                    Text(
-                                        text = "Your daily guidance · Omni+",
-                                        style = NutritionType.FoodCalories,
-                                        color = OmniNutriMacroLabel,
-                                    )
-                                }
-                                Image(
-                                    painter = painterResource(R.drawable.ic_set_arrow_right),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
+                            // The AI Food Coach's entry — visually distinctive premium feature card
+                            Spacer(Modifier.height(12.dp))
+                            AiCoachCard(
+                                onClick = {
+                                    onOpenCoach()
+                                    coachOpen = true
+                                },
+                            )
 
                             if (meals.isEmpty()) {
                                 Spacer(Modifier.height(EmptyGap))
@@ -916,6 +897,112 @@ private fun FoodLogHeader(onLog: () -> Unit) {
 }
 
 /**
+ * The AI Food Coach's entry card on the Nutrition / Food Log screen.
+ *
+ * Visually communicates a dedicated AI-powered premium feature within Omni's Soft-Bento design
+ * system: subtle horizontal gradient with a faint lavender wash, refined border stroke, dedicated
+ * AI sparkles mark, the [OmniPlusBadge], prominent typography, and an understated trailing action.
+ */
+@Composable
+private fun AiCoachCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = ScreenPadding)
+            .pressEffect()
+            .clip(RoundedCornerShape(16.dp))
+            .border(1.dp, OmniAuthHeading.copy(alpha = 0.20f), RoundedCornerShape(16.dp))
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        OmniAuthHeading.copy(alpha = 0.08f),
+                        OmniFieldSurface,
+                    ),
+                ),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // AI identity icon badge
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(OmniAuthHeading.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(OmniAuthHeading),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+
+        Spacer(Modifier.width(14.dp))
+
+        // Titles and description
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "AI Coach",
+                    style = TextStyle(
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        lineHeight = 20.sp,
+                        letterSpacing = (-0.16).sp,
+                    ),
+                    color = OmniCardInk,
+                    maxLines = 1,
+                )
+                OmniPlusBadge()
+            }
+
+            Spacer(Modifier.height(3.dp))
+
+            Text(
+                text = "Personalized daily guidance based on your week",
+                style = TextStyle(
+                    fontFamily = BodyFont,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    letterSpacing = (-0.13).sp,
+                ),
+                color = OmniNutriMacroLabel,
+                maxLines = 2,
+            )
+        }
+
+        Spacer(Modifier.width(10.dp))
+
+        // Trailing arrow affordance in a subtle circular pill
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(OmniBackground.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_set_arrow_right),
+                contentDescription = "Open AI Coach",
+                colorFilter = ColorFilter.tint(OmniInk),
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+/**
  * Figma `Food log entry` (nodes 151:608, 151:582, 151:595) — a name, the calories, three macro chips
  * and a hairline. Fixing the row at its 47 and hanging the hairline off the bottom keeps the gaps
  * between rows at the design's own literal numbers.
@@ -1273,3 +1360,20 @@ private fun previewMeals(): List<Meal> = listOf(
     Meal(id = "two", name = "Rice,fish and vegis", calories = 404, protein = 12f, carbs = 15f, fat = 35f, loggedAt = 2L),
     Meal(id = "three", name = "Rice,fish and vegis", calories = 404, protein = 12f, carbs = 15f, fat = 35f, loggedAt = 3L),
 )
+
+@DevicePreviews
+@Composable
+private fun AiCoachCardPreview() {
+    OmniTheme {
+        DesignFrame {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(OmniBackground)
+                    .padding(vertical = 20.dp),
+            ) {
+                AiCoachCard(onClick = {})
+            }
+        }
+    }
+}
