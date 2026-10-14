@@ -138,6 +138,7 @@ fun GuidesScreen(
                     AdaptiveColumnGrid(
                         items = state.matches,
                         verticalSpacing = CardGap,
+                        key = { it.id },
                     ) { card ->
                         GuideCard(card = card, onClick = { onOpenGuide(card.id) })
                     }

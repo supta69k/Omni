@@ -23,11 +23,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import androidx.compose.runtime.Immutable
+
 /**
  * One tile of the strip, flattened: who, their newest story's cover, and whether the viewer has
  * already seen this author's current story. Unseen authors draw the accent ring; seen ones draw
  * grey — the convention every stories UI has taught since 2016.
  */
+@Immutable
 data class StoryTileState(
     val authorId: String,
     val authorName: String,
@@ -49,6 +52,7 @@ data class StoryTileState(
  *   shape — and the stories within one author's tile are paged inside the viewer.
  * @property mine whether the viewer's own story exists — the strip's first tile.
  */
+@Immutable
 data class StoriesUiState(
     val tiles: List<StoryTileState> = emptyList(),
     val viewerIndex: Int? = null,

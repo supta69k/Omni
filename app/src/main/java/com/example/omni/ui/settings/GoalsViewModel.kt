@@ -1,6 +1,7 @@
 package com.example.omni.ui.settings
 
 import android.util.Log
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.CalorieGoalStep
@@ -48,6 +49,7 @@ enum class GoalKind { WATER, STEPS, SLEEP, FIBER, CALORIES }
  * lets the screen be a `forEach` over five rows instead of five hand-written cards that would drift
  * apart the first time one of them was edited.
  */
+@Immutable
 data class GoalRow(
     val kind: GoalKind,
     val title: String,
@@ -69,6 +71,7 @@ data class GoalRow(
  * @property loading true only until the profile listener's first emission. An account whose document
  *   has no `goals` map is not loading — it has the defaults, which is a real answer.
  */
+@Immutable
 data class GoalsUiState(
     val goals: HealthGoals = HealthGoals(),
     val stored: HealthGoals = HealthGoals(),

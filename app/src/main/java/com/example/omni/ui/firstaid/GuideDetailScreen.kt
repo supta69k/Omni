@@ -141,6 +141,7 @@ fun GuideDetailScreen(
                 items = state.guide.steps,
                 verticalSpacing = StepGap,
                 horizontalSpacing = StepGap,
+                key = { it.order },
             ) { step ->
                 StepCard(
                     step = step,

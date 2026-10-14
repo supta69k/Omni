@@ -184,7 +184,9 @@ private fun OmniApp() {
     // The Omni+ mark on the shared header comes from the one central access flow, so every tab that
     // draws the header shows it (or not) consistently and flips the instant the entitlement changes.
     val omniPlusActive by container.revenueCatRepository.isOmniPlusActive.collectAsStateWithLifecycle()
-    val header = headerUser.copy(unreadNotifications = unreadNotifications, omniPlus = omniPlusActive)
+    val header = remember(headerUser, unreadNotifications, omniPlusActive) {
+        headerUser.copy(unreadNotifications = unreadNotifications, omniPlus = omniPlusActive)
+    }
 
     // rememberSaveable, not remember: configChanges already keeps this across a rotation, but a
     // low-memory process kill recreates the Activity from a bundle, and a router that came back on
@@ -513,6 +515,7 @@ private fun OmniApp() {
 
             AppScreen.DoctorProfile -> {
                 val viewModel: DoctorProfileViewModel = viewModel(
+                    key = "doctor_profile_${doctorUid}",
                     factory = DoctorProfileViewModel.factory(
                         container.doctorRepository,
                         container.userRepository,
@@ -530,6 +533,7 @@ private fun OmniApp() {
 
             AppScreen.DoctorConsultation -> {
                 val viewModel: DoctorConsultationViewModel = viewModel(
+                    key = "doctor_consultation_${doctorUid}",
                     factory = DoctorConsultationViewModel.factory(
                         container.messageRepository,
                         container.authRepository,

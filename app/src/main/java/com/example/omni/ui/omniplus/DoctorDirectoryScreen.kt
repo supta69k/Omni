@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -134,7 +135,7 @@ fun DoctorDirectoryScreen(
                                 onClick = { onSelectSpecialty(null) },
                             )
                         }
-                        items(state.specialties) { specialty ->
+                        items(state.specialties, key = { it }) { specialty ->
                             SpecialtyChip(
                                 label = specialty,
                                 selected = state.selectedSpecialty == specialty,
@@ -146,10 +147,12 @@ fun DoctorDirectoryScreen(
                 }
 
                 // Filtered list
-                val visible = if (state.selectedSpecialty != null) {
-                    state.doctors.filter { it.specialty == state.selectedSpecialty }
-                } else {
-                    state.doctors
+                val visible = remember(state.doctors, state.selectedSpecialty) {
+                    if (state.selectedSpecialty != null) {
+                        state.doctors.filter { it.specialty == state.selectedSpecialty }
+                    } else {
+                        state.doctors
+                    }
                 }
 
                 when {
@@ -200,7 +203,7 @@ fun DoctorDirectoryScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(RowGap),
                         ) {
-                            items(visible) { doctor ->
+                            items(visible, key = { it.uid }) { doctor ->
                                 DoctorCard(
                                     doctor = doctor,
                                     onClick = { onDoctorClick(doctor.uid) },

@@ -166,6 +166,7 @@ fun GoalsScreen(
                     items = state.rows,
                     verticalSpacing = RowGap,
                     horizontalSpacing = RowGap,
+                    key = { it.kind },
                 ) { row ->
                     GoalCard(row = row, onStep = onStep)
                 }

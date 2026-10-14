@@ -165,6 +165,7 @@ fun SavedEmergenciesScreen(
                     items = state.contacts,
                     verticalSpacing = RowGap,
                     horizontalSpacing = RowGap,
+                    key = { it.id },
                 ) { contact ->
                     ContactRow(
                         contact = contact,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -34,6 +35,7 @@ fun adaptiveColumns(): Int = if (LocalDesignWindow.current.isLandscape) 2 else 1
  *
  * @param verticalSpacing gap between stacked items within a column (the list's own row gap).
  * @param horizontalSpacing gap between the two columns in landscape (ignored in portrait).
+ * @param key optional stable identity provider for each item to retain node state across reordering.
  */
 @Composable
 fun <T> AdaptiveColumnGrid(
@@ -41,6 +43,7 @@ fun <T> AdaptiveColumnGrid(
     verticalSpacing: Dp,
     modifier: Modifier = Modifier,
     horizontalSpacing: Dp = 16.dp,
+    key: ((T) -> Any)? = null,
     itemContent: @Composable (T) -> Unit,
 ) {
     val columns = adaptiveColumns()
@@ -49,7 +52,15 @@ fun <T> AdaptiveColumnGrid(
             modifier = modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         ) {
-            items.forEach { itemContent(it) }
+            items.forEachIndexed { index, item ->
+                if (key != null) {
+                    key(key(item)) {
+                        itemContent(item)
+                    }
+                } else {
+                    itemContent(item)
+                }
+            }
         }
         return
     }
@@ -66,7 +77,13 @@ fun <T> AdaptiveColumnGrid(
                 // Round-robin: this column gets every item whose index mod columns == col.
                 items.forEachIndexed { index, item ->
                     if (index % columns == col) {
-                        itemContent(item)
+                        if (key != null) {
+                            key(key(item)) {
+                                itemContent(item)
+                            }
+                        } else {
+                            itemContent(item)
+                        }
                     }
                 }
             }

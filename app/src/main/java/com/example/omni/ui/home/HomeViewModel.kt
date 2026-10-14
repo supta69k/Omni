@@ -40,6 +40,9 @@ import kotlin.math.max
  *   the least-read one in the library (rotating between equally-unread guides day to day), so the card
  *   recommends different guides rather than always CPR. [recommendedGuidePercent] is how far it is read.
  */
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class HomeUiState(
     val glasses: Int = 0,
     val steps: Int = 0,
@@ -53,6 +56,7 @@ data class HomeUiState(
 )
 
 /** One first-aid guide the dashboard is recommending: which one, its name, and how far it is read. */
+@Immutable
 data class RecommendedGuide(
     val id: String,
     val title: String,

@@ -38,6 +38,8 @@ import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 
+import androidx.compose.runtime.Immutable
+
 /**
  * One chip in the week strip.
  *
@@ -48,6 +50,7 @@ import java.util.Locale
  *   future date"). Only reachable in the hour either side of midnight, and only then because the strip is
  *   built once per composition while the clock keeps moving.
  */
+@Immutable
 data class DayChipState(
     val date: LocalDate,
     val initial: String,
@@ -64,6 +67,7 @@ data class DayChipState(
  * @property steps, [glasses], [sleepHours] the activity ring page — the same three metrics Home shows, from
  *   the same document, which is why the water goal fix in §3.1 applies to this screen too.
  */
+@Immutable
 data class NutritionUiState(
     val week: List<DayChipState> = emptyList(),
     val selectedIndex: Int = 0,

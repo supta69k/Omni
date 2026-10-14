@@ -24,7 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 
 /**
@@ -178,10 +178,13 @@ object OmniMotion {
         if (!enabled || !animationsEnabled) return@composed this
 
         var pressed by remember { mutableStateOf(false) }
-        val scale = if (pressed) PressScale else 1f
 
         this
-            .scale(scale)
+            .graphicsLayer {
+                val scale = if (pressed) PressScale else 1f
+                scaleX = scale
+                scaleY = scale
+            }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown()

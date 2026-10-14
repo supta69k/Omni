@@ -5,11 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.Doctor
 import com.example.omni.data.repo.DoctorRepository
 import com.example.omni.data.repo.UserRepository
+import androidx.compose.runtime.Immutable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+@Immutable
 data class DoctorDirectoryUiState(
     val doctors: List<Doctor> = emptyList(),
     val isLoading: Boolean = true,
@@ -48,15 +53,21 @@ class DoctorDirectoryViewModel(
      * The tile's `photoUrl` is written at approval time and can lag (a doctor seeded before the copy
      * existed, or one who changed their photo since). The account document is the live source, and it
      * is readable, so a tile without a photo is enriched with the account's — one read per doctor,
-     * cached so a re-emission of the directory does not re-read.
+     * cached so a re-emission of the directory does not re-read. Fetches missing photos in parallel.
      */
     private suspend fun withLivePhotos(doctors: List<Doctor>): List<Doctor> {
-        doctors.forEach { doctor ->
-            if (doctor.photoUrl.isNullOrBlank() && doctor.uid !in resolvedPhotos) {
-                resolvedPhotos[doctor.uid] = runCatching { userRepository.getUser(doctor.uid)?.photoUrl }
-                    .getOrNull()
-                    ?.takeIf { it.isNotBlank() }
+        val missing = doctors.filter { it.photoUrl.isNullOrBlank() && it.uid !in resolvedPhotos }
+        if (missing.isNotEmpty()) {
+            val fetched = coroutineScope {
+                missing.map { doctor ->
+                    async {
+                        doctor.uid to runCatching { userRepository.getUser(doctor.uid)?.photoUrl }
+                            .getOrNull()
+                            ?.takeIf { it.isNotBlank() }
+                    }
+                }.awaitAll()
             }
+            fetched.forEach { (uid, photo) -> resolvedPhotos[uid] = photo }
         }
         return doctors.map { doctor ->
             if (!doctor.photoUrl.isNullOrBlank()) doctor

@@ -224,6 +224,7 @@ fun MessagesScreen(
                         else -> AdaptiveColumnGrid(
                             items = state.patients,
                             verticalSpacing = RowGap,
+                            key = { it.otherUid },
                         ) { conversation ->
                             ConversationRow(
                                 conversation = conversation,
@@ -243,6 +244,7 @@ fun MessagesScreen(
                     else -> AdaptiveColumnGrid(
                         items = state.conversations,
                         verticalSpacing = RowGap,
+                        key = { it.otherUid },
                     ) { conversation ->
                         ConversationRow(
                             conversation = conversation,

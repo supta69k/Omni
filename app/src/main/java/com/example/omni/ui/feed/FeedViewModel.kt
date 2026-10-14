@@ -14,7 +14,11 @@ import com.example.omni.data.repo.MediaRepository
 import com.example.omni.data.repo.PostAuthor
 import com.example.omni.data.repo.UserRepository
 import com.example.omni.data.repo.UserSearchLimit
+import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,6 +51,7 @@ import kotlinx.coroutines.launch
 enum class FeedSegment { Discover, Following }
 
 /** One comment row, flattened for the sheet. */
+@Immutable
 data class CommentRow(
     val id: String,
     /** Who wrote it — carried so the row's avatar can open their page, as the feed's does. */
@@ -71,6 +76,7 @@ data class CommentRow(
  * @property following the uids I follow, live from `users/{myUid}/following` — the *same* set the
  *   Following segment filters on, so the pill on a row and the tab above it can never disagree.
  */
+@Immutable
 data class FeedUiState(
     val segment: FeedSegment = FeedSegment.Discover,
     val posts: List<Post> = emptyList(),
@@ -100,6 +106,7 @@ const val MinSearchQuery = 2
  * states the panel can be in are told apart here rather than guessed at from an empty list: closed
  * ([query] blank), too short to ask, searching, empty-handed, or broken ([error]).
  */
+@Immutable
 data class FeedSearchState(
     val query: String = "",
     val isSearching: Boolean = false,
@@ -437,14 +444,21 @@ class FeedViewModel(
         )
     }
 
-    /** Fetches any of [uids] not already held or already asked for. One read each, once. */
+    /** Fetches any of [uids] not already held or already asked for. Parallelized and batched. */
     private fun resolveAuthors(uids: List<String>) {
         val missing = uids.filter { it.isNotBlank() && requestedAuthors.add(it) }
         if (missing.isEmpty()) return
         viewModelScope.launch {
-            missing.forEach { uid ->
-                val user = userRepository.getUser(uid)
-                if (user != null) authors.value = authors.value + (uid to user)
+            val resolved = coroutineScope {
+                missing.map { uid ->
+                    async {
+                        val user = userRepository.getUser(uid)
+                        if (user != null) uid to user else null
+                    }
+                }.awaitAll().filterNotNull().toMap()
+            }
+            if (resolved.isNotEmpty()) {
+                authors.value = authors.value + resolved
             }
         }
     }

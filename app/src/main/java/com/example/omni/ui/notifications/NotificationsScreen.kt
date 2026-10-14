@@ -172,6 +172,7 @@ fun NotificationsScreen(
                     else -> AdaptiveColumnGrid(
                         items = state.items,
                         verticalSpacing = RowGap,
+                        key = { it.id },
                     ) { item ->
                         NotificationRow(item = item, onClick = { onOpen(item) })
                     }

@@ -102,8 +102,8 @@ private fun MonthSheet(
     onBrowseMonth: (YearMonth) -> Unit,
     onSelectDate: (LocalDate) -> Unit,
 ) {
-    val today = LocalDate.now()
-    val thisMonth = YearMonth.from(today)
+    val today = remember { LocalDate.now() }
+    val thisMonth = remember(today) { YearMonth.from(today) }
 
     // Which column Monday sits in is a local matter — a US calendar starts on Sunday and most of Europe on
     // Monday — so the first column is the locale's, not a constant. The header row and the leading blanks

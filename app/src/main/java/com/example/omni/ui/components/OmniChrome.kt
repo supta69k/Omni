@@ -101,6 +101,9 @@ import kotlinx.coroutines.delay
  * The unread counts are here rather than in the header's parameter list because they arrive from the
  * same document as the name; they are 0 until the Cloud Functions of Phases 10 and 11 maintain them.
  */
+import androidx.compose.runtime.Immutable
+
+@Immutable
 data class OmniHeaderState(
     val userName: String = "Sayed Mahir",
     val photoUrl: String? = null,
