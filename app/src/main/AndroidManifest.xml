@@ -33,6 +33,12 @@
     <!-- Restarting the tracking service after a reboot or an app update. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Health Connect: read aggregated daily steps to supplement the phone's hardware counter.
+         On API 28+ this lets the step count include data from wearables and other synced sources
+         that Google Fit would show but the phone's sensor alone would miss. On API < 28 or when
+         the Health Connect app is not installed, the sensor pipeline remains the sole source. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+
     <!-- Not required: plenty of devices have no pedometer, and the app is perfectly usable without
          one. Marking it required would hide Omni from those devices in the Play Store. -->
     <uses-feature
@@ -121,6 +127,16 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>

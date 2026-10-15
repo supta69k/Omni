@@ -163,6 +163,11 @@ dependencies {
     // declaring it directly so the routing repository does not depend on a transitive version.
     implementation(libs.okhttp)
     implementation(libs.revenuecat)
+    // Health Connect: aggregated daily steps, deduplicated across sources, to close the gap
+    // between Omni's phone-only sensor and Google Fit's multi-source total. Optional: unavailable
+    // on API < 28 or when the user has not installed/enabled Health Connect, in which case the
+    // sensor pipeline is the sole source — no feature is lost.
+    implementation(libs.androidx.health.connect)
     implementation(libs.exyte.navbar)
     testImplementation(libs.junit)
     // `runTest` and the virtual clock, for the ViewModel tests: the profile's state machine is a

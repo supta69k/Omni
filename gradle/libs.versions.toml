@@ -19,6 +19,7 @@ maplibre = "11.11.0"
 okhttp = "4.12.0"
 exyteNavBar = "1.0.0"
 revenuecat = "9.29.1"
+healthConnect = "1.1.0-alpha11"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +55,7 @@ maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.re
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 exyte-navbar = { group = "com.exyte", name = "animated-navigation-bar", version.ref = "exyteNavBar" }
 revenuecat = { group = "com.revenuecat.purchases", name = "purchases", version.ref = "revenuecat" }
+androidx-health-connect = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

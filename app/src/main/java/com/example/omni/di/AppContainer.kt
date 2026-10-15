@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.omni.data.local.HealthConnectStepsSource
 import com.example.omni.data.local.PreferencesStore
 import com.example.omni.data.local.StepCounterSource
 import com.example.omni.data.repo.AuthRepository
@@ -134,6 +135,7 @@ class AppContainer private constructor(
     private val preferencesProvider: () -> PreferencesStore,
     private val applicationProvider: () -> Application,
     private val stepsProvider: (AppContainer) -> StepsRepository,
+    private val healthConnectSourceProvider: () -> HealthConnectStepsSource? = { null },
 ) {
 
     /**
@@ -151,6 +153,12 @@ class AppContainer private constructor(
      * other members of this same object, and doing that eagerly would drag DataStore into every preview.
      */
     val stepsRepository: StepsRepository by lazy { stepsProvider(this) }
+
+    /**
+     * Health Connect aggregated step source — supplementary to the sensor pipeline.
+     * Evaluates to null in previews or when not configured.
+     */
+    val healthConnectSource: HealthConnectStepsSource? by lazy { healthConnectSourceProvider() }
 
     /** Lazy: Play Services should not be dragged into a preview that never asks for a location. */
     val sosRepository: SosRepository by lazy { sosRepositoryProvider() }
@@ -245,6 +253,7 @@ class AppContainer private constructor(
                         metrics = container.metricsRepository,
                     )
                 },
+                healthConnectSourceProvider = { HealthConnectStepsSource(appContext) },
             )
         }
 
@@ -308,6 +317,7 @@ class AppContainer private constructor(
                         current.guideProgressRepository,
                         // Same compiled-in bundle the guides screen uses — no preview/real split.
                         BundledGuideRepository,
+                        current.healthConnectSource,
                     ) as T
                 NutritionViewModel::class.java ->
                     NutritionViewModel(

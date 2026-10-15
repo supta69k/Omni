@@ -348,6 +348,56 @@ class StepStateTest {
         assertEquals(5_000, userA.total)
     }
 
+    @Test
+    fun `delayed or missing sensor events during background suspension accurately credit full delta on next reading`() {
+        // App started and anchored at raw 2_000
+        val state = StepState().reconcile(raw = 2_000, bootId = Boot, date = Today)
+        assertEquals(0, state.total)
+
+        // Device went to sleep in pocket for 2 hours; sensor hub batched or missed intermediate events
+        // Next event jumps directly from 2_000 to 5_157 steps
+        val wakeUpReading = state.reconcile(raw = 5_157, bootId = Boot, date = Today)
+
+        // All 3,157 steps taken during the background gap are fully credited
+        assertEquals(3_157, wakeUpReading.total)
+        assertEquals(5_157, wakeUpReading.anchorRaw)
+    }
+
+    @Test
+    fun `process restart after service death preserves anchor and accumulates subsequent walk delta`() {
+        // State persisted in DataStore before process died
+        val persisted = StepState(
+            date = Today,
+            bootId = Boot,
+            anchorRaw = 8_000,
+            total = 2_500,
+            syncedTotal = 2_500,
+        )
+
+        // Process restarts; sensor delivers next reading at raw 8_450
+        val afterRestart = persisted.reconcile(raw = 8_450, bootId = Boot, date = Today)
+
+        assertEquals(2_950, afterRestart.total) // 2500 + 450
+        assertEquals(8_450, afterRestart.anchorRaw)
+    }
+
+    @Test
+    fun `minor backwards sensor jitter without reboot contributes zero and does not corrupt total`() {
+        val state = StepState(
+            date = Today,
+            bootId = Boot,
+            anchorRaw = 5_000,
+            total = 1_500,
+            syncedTotal = 1_500,
+        )
+
+        // HAL transient jitter reporting slightly lower raw count without reboot
+        val jittered = state.reconcile(raw = 4_995, bootId = Boot, date = Today)
+
+        assertEquals(1_500, jittered.total)
+        assertEquals(4_995, jittered.anchorRaw)
+    }
+
     private companion object {
         const val Boot = 1_757_000_000_000L
         const val Today = "2026-09-10"

@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -17,6 +18,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.omni.MainActivity
 import com.example.omni.R
+import com.example.omni.data.model.todayKey
 import com.example.omni.data.model.todayKeyFlow
 import com.example.omni.di.AppContainer
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +39,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.max
 
 /**
  * The permanent foreground service that owns the step pipeline.
@@ -67,18 +70,48 @@ class OmniTrackingService : Service() {
     private var lastNotificationTime = 0L
     private var pendingUpdateJob: Job? = null
 
+    /**
+     * A lightweight synchronous cache for the last displayed notification values.
+     *
+     * DataStore is the session truth for steps (used by the pipeline and the dashboard), but it is
+     * asynchronous and scoped per uid — both of which make it unsuitable for the five-second window
+     * `startForeground` has to fire in. This SharedPreferences file holds exactly three values — the
+     * last displayed step count, glass count, and the date they belong to — written on every
+     * notification post and read **synchronously** in [onCreate] so the first notification shows the
+     * real count instead of the hardcoded zero that used to cause the "0 → 7,000" jump.
+     *
+     * When the cached date is not today, the cache reads as zero: a stale yesterday's total must not
+     * be shown as today's. The zero in that case is honest — no steps have been counted for the new
+     * day yet — and the pipeline replaces it within milliseconds.
+     */
+    private lateinit var notifCache: SharedPreferences
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+        notifCache = getSharedPreferences(NOTIF_CACHE_FILE, MODE_PRIVATE)
         ensureNotificationChannel()
-        startForegroundWith(steps = 0, glasses = 0)
+
+        // Read the last known values from the synchronous cache so the first notification shows
+        // today's actual count rather than a false zero. If the cache is from a previous day, fall
+        // back to zero — a stale yesterday's total is worse than a momentary zero.
+        val today = todayKey()
+        val cachedDate = notifCache.getString(KEY_CACHE_DATE, null)
+        val cachedSteps = if (cachedDate == today) notifCache.getInt(KEY_CACHE_STEPS, 0) else 0
+        val cachedGlasses = if (cachedDate == today) notifCache.getInt(KEY_CACHE_GLASSES, 0) else 0
+
+        startForegroundWith(steps = cachedSteps, glasses = cachedGlasses)
         observePipeline()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!isForegroundStarted) {
-            startForegroundWith(steps = 0, glasses = 0)
+            val today = todayKey()
+            val cachedDate = notifCache.getString(KEY_CACHE_DATE, null)
+            val cachedSteps = if (cachedDate == today) notifCache.getInt(KEY_CACHE_STEPS, 0) else 0
+            val cachedGlasses = if (cachedDate == today) notifCache.getInt(KEY_CACHE_GLASSES, 0) else 0
+            startForegroundWith(steps = cachedSteps, glasses = cachedGlasses)
         }
         return START_STICKY
     }
@@ -126,8 +159,19 @@ class OmniTrackingService : Service() {
                         }
                         .onStart { emit(0) }
 
-                    combine(
+                    val hcStepsFlow = container.healthConnectSource?.observeAggregatedSteps()
+                        ?.catch { cause ->
+                            Log.w(TAG, "Health Connect steps observation failed for notification", cause)
+                            emit(0)
+                        } ?: flowOf(0)
+
+                    val authoritativeStepsFlow = combine(
                         container.stepsRepository.observeTodaySteps(uid),
+                        hcStepsFlow,
+                    ) { sensorSteps, hcSteps -> max(sensorSteps, hcSteps) }
+
+                    combine(
+                        authoritativeStepsFlow,
                         glassesFlow,
                     ) { steps, glasses -> steps to glasses }
                 }
@@ -157,6 +201,11 @@ class OmniTrackingService : Service() {
             lastNotifiedSteps = steps
             lastNotifiedGlasses = glasses
             lastNotificationTime = System.currentTimeMillis()
+            notifCache.edit()
+                .putInt(KEY_CACHE_STEPS, steps)
+                .putInt(KEY_CACHE_GLASSES, glasses)
+                .putString(KEY_CACHE_DATE, todayKey())
+                .apply()
         } catch (cause: Exception) {
             Log.e(TAG, "Failed to start foreground notification", cause)
         }
@@ -166,33 +215,47 @@ class OmniTrackingService : Service() {
      * Updates the persistent notification, throttling minor step changes to at most once every
      * [NotificationThrottleMillis] while ensuring that major jumps (>= [SignificantStepDiff]),
      * glasses changes, and deferred final updates are delivered promptly.
+     *
+     * Guards against displaying a false zero while the pipeline warms up on the same calendar day.
      */
     private fun updateNotification(steps: Int, glasses: Int) {
+        val today = todayKey()
+        val cachedDate = notifCache.getString(KEY_CACHE_DATE, null)
+
+        // If the day hasn't changed, a step count of 0 while we previously had a positive count
+        // is not-yet-loaded data (pipeline warming up before first sensor event). Do not overwrite
+        // with a false zero.
+        val effectiveSteps = if (steps == 0 && cachedDate == today && lastNotifiedSteps > 0) {
+            lastNotifiedSteps
+        } else {
+            steps
+        }
+
         if (!isForegroundStarted) {
-            startForegroundWith(steps = steps, glasses = glasses)
+            startForegroundWith(steps = effectiveSteps, glasses = glasses)
             return
         }
 
-        if (steps == lastNotifiedSteps && glasses == lastNotifiedGlasses) {
+        if (effectiveSteps == lastNotifiedSteps && glasses == lastNotifiedGlasses) {
             return
         }
 
         val now = System.currentTimeMillis()
         val timeSinceLast = now - lastNotificationTime
-        val stepDiff = abs(steps - lastNotifiedSteps)
+        val stepDiff = abs(effectiveSteps - lastNotifiedSteps)
 
         if (timeSinceLast < NotificationThrottleMillis && stepDiff < SignificantStepDiff && glasses == lastNotifiedGlasses) {
             if (pendingUpdateJob?.isActive != true) {
                 pendingUpdateJob = scope.launch {
                     delay(NotificationThrottleMillis - timeSinceLast)
-                    postNotification(steps, glasses)
+                    postNotification(effectiveSteps, glasses)
                 }
             }
             return
         }
 
         pendingUpdateJob?.cancel()
-        postNotification(steps, glasses)
+        postNotification(effectiveSteps, glasses)
     }
 
     private fun postNotification(steps: Int, glasses: Int) {
@@ -202,6 +265,12 @@ class OmniTrackingService : Service() {
             lastNotifiedSteps = steps
             lastNotifiedGlasses = glasses
             lastNotificationTime = System.currentTimeMillis()
+            // Persist for the next cold start so the notification opens with today's real count.
+            notifCache.edit()
+                .putInt(KEY_CACHE_STEPS, steps)
+                .putInt(KEY_CACHE_GLASSES, glasses)
+                .putString(KEY_CACHE_DATE, todayKey())
+                .apply()
         } catch (cause: Exception) {
             Log.w(TAG, "Failed to post notification update", cause)
         }
@@ -231,6 +300,12 @@ class OmniTrackingService : Service() {
         private const val NOTIFICATION_ID = 41
         private const val NotificationThrottleMillis = 2_000L
         private const val SignificantStepDiff = 10
+
+        /** SharedPreferences file for the notification's last-displayed values. */
+        private const val NOTIF_CACHE_FILE = "omni_notif_cache"
+        private const val KEY_CACHE_STEPS = "steps"
+        private const val KEY_CACHE_GLASSES = "glasses"
+        private const val KEY_CACHE_DATE = "date"
 
         /**
          * Starts the service, but only when it can legally run: on API 29+ the sensor is silent

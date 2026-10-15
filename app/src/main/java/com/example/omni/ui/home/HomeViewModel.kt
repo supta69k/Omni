@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.omni.data.model.DailyMetrics
 import com.example.omni.data.model.todayKey
 import com.example.omni.data.model.todayKeyFlow
+import com.example.omni.data.local.HealthConnectStepsSource
 import com.example.omni.data.repo.AuthRepository
 import com.example.omni.data.repo.GuideProgressRepository
 import com.example.omni.data.repo.GuideRepository
@@ -82,6 +83,7 @@ class HomeViewModel(
     private val stepsRepository: StepsRepository,
     private val guideProgressRepository: GuideProgressRepository,
     private val guideRepository: GuideRepository,
+    private val healthConnectSource: HealthConnectStepsSource? = null,
 ) : ViewModel() {
 
     /** The bundled first-aid library — read once, it does not change while the app runs. */
@@ -159,6 +161,24 @@ class HomeViewModel(
             }
 
     /**
+     * Today's aggregated steps from Health Connect, if available and granted.
+     * When unavailable or denied, emits 0 and deviceSteps remains the sole live source.
+     */
+    private val healthConnectSteps: Flow<Int> = healthConnectSource?.observeAggregatedSteps()
+        ?.catch { cause ->
+            Log.w("Omni", "Health Connect step observation failed", cause)
+            emit(0)
+        } ?: flowOf(0)
+
+    /**
+     * The authoritative live step count for this device: the maximum of the phone's hardware
+     * sensor counter and any multi-source aggregated count from Health Connect (e.g. from Google Fit/wearables).
+     */
+    private val liveSteps: Flow<Int> = combine(deviceSteps, healthConnectSteps) { local, hc ->
+        max(local, hc)
+    }.distinctUntilChanged()
+
+    /**
      * The first-aid guide to recommend on the dashboard card.
      *
      * Rotates through the whole library one guide per day (by the day index), so the card surfaces a
@@ -200,10 +220,10 @@ class HomeViewModel(
      * stored one within seconds of walking, since the sync deliberately lags.
      */
     val uiState: StateFlow<HomeUiState> =
-        combine(metrics, deviceSteps, stepPermission, recommendedGuide, isRefreshing) { day, local, granted, guide, refreshing ->
+        combine(metrics, liveSteps, stepPermission, recommendedGuide, isRefreshing) { day, live, granted, guide, refreshing ->
             HomeUiState(
                 glasses = day.waterGlasses,
-                steps = max(day.steps, local),
+                steps = max(day.steps, live),
                 stepPermissionNeeded = granted == false && stepsRepository.isAvailable,
                 fiberGrams = day.fiberGrams,
                 sleepHours = day.sleepHours,
