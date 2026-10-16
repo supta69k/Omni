@@ -26,6 +26,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import android.os.Build
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -97,6 +101,8 @@ fun HomeScreen(
     recommendedGuideId: String? = null,
     recommendedGuideTitle: String = "CPR",
     recommendedGuidePercent: Int = 0,
+    /** Real-time success events from HomeViewModel when a glass of water is persisted. */
+    waterLoggedEvents: Flow<Long> = emptyFlow(),
     onOpenGuide: (String) -> Unit = {},
     onExploreFirstAid: () -> Unit = {},
     onAddGlass: () -> Unit = {},
@@ -106,6 +112,14 @@ fun HomeScreen(
     onRefresh: () -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
+    var celebrationTrigger by remember { mutableStateOf(0L) }
+    var blurFraction by remember { mutableStateOf(0f) }
+    LaunchedEffect(waterLoggedEvents) {
+        waterLoggedEvents.collect { eventTimestamp ->
+            celebrationTrigger = eventTimestamp
+        }
+    }
+
     DesignFrame {
         OmniTabScaffold(
             selected = OmniNavItem.Home,
@@ -118,96 +132,117 @@ fun HomeScreen(
                     .fillMaxSize()
                     .background(OmniBackground),
             ) {
-                Column(
+                // Background dashboard content — smoothly blurred on Android 12+ (API 31+)
+                // when the water celebration animation appears.
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .statusBarsPadding()
-                        .padding(horizontal = ScreenPadding),
+                        .then(
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurFraction > 0.01f) {
+                                Modifier.blur(10.dp * blurFraction)
+                            } else {
+                                Modifier
+                            }
+                        ),
                 ) {
-                    Spacer(Modifier.height(HeaderHeight + GreetingGap))
-                    HomeGreeting(name = header.greetingName)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .statusBarsPadding()
+                            .padding(horizontal = ScreenPadding),
+                    ) {
+                        Spacer(Modifier.height(HeaderHeight + GreetingGap))
+                        HomeGreeting(name = header.greetingName)
 
-                    Spacer(Modifier.height(BentoGap))
+                        Spacer(Modifier.height(BentoGap))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FirstAidCard(onExplore = onExploreFirstAid)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            WaterCard(
-                                glasses = glasses,
-                                goal = waterGoal,
-                                onAdd = onAddGlass,
-                                modifier = Modifier.weight(WaterCardWeight),
-                            )
-                            StepsCard(
-                                steps = steps,
-                                goal = stepsGoal,
-                                permissionNeeded = stepPermissionNeeded,
-                                onEnableTracking = onEnableStepTracking,
-                                modifier = Modifier.weight(StepsCardWeight),
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(SectionGap))
-
-                    Text(
-                        text = "Daily updates & Recomindation",
-                        style = HomeType.SectionTitle,
-                        color = OmniSectionTitle,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    Spacer(Modifier.height(DashboardGap))
-
-                    AdaptiveRow(
-                        horizontalSpacing = DashboardStackGap,
-                    ) { columnIndex, columnCount ->
-                        if (columnCount <= 1) {
-                            // Portrait is a single column, so all three recommendation cards stack here.
-                            // The first-aid card used to live only in the landscape second column, which
-                            // portrait never renders — that is why it went missing on phones.
-                            Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
-                                FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
-                                SleepCard(
-                                    hours = sleepHours,
-                                    goalHours = sleepGoal,
-                                    onLog = onOpenSleep,
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FirstAidCard(onExplore = onExploreFirstAid)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                WaterCard(
+                                    glasses = glasses,
+                                    goal = waterGoal,
+                                    onAdd = onAddGlass,
+                                    modifier = Modifier.weight(WaterCardWeight),
                                 )
-                                CprCard(
-                                    title = "Learn Basic $recommendedGuideTitle",
-                                    onClick = recommendedGuideId?.let { id -> { onOpenGuide(id) } },
+                                StepsCard(
+                                    steps = steps,
+                                    goal = stepsGoal,
+                                    permissionNeeded = stepPermissionNeeded,
+                                    onEnableTracking = onEnableStepTracking,
+                                    modifier = Modifier.weight(StepsCardWeight),
                                 )
                             }
-                        } else {
-                            when (columnIndex) {
-                                0 -> Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
+                        }
+
+                        Spacer(Modifier.height(SectionGap))
+
+                        Text(
+                            text = "Daily updates & Recomindation",
+                            style = HomeType.SectionTitle,
+                            color = OmniSectionTitle,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        Spacer(Modifier.height(DashboardGap))
+
+                        AdaptiveRow(
+                            horizontalSpacing = DashboardStackGap,
+                        ) { columnIndex, columnCount ->
+                            if (columnCount <= 1) {
+                                // Portrait is a single column, so all three recommendation cards stack here.
+                                // The first-aid card used to live only in the landscape second column, which
+                                // portrait never renders — that is why it went missing on phones.
+                                Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
                                     FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
                                     SleepCard(
                                         hours = sleepHours,
                                         goalHours = sleepGoal,
                                         onLog = onOpenSleep,
                                     )
+                                    CprCard(
+                                        title = "Learn Basic $recommendedGuideTitle",
+                                        onClick = recommendedGuideId?.let { id -> { onOpenGuide(id) } },
+                                    )
                                 }
-                                else -> CprCard(
-                                    title = "Learn Basic $recommendedGuideTitle",
-                                    onClick = recommendedGuideId?.let { id -> { onOpenGuide(id) } },
-                                )
+                            } else {
+                                when (columnIndex) {
+                                    0 -> Column(verticalArrangement = Arrangement.spacedBy(DashboardStackGap)) {
+                                        FiberCard(grams = fiberGrams, goalGrams = fiberGoal)
+                                        SleepCard(
+                                            hours = sleepHours,
+                                            goalHours = sleepGoal,
+                                            onLog = onOpenSleep,
+                                        )
+                                    }
+                                    else -> CprCard(
+                                        title = "Learn Basic $recommendedGuideTitle",
+                                        onClick = recommendedGuideId?.let { id -> { onOpenGuide(id) } },
+                                    )
+                                }
                             }
                         }
+
+                        Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
                     }
 
-                    Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                    OmniHeader(
+                        state = header,
+                        onProfileClick = { onNavigate(OmniNavItem.Setting) },
+                        onMessagesClick = { onNavigate(OmniNavItem.Messages) },
+                        onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
+                    )
                 }
 
-                OmniHeader(
-                    state = header,
-                    onProfileClick = { onNavigate(OmniNavItem.Setting) },
-                    onMessagesClick = { onNavigate(OmniNavItem.Messages) },
-                    onNotificationsClick = { onNavigate(OmniNavItem.Notifications) },
+                // Temporary animated water glass overlay upon successful water logging
+                // Sits on top of the blurred content, remaining perfectly crisp and unblurred.
+                WaterLogCelebrationOverlay(
+                    trigger = celebrationTrigger,
+                    onBlurFractionChange = { blurFraction = it },
                 )
             }
         }

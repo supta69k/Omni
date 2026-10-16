@@ -592,6 +592,7 @@ private fun OmniApp() {
                         screen = AppScreen.FirstAid
                     },
                     onAddGlass = { home.addGlass(waterGoal) },
+                    waterLoggedEvents = home.waterLoggedEvents,
                     onEnableStepTracking = stepPermission::openSystemSettings,
                     // The sleep card leaves for the detailed diary rather than opening the old hours-only
                     // sheet: the diary is the single writer of a night's record, and it keeps

@@ -15,9 +15,12 @@ import com.example.omni.data.repo.MetricsRepository
 import com.example.omni.data.repo.StepsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -260,6 +263,13 @@ class HomeViewModel(
     private var lastGlassAt = 0L
 
     /**
+     * Fires whenever a glass of water has been successfully persisted by [addGlass].
+     * Unbuffered and without replay so navigations do not replay past successes.
+     */
+    private val _waterLoggedEvents = MutableSharedFlow<Long>(extraBufferCapacity = 8)
+    val waterLoggedEvents: SharedFlow<Long> = _waterLoggedEvents.asSharedFlow()
+
+    /**
      * One more glass, on today's document.
      *
      * The date is recomputed here rather than read from [uiState], so a tap at 00:00:01 lands on the new
@@ -292,6 +302,7 @@ class HomeViewModel(
         viewModelScope.launch {
             try {
                 metricsRepository.addGlass(uid, todayKey())
+                _waterLoggedEvents.tryEmit(SystemClock.elapsedRealtime())
             } catch (cause: Exception) {
                 // Only reachable when the rules reject the write; an offline write does not fail, it
                 // queues. Nothing is shown to the user because nothing was optimistically applied — the
