@@ -169,6 +169,10 @@ dependencies {
     // sensor pipeline is the sole source — no feature is lost.
     implementation(libs.androidx.health.connect)
     implementation(libs.exyte.navbar)
+    // Home-screen widgets with Jetpack Glance
+    implementation(libs.androidx.glance)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     testImplementation(libs.junit)
     // `runTest` and the virtual clock, for the ViewModel tests: the profile's state machine is a
     // combine over five flows, and the bug it is guarding against is a timing one — what the page

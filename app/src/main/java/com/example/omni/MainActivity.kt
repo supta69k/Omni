@@ -107,13 +107,47 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_DESTINATION = "com.example.omni.EXTRA_DESTINATION"
+        const val EXTRA_OPEN_LOG_MEAL = "com.example.omni.EXTRA_OPEN_LOG_MEAL"
+        const val DESTINATION_HOME = "home"
+        const val DESTINATION_NUTRITION = "nutrition"
+    }
+
+    private val pendingDestination = mutableStateOf<String?>(null)
+    private val pendingOpenLogMeal = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleWidgetIntent(intent)
         enableEdgeToEdge()
         setContent {
             OmniTheme {
-                OmniApp()
+                OmniApp(
+                    pendingDestination = pendingDestination.value,
+                    pendingOpenLogMeal = pendingOpenLogMeal.value,
+                    onWidgetIntentHandled = {
+                        pendingDestination.value = null
+                        pendingOpenLogMeal.value = false
+                    },
+                )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWidgetIntent(intent)
+    }
+
+    private fun handleWidgetIntent(intent: Intent?) {
+        if (intent == null) return
+        val dest = intent.getStringExtra(EXTRA_DESTINATION)
+        val openLog = intent.getBooleanExtra(EXTRA_OPEN_LOG_MEAL, false)
+        if (dest != null || openLog) {
+            pendingDestination.value = dest
+            pendingOpenLogMeal.value = openLog
         }
     }
 }
@@ -131,7 +165,11 @@ class MainActivity : ComponentActivity() {
  * in `@DevicePreviews`.
  */
 @Composable
-private fun OmniApp() {
+private fun OmniApp(
+    pendingDestination: String? = null,
+    pendingOpenLogMeal: Boolean = false,
+    onWidgetIntentHandled: () -> Unit = {},
+) {
     val container = AppContainer.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -323,6 +361,17 @@ private fun OmniApp() {
             // Covers both a cold start and a sign-out from deep inside the app.
             AuthState.UNAUTHENTICATED ->
                 if (screen == AppScreen.Splash || screen !in EntryScreens) screen = AppScreen.SignIn
+        }
+    }
+
+    // Navigate according to widget intents once authenticated
+    LaunchedEffect(pendingDestination, pendingOpenLogMeal, authState) {
+        if (authState == AuthState.AUTHENTICATED && container.authRepository.isEmailVerified) {
+            if (pendingDestination == MainActivity.DESTINATION_NUTRITION || pendingOpenLogMeal) {
+                screen = AppScreen.Nutrition
+            } else if (pendingDestination == MainActivity.DESTINATION_HOME) {
+                screen = AppScreen.Home
+            }
         }
     }
 
@@ -591,7 +640,10 @@ private fun OmniApp() {
                         pendingGuideId = id
                         screen = AppScreen.FirstAid
                     },
-                    onAddGlass = { home.addGlass(waterGoal) },
+                    onAddGlass = {
+                        home.addGlass(waterGoal)
+                        com.example.omni.widget.OmniWidgetUpdater.updateWaterWidgets(context)
+                    },
                     waterLoggedEvents = home.waterLoggedEvents,
                     onEnableStepTracking = stepPermission::openSystemSettings,
                     // The sleep card leaves for the detailed diary rather than opening the old hours-only
@@ -980,12 +1032,33 @@ private fun OmniApp() {
                     // point into the existing AppScreen.Sleep, not a new screen.
                     onOpenSleep = { screen = AppScreen.Sleep },
                     onNavigate = navigate,
-                    onAddMeal = nutrition::saveMeal,
-                    onEditMeal = nutrition::saveMeal,
-                    onDeleteMeal = nutrition::deleteMeal,
+                    onAddMeal = { meal ->
+                        nutrition.saveMeal(meal)
+                        user?.uid?.let { uid ->
+                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    },
+                    onEditMeal = { meal ->
+                        nutrition.saveMeal(meal)
+                        user?.uid?.let { uid ->
+                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    },
+                    onDeleteMeal = { mealId ->
+                        nutrition.deleteMeal(mealId)
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    },
                     aiMeal = aiMeal,
                     onAnalyzeMeal = nutrition::analyzeMeal,
-                    onConfirmAiMeal = nutrition::confirmAiMeal,
+                    onConfirmAiMeal = { meal ->
+                        nutrition.confirmAiMeal(meal)
+                        user?.uid?.let { uid ->
+                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    },
                     onDismissAiMeal = nutrition::dismissAiMeal,
                     isOmniPlusActive = nutritionOmniPlus,
                     onNeedsPremium = { screen = AppScreen.OmniPlus },
@@ -996,6 +1069,8 @@ private fun OmniApp() {
                     onCoachNeedsPremium = { screen = AppScreen.OmniPlus },
                     isRefreshing = state.isRefreshing,
                     onRefresh = nutrition::refresh,
+                    initialOpenLogMeal = pendingOpenLogMeal,
+                    onLogMealSheetOpened = onWidgetIntentHandled,
                 )
             }
 

@@ -137,6 +137,31 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Native Home-Screen Widgets -->
+        <receiver
+            android:name=".widget.OmniWaterWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_water_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/omni_water_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.OmniFoodWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_food_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/omni_food_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

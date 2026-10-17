@@ -12,4 +12,10 @@
     <string name="tracking_channel_description">Today\'s steps and water, live in the notification panel.</string>
     <string name="tracking_notification_title">%1$d steps today</string>
     <string name="tracking_notification_text">%1$d glasses of water logged</string>
+
+    <!-- Home-screen Widgets -->
+    <string name="widget_water_name">Omni Water Tracker</string>
+    <string name="widget_water_description">Glance daily water progress and quickly log glasses from your home screen.</string>
+    <string name="widget_food_name">Omni Food Log</string>
+    <string name="widget_food_description">Glance today\'s calorie total and quick-log meals directly from your home screen.</string>
 </resources>

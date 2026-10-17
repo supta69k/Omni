@@ -201,6 +201,12 @@ class AppContainer private constructor(
         @Volatile
         private var instance: AppContainer? = null
 
+        fun ensureInit(appContext: Context) {
+            if (instance == null) {
+                init(appContext.applicationContext)
+            }
+        }
+
         fun init(appContext: Context) {
             check(instance == null) { "AppContainer is already initialised" }
             val firestore = FirebaseFirestore.getInstance()

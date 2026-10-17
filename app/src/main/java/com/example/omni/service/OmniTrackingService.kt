@@ -262,9 +262,13 @@ class OmniTrackingService : Service() {
         val notification = buildNotification(steps = steps, glasses = glasses)
         try {
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+            val glassesChanged = lastNotifiedGlasses != glasses
             lastNotifiedSteps = steps
             lastNotifiedGlasses = glasses
             lastNotificationTime = System.currentTimeMillis()
+            if (glassesChanged) {
+                com.example.omni.widget.OmniWidgetUpdater.updateWaterWidgets(this)
+            }
             // Persist for the next cold start so the notification opens with today's real count.
             notifCache.edit()
                 .putInt(KEY_CACHE_STEPS, steps)

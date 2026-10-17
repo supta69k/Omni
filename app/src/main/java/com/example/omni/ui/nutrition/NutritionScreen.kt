@@ -198,18 +198,27 @@ fun NutritionScreen(
     onCoachNeedsPremium: () -> Unit = {},
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
+    initialOpenLogMeal: Boolean = false,
+    onLogMealSheetOpened: () -> Unit = {},
 ) {
     // The log-food sheet is the one thing on this screen the design does not contain. Both the plus and a
     // tap on a row open it; the plus means "new" and the row means "edit". Whether the current open is
     // add or edit is the shape of [editingMeal]: `null`. A blank id is add, a filled one is edit, and
     // that is all [MealEntrySheet] needs to tell the two apart.
-    var isAdding by remember { mutableStateOf(false) }
+    var isAdding by remember { mutableStateOf(initialOpenLogMeal) }
     var editingMeal by remember { mutableStateOf<Meal?>(null) }
     // The "+" now opens a small fork first (Use AI / Manual) rather than the manual sheet directly.
     // `aiOpen` gates the AI flow's own sheet, whose *content* is driven by [aiMeal] from the ViewModel.
     var logMethodOpen by remember { mutableStateOf(false) }
     var aiOpen by remember { mutableStateOf(false) }
     var coachOpen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialOpenLogMeal) {
+        if (initialOpenLogMeal) {
+            isAdding = true
+            onLogMealSheetOpened()
+        }
+    }
 
     val pagerState = rememberPagerState(pageCount = { 2 })
     // Held apart from the remember key list so the ring pages are rebuilt only when a reading changes,
