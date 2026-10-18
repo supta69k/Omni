@@ -605,6 +605,7 @@ private fun OmniApp(
             AppScreen.Home -> {
                 val home: HomeViewModel = viewModel(factory = AppContainer.factory())
                 val state by home.uiState.collectAsStateWithLifecycle()
+                val celebrationTrigger by home.waterLoggedEvents.collectAsStateWithLifecycle(initialValue = 0L)
 
                 // A ViewModel cannot see a permission, so it is told — on entry and on every change,
                 // which is what makes granting it from the system settings screen start the sensor
@@ -620,6 +621,33 @@ private fun OmniApp(
                 // from here. The goals belong to the account, not the day — see [User.waterGoal].
                 val waterGoal = user?.waterGoal ?: DefaultWaterGoal
 
+                val onOpenGuide = remember {
+                    { id: String ->
+                        pendingGuideId = id
+                        screen = AppScreen.FirstAid
+                    }
+                }
+                val onAddGlass = remember(waterGoal, user?.uid) {
+                    {
+                        home.addGlass(waterGoal)
+                        user?.uid?.let { uid ->
+                            val currentGlasses = state.glasses
+                            if (currentGlasses < waterGoal) {
+                                com.example.omni.widget.OmniWidgetStore.saveWaterData(
+                                    context = context,
+                                    uid = uid,
+                                    date = com.example.omni.data.model.todayKey(),
+                                    glasses = currentGlasses + 1,
+                                    goal = waterGoal,
+                                )
+                            }
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateWaterWidgets(context)
+                    }
+                }
+                val onOpenSleep = remember { { screen = AppScreen.Sleep } }
+                val onExploreFirstAid = remember { { screen = AppScreen.FirstAid } }
+
                 HomeScreen(
                     header = header,
                     glasses = state.glasses,
@@ -634,25 +662,14 @@ private fun OmniApp(
                     recommendedGuideId = state.recommendedGuideId,
                     recommendedGuideTitle = state.recommendedGuideTitle,
                     recommendedGuidePercent = state.recommendedGuidePercent,
-                    // Opens the recommended guide itself, not just the list — the First Aid screen
-                    // picks it up and opens it (see the FirstAid branch's LaunchedEffect).
-                    onOpenGuide = { id ->
-                        pendingGuideId = id
-                        screen = AppScreen.FirstAid
-                    },
-                    onAddGlass = {
-                        home.addGlass(waterGoal)
-                        com.example.omni.widget.OmniWidgetUpdater.updateWaterWidgets(context)
-                    },
-                    waterLoggedEvents = home.waterLoggedEvents,
+                    celebrationTrigger = celebrationTrigger,
+                    onOpenGuide = onOpenGuide,
+                    onExploreFirstAid = onExploreFirstAid,
+                    onAddGlass = onAddGlass,
                     onEnableStepTracking = stepPermission::openSystemSettings,
-                    // The sleep card leaves for the detailed diary rather than opening the old hours-only
-                    // sheet: the diary is the single writer of a night's record, and it keeps
-                    // `DailyMetrics.sleepHours` — which this card reads — in step on every save.
-                    onOpenSleep = { screen = AppScreen.Sleep },
-                    onExploreFirstAid = { screen = AppScreen.FirstAid },
+                    onOpenSleep = onOpenSleep,
                     onNavigate = navigate,
-                    onRefresh = { home.refresh() },
+                    onRefresh = home::refresh,
                     isRefreshing = state.isRefreshing,
                 )
             }
@@ -1006,6 +1023,43 @@ private fun OmniApp(
 
                 // The day on screen follows the chip, so the goals passed here — which belong to the
                 // account — are what the rings and the gauge draw against, whatever day is selected.
+                val onSelectDay = remember { { day: com.example.omni.ui.nutrition.DayChipState -> nutrition.onSelectDay(day.date) } }
+                val onOpenSleep = remember { { screen = AppScreen.Sleep } }
+                val onAddMeal = remember(user?.uid) {
+                    { meal: com.example.omni.data.model.Meal ->
+                        nutrition.saveMeal(meal)
+                        user?.uid?.let { uid ->
+                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    }
+                }
+                val onEditMeal = remember(user?.uid) {
+                    { meal: com.example.omni.data.model.Meal ->
+                        nutrition.saveMeal(meal)
+                        user?.uid?.let { uid ->
+                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    }
+                }
+                val onDeleteMeal = remember {
+                    { mealId: String ->
+                        nutrition.deleteMeal(mealId)
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    }
+                }
+                val onConfirmAiMeal = remember(user?.uid) {
+                    { meal: com.example.omni.data.model.Meal ->
+                        nutrition.confirmAiMeal(meal)
+                        user?.uid?.let { uid ->
+                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
+                        }
+                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
+                    }
+                }
+                val onNeedsPremium = remember { { screen = AppScreen.OmniPlus } }
+
                 NutritionScreen(
                     header = header,
                     week = state.week,
@@ -1027,46 +1081,23 @@ private fun OmniApp(
                     sleepHours = state.sleepHours,
                     sleepGoal = user?.sleepGoal ?: DefaultSleepGoal,
                     calorieGoal = user?.calorieGoal ?: DefaultCalorieGoal,
-                    onSelectDay = { nutrition.onSelectDay(it.date) },
-                    // The sleep ring opens the same diary the Home sleep card does — a second entry
-                    // point into the existing AppScreen.Sleep, not a new screen.
-                    onOpenSleep = { screen = AppScreen.Sleep },
+                    onSelectDay = onSelectDay,
+                    onOpenSleep = onOpenSleep,
                     onNavigate = navigate,
-                    onAddMeal = { meal ->
-                        nutrition.saveMeal(meal)
-                        user?.uid?.let { uid ->
-                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
-                        }
-                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
-                    },
-                    onEditMeal = { meal ->
-                        nutrition.saveMeal(meal)
-                        user?.uid?.let { uid ->
-                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
-                        }
-                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
-                    },
-                    onDeleteMeal = { mealId ->
-                        nutrition.deleteMeal(mealId)
-                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
-                    },
+                    onAddMeal = onAddMeal,
+                    onEditMeal = onEditMeal,
+                    onDeleteMeal = onDeleteMeal,
                     aiMeal = aiMeal,
                     onAnalyzeMeal = nutrition::analyzeMeal,
-                    onConfirmAiMeal = { meal ->
-                        nutrition.confirmAiMeal(meal)
-                        user?.uid?.let { uid ->
-                            com.example.omni.widget.OmniWidgetStore.addRecentMeal(context, uid, meal)
-                        }
-                        com.example.omni.widget.OmniWidgetUpdater.updateAllWidgets(context)
-                    },
+                    onConfirmAiMeal = onConfirmAiMeal,
                     onDismissAiMeal = nutrition::dismissAiMeal,
                     isOmniPlusActive = nutritionOmniPlus,
-                    onNeedsPremium = { screen = AppScreen.OmniPlus },
+                    onNeedsPremium = onNeedsPremium,
                     coachState = coachState,
                     onOpenCoach = nutrition::openCoach,
                     onRetryCoach = nutrition::retryCoach,
                     onDismissCoach = nutrition::dismissCoach,
-                    onCoachNeedsPremium = { screen = AppScreen.OmniPlus },
+                    onCoachNeedsPremium = onNeedsPremium,
                     isRefreshing = state.isRefreshing,
                     onRefresh = nutrition::refresh,
                     initialOpenLogMeal = pendingOpenLogMeal,

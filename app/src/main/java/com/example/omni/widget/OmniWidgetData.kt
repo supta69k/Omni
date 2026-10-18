@@ -9,7 +9,11 @@ import com.example.omni.data.model.Meal
 import com.example.omni.data.model.MealSlot
 import com.example.omni.data.model.todayKey
 import com.example.omni.di.AppContainer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
@@ -80,6 +84,12 @@ object OmniWidgetStore {
 
     private const val MAX_RECENT_MEALS = 4
 
+    @Volatile
+    private var inMemoryRecentUid: String? = null
+    @Volatile
+    private var inMemoryRecentMeals: List<Meal>? = null
+    private val diskScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     /**
      * Loads the current water widget data.
      * Checks authentication and day rollover, synchronizing with the repository.
@@ -102,9 +112,20 @@ object OmniWidgetStore {
             prefs.getInt(KEY_WATER_GOAL, DefaultWaterGoal)
         } else DefaultWaterGoal
 
-        // Query fresh metrics with a short timeout to catch any cloud/local updates
+        // Fast path: if valid local cache already exists for today and current user, return immediately!
+        // Avoids opening and closing heavy Firestore snapshot listeners on every widget render.
+        if (cachedUid == currentUid && cachedDate == today && prefs.contains(KEY_WATER_GLASSES)) {
+            return WaterWidgetData(
+                glasses = cachedGlasses,
+                goal = cachedGoal.coerceAtLeast(1),
+                date = today,
+                isAuthenticated = true,
+            )
+        }
+
+        // Cache missing, empty, or from previous day — query fresh metrics with a short timeout
         val freshMetrics = runCatching {
-            withTimeoutOrNull(1500L) {
+            withTimeoutOrNull(800L) {
                 container.metricsRepository.observeDay(currentUid, today).firstOrNull()
             }
         }.getOrNull()
@@ -182,9 +203,23 @@ object OmniWidgetStore {
             getRecentMeals(context, currentUid)
         } else emptyList()
 
+        // Fast path: if valid local cache already exists for today and current user, return immediately!
+        if (cachedUid == currentUid && cachedDate == today && prefs.contains(KEY_CALORIES)) {
+            return FoodWidgetData(
+                calories = cachedCalories,
+                calorieGoal = cachedGoal,
+                protein = cachedProtein,
+                carbs = cachedCarbs,
+                fat = cachedFat,
+                recentMeals = recentMeals,
+                date = today,
+                isAuthenticated = true,
+            )
+        }
+
         // Check fresh metrics with short timeout
         val freshMetrics = runCatching {
-            withTimeoutOrNull(1500L) {
+            withTimeoutOrNull(800L) {
                 container.metricsRepository.observeDay(currentUid, today).firstOrNull()
             }
         }.getOrNull()
@@ -272,34 +307,49 @@ object OmniWidgetStore {
         // Deduplicate by name (case-insensitive)
         currentList.removeAll { it.name.trim().equals(meal.name.trim(), ignoreCase = true) }
         currentList.add(0, meal)
-
         val trimmed = currentList.take(MAX_RECENT_MEALS)
-        val jsonArray = JSONArray()
-        trimmed.forEach { item ->
-            val obj = JSONObject().apply {
-                put("id", item.id)
-                put("name", item.name)
-                put("slot", item.slot.name)
-                put("calories", item.calories)
-                put("protein", item.protein.toDouble())
-                put("carbs", item.carbs.toDouble())
-                put("fat", item.fat.toDouble())
-                put("fiber", item.fiber.toDouble())
-            }
-            jsonArray.put(obj)
-        }
 
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString(KEY_UID, uid)
-            .putString(KEY_RECENT_MEALS, jsonArray.toString())
-            .apply()
+        // Instant in-memory cache update
+        inMemoryRecentUid = uid
+        inMemoryRecentMeals = trimmed
+
+        // Persist to disk asynchronously off the main UI thread
+        diskScope.launch {
+            try {
+                val jsonArray = JSONArray()
+                trimmed.forEach { item ->
+                    val obj = JSONObject().apply {
+                        put("id", item.id)
+                        put("name", item.name)
+                        put("slot", item.slot.name)
+                        put("calories", item.calories)
+                        put("protein", item.protein.toDouble())
+                        put("carbs", item.carbs.toDouble())
+                        put("fat", item.fat.toDouble())
+                        put("fiber", item.fiber.toDouble())
+                    }
+                    jsonArray.put(obj)
+                }
+
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString(KEY_UID, uid)
+                    .putString(KEY_RECENT_MEALS, jsonArray.toString())
+                    .apply()
+            } catch (e: Exception) {
+                Log.w("OmniWidget", "Failed to persist recent meals to cache", e)
+            }
+        }
     }
 
     /**
      * Reads cached recent meals for the signed-in user.
      */
     fun getRecentMeals(context: Context, uid: String): List<Meal> {
+        if (inMemoryRecentUid == uid && inMemoryRecentMeals != null) {
+            return inMemoryRecentMeals!!
+        }
+
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val cachedUid = prefs.getString(KEY_UID, null)
         if (cachedUid != uid) return emptyList()
@@ -324,6 +374,8 @@ object OmniWidgetStore {
                     )
                 )
             }
+            inMemoryRecentUid = uid
+            inMemoryRecentMeals = result
             result
         } catch (e: Exception) {
             Log.w("OmniWidget", "Failed to parse recent meals from cache", e)

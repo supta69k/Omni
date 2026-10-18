@@ -100,7 +100,15 @@ fun WaterLogCelebrationOverlay(
                     durationMillis = AnimationDurationMillis,
                     easing = LinearEasing,
                 ),
-            )
+            ) {
+                val p = value
+                val fraction = when {
+                    p < 0.20f -> (p / 0.20f).coerceIn(0f, 1f)
+                    p > 0.82f -> (1f - (p - 0.82f) / 0.18f).coerceIn(0f, 1f)
+                    else -> 1f
+                }
+                onBlurFractionChange?.invoke(fraction)
+            }
         } finally {
             onBlurFractionChange?.invoke(0f)
             isPlaying = false
@@ -122,10 +130,6 @@ fun WaterLogCelebrationOverlay(
         p < 0.20f -> (p / 0.20f).coerceIn(0f, 1f)
         p > 0.82f -> (1f - (p - 0.82f) / 0.18f).coerceIn(0f, 1f)
         else -> 1f
-    }
-
-    LaunchedEffect(blurFraction) {
-        onBlurFractionChange?.invoke(blurFraction)
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────

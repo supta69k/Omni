@@ -151,13 +151,16 @@ class OmniTrackingService : Service() {
                     stopSelf()
                     flowOf(0 to 0)
                 } else {
+                    val cachedDate = notifCache.getString(KEY_CACHE_DATE, null)
+                    val cachedGlasses = if (cachedDate == today) notifCache.getInt(KEY_CACHE_GLASSES, 0) else 0
+
                     val glassesFlow = container.metricsRepository.observeDay(uid, today)
                         .map { it?.waterGlasses ?: 0 }
                         .catch { cause ->
                             Log.w(TAG, "Failed to observe water glasses for notification", cause)
                             emit(0)
                         }
-                        .onStart { emit(0) }
+                        .onStart { emit(cachedGlasses) }
 
                     val hcStepsFlow = container.healthConnectSource?.observeAggregatedSteps()
                         ?.catch { cause ->

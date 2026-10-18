@@ -20,16 +20,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import android.os.Build
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -101,8 +98,8 @@ fun HomeScreen(
     recommendedGuideId: String? = null,
     recommendedGuideTitle: String = "CPR",
     recommendedGuidePercent: Int = 0,
-    /** Real-time success events from HomeViewModel when a glass of water is persisted. */
-    waterLoggedEvents: Flow<Long> = emptyFlow(),
+    /** Celebration trigger timestamp (monotonic, stable primitive). */
+    celebrationTrigger: Long = 0L,
     onOpenGuide: (String) -> Unit = {},
     onExploreFirstAid: () -> Unit = {},
     onAddGlass: () -> Unit = {},
@@ -112,13 +109,7 @@ fun HomeScreen(
     onRefresh: () -> Unit = {},
     isRefreshing: Boolean = false,
 ) {
-    var celebrationTrigger by remember { mutableStateOf(0L) }
-    var blurFraction by remember { mutableStateOf(0f) }
-    LaunchedEffect(waterLoggedEvents) {
-        waterLoggedEvents.collect { eventTimestamp ->
-            celebrationTrigger = eventTimestamp
-        }
-    }
+    var blurFraction by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
 
     DesignFrame {
         OmniTabScaffold(
@@ -133,17 +124,23 @@ fun HomeScreen(
                     .background(OmniBackground),
             ) {
                 // Background dashboard content — smoothly blurred on Android 12+ (API 31+)
-                // when the water celebration animation appears.
+                // via draw-phase graphicsLayer (zero recompositions of HomeScreen during animation).
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && blurFraction > 0.01f) {
-                                Modifier.blur(10.dp * blurFraction)
-                            } else {
-                                Modifier
+                        .graphicsLayer {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                val fraction = blurFraction
+                                renderEffect = if (fraction > 0.01f) {
+                                    BlurEffect(
+                                        radiusX = 10.dp.toPx() * fraction,
+                                        radiusY = 10.dp.toPx() * fraction,
+                                    )
+                                } else {
+                                    null
+                                }
                             }
-                        ),
+                        },
                 ) {
                     Column(
                         modifier = Modifier
