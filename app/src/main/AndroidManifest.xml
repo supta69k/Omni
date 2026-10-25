@@ -33,6 +33,10 @@
     <!-- Restarting the tracking service after a reboot or an app update. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Battery optimization exemption and wake lock for 24/7 background step counting and sensor event delivery. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- Health Connect: read aggregated daily steps to supplement the phone's hardware counter.
          On API 28+ this lets the step count include data from wearables and other synced sources
          that Google Fit would show but the phone's sensor alone would miss. On API < 28 or when
@@ -94,14 +98,17 @@
             android:exported="false"
             android:foregroundServiceType="health" />
 
-        <!-- Restarts the tracking service after a reboot or an app update. MIUI additionally gates
-             this behind the app's Autostart toggle. -->
+        <!-- Restarts the tracking service after a reboot, an app update, or a watchdog trigger.
+             MIUI/ColorOS additionally benefit from Omni's Autostart / Background Run toggles. -->
         <receiver
             android:name=".service.OmniBootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.example.omni.action.WATCHDOG_RESTART" />
             </intent-filter>
         </receiver>
 

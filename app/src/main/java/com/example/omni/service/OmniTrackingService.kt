@@ -1,5 +1,6 @@
 package com.example.omni.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -12,12 +13,14 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.omni.MainActivity
 import com.example.omni.R
+import com.example.omni.data.model.AuthState
 import com.example.omni.data.model.todayKey
 import com.example.omni.data.model.todayKeyFlow
 import com.example.omni.di.AppContainer
@@ -116,6 +119,17 @@ class OmniTrackingService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.i(TAG, "onTaskRemoved: app swiped from recents; re-asserting foreground and scheduling watchdog")
+        val today = todayKey()
+        val cachedDate = notifCache.getString(KEY_CACHE_DATE, null)
+        val cachedSteps = if (cachedDate == today) notifCache.getInt(KEY_CACHE_STEPS, 0) else 0
+        val cachedGlasses = if (cachedDate == today) notifCache.getInt(KEY_CACHE_GLASSES, 0) else 0
+        startForegroundWith(steps = cachedSteps, glasses = cachedGlasses)
+        scheduleWatchdogRestart(this)
+    }
+
     override fun onDestroy() {
         scope.cancel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -132,7 +146,11 @@ class OmniTrackingService : Service() {
             CHANNEL_ID,
             getString(R.string.tracking_channel_name),
             NotificationManager.IMPORTANCE_LOW,
-        ).apply { description = getString(R.string.tracking_channel_description) }
+        ).apply {
+            description = getString(R.string.tracking_channel_description)
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
@@ -140,21 +158,41 @@ class OmniTrackingService : Service() {
      * The pipeline is keyed on the session and the date — the same keys the dashboard uses — so a
      * sign-out/in or a midnight swaps the flows instead of leaking one account's state into the
      * next, and the re-collected pipeline re-seeds through [com.example.omni.data.local.seedForRollover]
-     * on its way up. When signed out (`uid == null`), the service detaches and stops itself.
+     * on its way up.
+     *
+     * Unlike before, this does NOT immediately stop itself while Firebase Auth is loading on startup.
+     * Instead, it falls back to the locally cached session UID so background step counting continues
+     * seamlessly across restarts, and only terminates if the user is explicitly signed out.
      */
     private fun observePipeline() {
         val container = AppContainer.current
-        combine(container.authRepository.sessionUid, todayKeyFlow()) { uid, today -> uid to today }
+        combine(
+            container.authRepository.sessionUid,
+            container.authRepository.authState,
+            todayKeyFlow(),
+        ) { uid, authState, today -> Triple(uid, authState, today) }
             .distinctUntilChanged()
-            .flatMapLatest { (uid, today) ->
-                if (uid == null) {
+            .flatMapLatest { (sessionUid, authState, today) ->
+                val cachedUid = notifCache.getString(KEY_CACHE_UID, null)
+                val effectiveUid = sessionUid ?: cachedUid
+
+                if (authState == AuthState.UNAUTHENTICATED && effectiveUid == null) {
+                    Log.i(TAG, "User unauthenticated; stopping tracking service")
                     stopSelf()
                     flowOf(0 to 0)
+                } else if (effectiveUid == null) {
+                    // Auth is still resolving and no cached UID is present; wait without stopping
+                    Log.d(TAG, "Waiting for auth state to resolve...")
+                    flowOf(0 to 0)
                 } else {
+                    if (sessionUid != null && sessionUid != cachedUid) {
+                        notifCache.edit().putString(KEY_CACHE_UID, sessionUid).apply()
+                    }
+
                     val cachedDate = notifCache.getString(KEY_CACHE_DATE, null)
                     val cachedGlasses = if (cachedDate == today) notifCache.getInt(KEY_CACHE_GLASSES, 0) else 0
 
-                    val glassesFlow = container.metricsRepository.observeDay(uid, today)
+                    val glassesFlow = container.metricsRepository.observeDay(effectiveUid, today)
                         .map { it?.waterGlasses ?: 0 }
                         .catch { cause ->
                             Log.w(TAG, "Failed to observe water glasses for notification", cause)
@@ -169,7 +207,7 @@ class OmniTrackingService : Service() {
                         } ?: flowOf(0)
 
                     val authoritativeStepsFlow = combine(
-                        container.stepsRepository.observeTodaySteps(uid),
+                        container.stepsRepository.observeTodaySteps(effectiveUid),
                         hcStepsFlow,
                     ) { sensorSteps, hcSteps -> max(sensorSteps, hcSteps) }
 
@@ -291,6 +329,8 @@ class OmniTrackingService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_WORKOUT)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(
                 PendingIntent.getActivity(
                     this,
@@ -308,11 +348,15 @@ class OmniTrackingService : Service() {
         private const val NotificationThrottleMillis = 2_000L
         private const val SignificantStepDiff = 10
 
+        const val ACTION_WATCHDOG_RESTART = "com.example.omni.action.WATCHDOG_RESTART"
+        private const val WATCHDOG_REQUEST_CODE = 4141
+
         /** SharedPreferences file for the notification's last-displayed values. */
         private const val NOTIF_CACHE_FILE = "omni_notif_cache"
         private const val KEY_CACHE_STEPS = "steps"
         private const val KEY_CACHE_GLASSES = "glasses"
         private const val KEY_CACHE_DATE = "date"
+        private const val KEY_CACHE_UID = "uid"
 
         /**
          * Starts the service, but only when it can legally run: on API 29+ the sensor is silent
@@ -330,10 +374,18 @@ class OmniTrackingService : Service() {
                 Log.i(TAG, "Tracking service not started — ACTIVITY_RECOGNITION not granted yet")
                 return
             }
-            val uid = AppContainer.current.authRepository.currentUid
-            if (uid == null) {
+            AppContainer.ensureInit(context)
+            val notifCache = context.getSharedPreferences(NOTIF_CACHE_FILE, MODE_PRIVATE)
+            val cachedUid = notifCache.getString(KEY_CACHE_UID, null)
+            val currentUid = AppContainer.current.authRepository.currentUid
+            val effectiveUid = currentUid ?: cachedUid
+
+            if (effectiveUid == null) {
                 Log.i(TAG, "Tracking service not started — no authenticated user")
                 return
+            }
+            if (currentUid != null && currentUid != cachedUid) {
+                notifCache.edit().putString(KEY_CACHE_UID, currentUid).apply()
             }
             try {
                 ContextCompat.startForegroundService(context, Intent(context, OmniTrackingService::class.java))
@@ -344,9 +396,43 @@ class OmniTrackingService : Service() {
 
         fun stop(context: Context) {
             try {
+                val notifCache = context.getSharedPreferences(NOTIF_CACHE_FILE, MODE_PRIVATE)
+                notifCache.edit().remove(KEY_CACHE_UID).apply()
                 context.stopService(Intent(context, OmniTrackingService::class.java))
             } catch (cause: Exception) {
                 Log.w(TAG, "Could not stop tracking service", cause)
+            }
+        }
+
+        /**
+         * Schedules an AlarmManager alarm targeting OmniBootReceiver to revive the service in case
+         * an aggressive OEM task-killer terminates the process on recents swipe.
+         */
+        fun scheduleWatchdogRestart(context: Context) {
+            runCatching {
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                    ?: return
+                val restartIntent = Intent(context, OmniBootReceiver::class.java).apply {
+                    action = ACTION_WATCHDOG_RESTART
+                }
+                val pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    WATCHDOG_REQUEST_CODE,
+                    restartIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                val triggerAt = SystemClock.elapsedRealtime() + 1_500L
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+                    } else {
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+                    }
+                } else {
+                    alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent)
+                }
+            }.onFailure { cause ->
+                Log.w(TAG, "Could not schedule watchdog restart alarm", cause)
             }
         }
     }

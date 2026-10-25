@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -361,6 +362,12 @@ private fun OmniApp(
             // Covers both a cold start and a sign-out from deep inside the app.
             AuthState.UNAUTHENTICATED ->
                 if (screen == AppScreen.Splash || screen !in EntryScreens) screen = AppScreen.SignIn
+        }
+    }
+
+    LaunchedEffect(authState) {
+        if (authState == AuthState.AUTHENTICATED) {
+            OmniTrackingService.start(context)
         }
     }
 
@@ -1633,9 +1640,17 @@ private fun rememberStepPermission(): StepPermission {
     val asked = remember { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        val stepGranted = results[Manifest.permission.ACTIVITY_RECOGNITION] ?: hasStepPermission(context)
-        granted = stepGranted
-        if (stepGranted) OmniTrackingService.start(context)
+        val stepGranted = (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            results[Manifest.permission.ACTIVITY_RECOGNITION] == true ||
+            context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
+        val notifGranted = (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            results[Manifest.permission.POST_NOTIFICATIONS] == true ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+        granted = stepGranted && notifGranted
+        if (stepGranted) {
+            OmniTrackingService.start(context)
+            requestIgnoreBatteryOptimizations(context)
+        }
     }
 
     // A grant made on the system settings screen never comes back through the launcher, so the answer is
@@ -1643,7 +1658,11 @@ private fun rememberStepPermission(): StepPermission {
     // effect — Android restarts the process on a revoke, but a re-read costs nothing and is honest.
     LifecycleResumeEffect(Unit) {
         granted = hasStepPermission(context)
-        if (granted) OmniTrackingService.start(context)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+        ) {
+            OmniTrackingService.start(context)
+        }
         onPauseOrDispose { }
     }
 
@@ -1666,6 +1685,8 @@ private fun rememberStepPermission(): StepPermission {
                 }
                 if (perms.isNotEmpty()) {
                     launcher.launch(perms.toTypedArray())
+                } else {
+                    requestIgnoreBatteryOptimizations(context)
                 }
             },
             openSettings = {
@@ -1865,15 +1886,43 @@ private fun Context.startActivitySafely(intent: Intent) {
 private const val EmergencyNumber = "999"
 
 /**
- * Whether the app may read the step counter.
+ * Whether the app may read the step counter and display its ongoing tracking notification.
  *
- * True by construction below API 29: the permission did not exist as a runtime one there, and the manifest
- * declaration is the whole of it. Asking for it on those versions would return a refusal.
+ * Checks ACTIVITY_RECOGNITION on API 29+ and POST_NOTIFICATIONS on API 33+.
  */
-private fun hasStepPermission(context: Context): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-        context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) ==
-        PackageManager.PERMISSION_GRANTED
+private fun hasStepPermission(context: Context): Boolean {
+    val activityRecognition = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+        context.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+    val postNotifications = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    return activityRecognition && postNotifications
+}
+
+private fun isIgnoringBatteryOptimizations(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+        return powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+    }
+    return true
+}
+
+private fun requestIgnoreBatteryOptimizations(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !isIgnoringBatteryOptimizations(context)) {
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:${context.packageName}")
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                context.startActivity(intent)
+            } catch (e2: Exception) {
+                Log.w("Omni", "Could not open battery optimization settings", e2)
+            }
+        }
+    }
+}
 
 /**
  * Set this to a screen to bypass the auth gate and open straight onto it for a pixel-comparison pass
