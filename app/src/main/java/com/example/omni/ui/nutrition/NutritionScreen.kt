@@ -317,8 +317,9 @@ fun NutritionScreen(
                             FoodLogHeader(onLog = { logMethodOpen = true })
 
                             // The AI Food Coach's entry — visually distinctive premium feature card
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(14.dp))
                             AiCoachCard(
+                                isOmniPlus = isOmniPlusActive,
                                 onClick = {
                                     onOpenCoach()
                                     coachOpen = true
@@ -908,109 +909,252 @@ private fun FoodLogHeader(onLog: () -> Unit) {
     }
 }
 
+private val AiCoachBadgeGradient = listOf(
+    Color(0xFF8D84F9),
+    Color(0xFFAE96EF),
+    Color(0xFFF1BBDC),
+    Color(0xFFFEEBA9),
+    Color(0xFFAFDFDF),
+)
+
+private val AiCoachBorderGradient = listOf(
+    Color(0xFFF1BBDC),
+    Color(0xFF8D84F9),
+    Color(0xFFB184E1),
+    Color(0x45B3E1E1),
+)
+
 /**
  * The AI Food Coach's entry card on the Nutrition / Food Log screen.
  *
- * Visually communicates a dedicated AI-powered premium feature within Omni's Soft-Bento design
- * system: subtle horizontal gradient with a faint lavender wash, refined border stroke, dedicated
- * AI sparkles mark, the [OmniPlusBadge], prominent typography, and an understated trailing action.
+ * Designed in the spirit of Omni's premium gatecards: rich dark [OmniInk] canvas with an
+ * iridescent multi-stop border, signature 5-stop Omni Plus gradient badge, gleaming sparkles,
+ * authoritative typography, and a prominent CTA pill with the rotated arrow.
  */
 @Composable
 private fun AiCoachCard(
+    isOmniPlus: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = ScreenPadding)
             .pressEffect()
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, OmniAuthHeading.copy(alpha = 0.20f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(AiCoachBorderGradient),
+                shape = RoundedCornerShape(18.dp),
+            )
             .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        OmniAuthHeading.copy(alpha = 0.08f),
-                        OmniFieldSurface,
-                    ),
+                Brush.linearGradient(
+                    0.0f to Color(0xFF383145),
+                    0.35f to Color(0xFF2B2633),
+                    1.0f to OmniInk,
                 ),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
-        // AI identity icon badge
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(OmniAuthHeading.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_omniplus_sparkles),
-                contentDescription = null,
-                colorFilter = ColorFilter.tint(OmniAuthHeading),
-                modifier = Modifier.size(18.dp),
-            )
-        }
-
-        Spacer(Modifier.width(14.dp))
-
-        // Titles and description
-        Column(modifier = Modifier.weight(1f)) {
+            // ---- Top Header: Badge + Tier / Quota indicator ----
             Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Iridescent Omni Plus AI Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White.copy(alpha = 0.09f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 9.dp, vertical = 4.5.dp),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = "AI COACH",
+                        style = TextStyle(
+                            brush = Brush.horizontalGradient(AiCoachBadgeGradient),
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 0.9.sp,
+                        ),
+                    )
+                }
+
+                // Member tier or daily session status
+                if (isOmniPlus) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(Color(0xFF7AE582)),
+                        )
+                        Text(
+                            text = "Omni+ · Unlimited",
+                            style = TextStyle(
+                                fontFamily = BodyFont,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 11.sp,
+                                letterSpacing = (-0.11).sp,
+                            ),
+                            color = Color.White.copy(alpha = 0.85f),
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "Daily Session",
+                            style = TextStyle(
+                                fontFamily = BodyFont,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 11.sp,
+                                letterSpacing = (-0.11).sp,
+                            ),
+                            color = Color(0xFFDADADA),
+                        )
+                    }
+                }
+            }
+
+            // ---- Body: Hero Headline & Narrative Description ----
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "AI Coach",
+                    text = "Personalized Nutrition Intelligence",
                     style = TextStyle(
                         fontFamily = PlusJakartaSans,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
-                        lineHeight = 20.sp,
+                        lineHeight = 21.sp,
                         letterSpacing = (-0.16).sp,
                     ),
-                    color = OmniCardInk,
+                    color = Color.White,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                OmniPlusBadge()
+                Text(
+                    text = "Daily tailored guidance analyzing your calorie pace, macro distribution, and eating habits.",
+                    style = TextStyle(
+                        fontFamily = BodyFont,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.5.sp,
+                        lineHeight = 17.5.sp,
+                        letterSpacing = (-0.12).sp,
+                    ),
+                    color = Color(0xFFDADADA),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
 
-            Spacer(Modifier.height(3.dp))
-
-            Text(
-                text = "Personalized daily guidance based on your week",
-                style = TextStyle(
-                    fontFamily = BodyFont,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp,
-                    letterSpacing = (-0.13).sp,
-                ),
-                color = OmniNutriMacroLabel,
-                maxLines = 2,
+            // ---- Divider Hairline ----
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color.White.copy(alpha = 0.10f)),
             )
-        }
 
-        Spacer(Modifier.width(10.dp))
+            // ---- Bottom Row: Highlight Chips on left, "Open Coach" Pill Action on right ----
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Focus metric tags
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CoachPillTag(text = "✦ Macros")
+                    CoachPillTag(text = "✦ Trends")
+                }
 
-        // Trailing arrow affordance in a subtle circular pill
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(percent = 50))
-                .background(OmniBackground.copy(alpha = 0.85f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_set_arrow_right),
-                contentDescription = "Open AI Coach",
-                colorFilter = ColorFilter.tint(OmniInk),
-                modifier = Modifier.size(16.dp),
-            )
+                // Action CTA with rotated arrow
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color(0xFF8D84F9).copy(alpha = 0.28f),
+                                    Color(0xFFB184E1).copy(alpha = 0.38f),
+                                ),
+                            ),
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.horizontalGradient(
+                                listOf(
+                                    Color(0xFF8D84F9).copy(alpha = 0.55f),
+                                    Color(0xFFF1BBDC).copy(alpha = 0.55f),
+                                ),
+                            ),
+                            shape = RoundedCornerShape(20.dp),
+                        )
+                        .padding(horizontal = 13.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = "Open Coach",
+                        style = TextStyle(
+                            fontFamily = PlusJakartaSans,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            letterSpacing = (-0.12).sp,
+                        ),
+                        color = Color.White,
+                    )
+                    Image(
+                        painter = painterResource(R.drawable.ic_omniplus_arrow),
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun CoachPillTag(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .padding(horizontal = 7.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text = text,
+            style = TextStyle(
+                fontFamily = BodyFont,
+                fontWeight = FontWeight.Medium,
+                fontSize = 10.5.sp,
+                letterSpacing = (-0.1).sp,
+            ),
+            color = Color(0xFFE4E4E7),
+        )
     }
 }
 
@@ -1378,13 +1522,15 @@ private fun previewMeals(): List<Meal> = listOf(
 private fun AiCoachCardPreview() {
     OmniTheme {
         DesignFrame {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(OmniBackground)
                     .padding(vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                AiCoachCard(onClick = {})
+                AiCoachCard(isOmniPlus = false, onClick = {})
+                AiCoachCard(isOmniPlus = true, onClick = {})
             }
         }
     }
