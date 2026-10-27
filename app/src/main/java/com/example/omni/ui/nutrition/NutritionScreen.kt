@@ -2,6 +2,10 @@ package com.example.omni.ui.nutrition
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,6 +42,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -105,6 +112,7 @@ import com.example.omni.ui.theme.OmniNutriGaugeLabel
 import com.example.omni.ui.theme.OmniNutriMacroLabel
 import com.example.omni.ui.theme.OmniNutriUnit
 import com.example.omni.ui.theme.OmniOnInk
+import com.example.omni.ui.theme.OmniSetApply
 import com.example.omni.ui.theme.OmniStepsCream
 import com.example.omni.ui.theme.OmniTheme
 import com.example.omni.ui.theme.OmniWaterTeal
@@ -317,7 +325,7 @@ fun NutritionScreen(
                             FoodLogHeader(onLog = { logMethodOpen = true })
 
                             // The AI Food Coach's entry — visually distinctive premium feature card
-                            Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(10.dp))
                             AiCoachCard(
                                 isOmniPlus = isOmniPlusActive,
                                 onClick = {
@@ -352,7 +360,11 @@ fun NutritionScreen(
                                 }
                             }
 
-                            Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                            Spacer(
+                                Modifier
+                                    .navigationBarsPadding()
+                                    .height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap),
+                            )
                         }
                     }
                 }
@@ -925,211 +937,256 @@ private val AiCoachBorderGradient = listOf(
 )
 
 /**
- * The AI Food Coach's entry card on the Nutrition / Food Log screen.
+ * The AI Food Coach's compact, expandable card on the Nutrition / Food Log screen.
  *
- * Designed in the spirit of Omni's premium gatecards: rich dark [OmniInk] canvas with an
- * iridescent multi-stop border, signature 5-stop Omni Plus gradient badge, gleaming sparkles,
- * authoritative typography, and a prominent CTA pill with the rotated arrow.
+ * Follows the exact Omni Plus premium card design system (`SettingScreen`'s `OmniPlusCard` &
+ * `OmniPlusActiveCard` — Figma node 243-235):
+ * - Solid [OmniInk] (`#302E2E`) surface at `13.dp` corner radius with a subtle gradient hairline border.
+ * - Compact collapsed header by default so it never crowds the Food Log, pairing "AI Coach" with
+ *   the five-stop vertical gradient "Omni Plus" badge + `ic_omniplus_sparkles`, a one-line
+ *   `#DADADA` subtitle, a quick "Ask" pill, and a rotating dropdown chevron.
+ * - Smoothly expands on tap to reveal the weekly analysis breakdown, metric chips, quota status,
+ *   and the `OmniPlusActionRow`-style CTA ("Get today's coaching insight" + `ic_omniplus_arrow`).
  */
 @Composable
 private fun AiCoachCard(
     isOmniPlus: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    initialExpanded: Boolean = false,
 ) {
-    Box(
+    var expanded by rememberSaveable { mutableStateOf(initialExpanded) }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 270f else 90f,
+        animationSpec = OmniMotion.fast(),
+        label = "aiCoachChevron",
+    )
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = ScreenPadding)
-            .pressEffect()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(13.dp))
             .border(
-                width = 1.dp,
+                width = 0.75.dp,
                 brush = Brush.linearGradient(AiCoachBorderGradient),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(13.dp),
             )
-            .background(
-                Brush.linearGradient(
-                    0.0f to Color(0xFF383145),
-                    0.35f to Color(0xFF2B2633),
-                    1.0f to OmniInk,
-                ),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 18.dp),
+            .background(OmniInk)
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 16.dp, vertical = 11.dp),
     ) {
-        Column(
+        // ---- Compact Header Row (Always Visible) ----
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // ---- Top Header: Badge + Tier / Quota indicator ----
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                // Iridescent Omni Plus AI Badge
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.09f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 9.dp, vertical = 4.5.dp),
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_omniplus_sparkles),
-                        contentDescription = null,
-                        modifier = Modifier.size(13.dp),
-                    )
                     Text(
-                        text = "AI COACH",
+                        text = "AI Coach",
                         style = TextStyle(
-                            brush = Brush.horizontalGradient(AiCoachBadgeGradient),
-                            fontFamily = BodyFont,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            letterSpacing = 0.9.sp,
+                            fontFamily = PlusJakartaSans,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.5.sp,
+                            letterSpacing = (-0.15).sp,
                         ),
+                        color = Color.White,
                     )
-                }
 
-                // Member tier or daily session status
-                if (isOmniPlus) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(RoundedCornerShape(percent = 50))
-                                .background(Color(0xFF7AE582)),
-                        )
-                        Text(
-                            text = "Omni+ · Unlimited",
-                            style = TextStyle(
-                                fontFamily = BodyFont,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 11.sp,
-                                letterSpacing = (-0.11).sp,
-                            ),
-                            color = Color.White.copy(alpha = 0.85f),
-                        )
-                    }
-                } else {
+                    Text(
+                        text = "·",
+                        style = TextStyle(
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                        ),
+                        color = Color.White.copy(alpha = 0.35f),
+                    )
+
+                    // Exact 5-stop vertical gradient badge + sparkles from OmniPlusCard (node 243-235)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Text(
-                            text = "Daily Session",
+                            text = "Omni Plus",
                             style = TextStyle(
+                                brush = Brush.verticalGradient(
+                                    0.0277f to AiCoachBadgeGradient[0],
+                                    0.1127f to AiCoachBadgeGradient[1],
+                                    0.2849f to AiCoachBadgeGradient[2],
+                                    0.5218f to AiCoachBadgeGradient[3],
+                                    1f to AiCoachBadgeGradient[4],
+                                ),
                                 fontFamily = BodyFont,
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 11.sp,
-                                letterSpacing = (-0.11).sp,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp,
+                                letterSpacing = (-0.131).sp,
                             ),
-                            color = Color(0xFFDADADA),
+                        )
+                        Image(
+                            painter = painterResource(R.drawable.ic_omniplus_sparkles),
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
                         )
                     }
                 }
-            }
 
-            // ---- Body: Hero Headline & Narrative Description ----
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Personalized Nutrition Intelligence",
-                    style = TextStyle(
-                        fontFamily = PlusJakartaSans,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
-                        lineHeight = 21.sp,
-                        letterSpacing = (-0.16).sp,
-                    ),
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "Daily tailored guidance analyzing your calorie pace, macro distribution, and eating habits.",
+                    text = "Personalized daily nutrition guidance",
                     style = TextStyle(
                         fontFamily = BodyFont,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 12.5.sp,
-                        lineHeight = 17.5.sp,
-                        letterSpacing = (-0.12).sp,
+                        fontSize = 10.5.sp,
                     ),
                     color = Color(0xFFDADADA),
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
 
-            // ---- Divider Hairline ----
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(Color.White.copy(alpha = 0.10f)),
-            )
+            Spacer(Modifier.width(8.dp))
 
-            // ---- Bottom Row: Highlight Chips on left, "Open Coach" Pill Action on right ----
+            // Quick "Ask" pill + Dropdown Chevron
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // Focus metric tags
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CoachPillTag(text = "✦ Macros")
-                    CoachPillTag(text = "✦ Trends")
+                if (!expanded) {
+                    Box(
+                        modifier = Modifier
+                            .pressEffect()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(OmniSetApply.copy(alpha = 0.20f))
+                            .border(0.75.dp, OmniSetApply.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                            .clickable(onClick = onClick)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Ask",
+                            style = TextStyle(
+                                fontFamily = PlusJakartaSans,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
+                                letterSpacing = (-0.11).sp,
+                            ),
+                            color = Color.White,
+                        )
+                    }
                 }
 
-                // Action CTA with rotated arrow
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_omniplus_arrow),
+                        contentDescription = if (expanded) "Collapse AI Coach" else "Expand AI Coach",
+                        modifier = Modifier
+                            .size(14.dp)
+                            .graphicsLayer { rotationZ = chevronRotation },
+                    )
+                }
+            }
+        }
+
+        // ---- Expandable Dropdown Section ----
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(animationSpec = OmniMotion.medium()) + fadeIn(animationSpec = OmniMotion.fast()),
+            exit = shrinkVertically(animationSpec = OmniMotion.medium()) + fadeOut(animationSpec = OmniMotion.fast()),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.12f)),
+                )
+
+                Text(
+                    text = "Reviews your weekly calorie pace, macro balance, and hydration to deliver one focused daily recommendation.",
+                    style = TextStyle(
+                        fontFamily = BodyFont,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 11.5.sp,
+                        lineHeight = 16.sp,
+                    ),
+                    color = Color(0xFFDADADA),
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CoachPillTag(text = "Macros")
+                        CoachPillTag(text = "Calorie Pace")
+                        CoachPillTag(text = "Trends")
+                    }
+
+                    Text(
+                        text = if (isOmniPlus) "Unlimited" else "1 Free / day",
+                        style = TextStyle(
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.5.sp,
+                        ),
+                        color = if (isOmniPlus) OmniSetApply else Color(0xFFDADADA),
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.12f)),
+                )
+
+                // Exact OmniPlusActionRow pattern from SettingScreen.kt
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    Color(0xFF8D84F9).copy(alpha = 0.28f),
-                                    Color(0xFFB184E1).copy(alpha = 0.38f),
-                                ),
-                            ),
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.horizontalGradient(
-                                listOf(
-                                    Color(0xFF8D84F9).copy(alpha = 0.55f),
-                                    Color(0xFFF1BBDC).copy(alpha = 0.55f),
-                                ),
-                            ),
-                            shape = RoundedCornerShape(20.dp),
-                        )
-                        .padding(horizontal = 13.dp, vertical = 6.dp),
+                        .fillMaxWidth()
+                        .pressEffect()
+                        .clickable(onClick = onClick)
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        text = "Open Coach",
+                        text = "Get today's coaching insight",
                         style = TextStyle(
-                            fontFamily = PlusJakartaSans,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp,
-                            letterSpacing = (-0.12).sp,
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.sp,
                         ),
-                        color = Color.White,
+                        color = OmniSetApply,
                     )
                     Image(
                         painter = painterResource(R.drawable.ic_omniplus_arrow),
-                        contentDescription = null,
-                        modifier = Modifier.size(15.dp),
+                        contentDescription = "Open AI Coach",
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -1141,19 +1198,18 @@ private fun AiCoachCard(
 private fun CoachPillTag(text: String) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(5.dp))
             .background(Color.White.copy(alpha = 0.08f))
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            .padding(horizontal = 6.dp, vertical = 2.5.dp),
     ) {
         Text(
             text = text,
             style = TextStyle(
                 fontFamily = BodyFont,
-                fontWeight = FontWeight.Medium,
-                fontSize = 10.5.sp,
-                letterSpacing = (-0.1).sp,
+                fontWeight = FontWeight.Normal,
+                fontSize = 10.sp,
             ),
-            color = Color(0xFFE4E4E7),
+            color = Color(0xFFDADADA),
         )
     }
 }
@@ -1474,7 +1530,7 @@ private val EmptyGap = 16.dp
 private val IdleAlpha = 0.3f
 
 /** Clearance below the last row so the floating bar never covers it. */
-private val ContentBottomGap = 24.dp
+private val ContentBottomGap = 84.dp
 
 @DevicePreviews
 @Composable
@@ -1527,10 +1583,10 @@ private fun AiCoachCardPreview() {
                     .fillMaxWidth()
                     .background(OmniBackground)
                     .padding(vertical = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AiCoachCard(isOmniPlus = false, onClick = {})
-                AiCoachCard(isOmniPlus = true, onClick = {})
+                AiCoachCard(isOmniPlus = false, onClick = {}, initialExpanded = false)
+                AiCoachCard(isOmniPlus = true, onClick = {}, initialExpanded = true)
             }
         }
     }

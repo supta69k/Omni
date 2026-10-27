@@ -271,61 +271,51 @@ private fun ReadyContent(
 
         Spacer(Modifier.height(HeaderToSummaryGap))
 
-        // 2. Main Result: Premium Summary Card
+        // 2. Main Result: Premium Summary Card (matches OmniPlusCard 13.dp & OmniInk surface)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(CardCorner16))
+                .clip(RoundedCornerShape(CardCorner13))
                 .border(
-                    width = 1.dp,
+                    width = 0.75.dp,
                     brush = Brush.linearGradient(CoachBorderGradient),
-                    shape = RoundedCornerShape(CardCorner16),
+                    shape = RoundedCornerShape(CardCorner13),
                 )
-                .background(
-                    Brush.linearGradient(
-                        0.0f to Color(0xFF383145),
-                        0.35f to Color(0xFF282530),
-                        1.0f to OmniInk,
-                    ),
-                )
+                .background(OmniInk)
                 .padding(horizontal = SummaryPaddingH, vertical = SummaryPaddingV),
         ) {
             Column {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
+                    Text(
+                        text = "Today's Intelligence · Omni Plus",
+                        style = TextStyle(
+                            brush = Brush.verticalGradient(*CoachBadgeGradientStops),
+                            fontFamily = BodyFont,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp,
+                            letterSpacing = (-0.12).sp,
+                        ),
+                    )
                     Image(
                         painter = painterResource(R.drawable.ic_omniplus_sparkles),
                         contentDescription = null,
                         modifier = Modifier.size(12.dp),
                     )
-                    Text(
-                        text = "TODAY'S INTELLIGENCE",
-                        style = TextStyle(
-                            brush = Brush.horizontalGradient(CoachBadgeGradient),
-                            fontFamily = PlusJakartaSans,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.sp,
-                            letterSpacing = 0.6.sp,
-                        ),
-                    )
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
 
                 Text(
                     text = guidance.summary,
                     style = TextStyle(
                         fontFamily = BodyFont,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
-                        letterSpacing = (-0.15).sp,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        letterSpacing = (-0.14).sp,
                     ),
                     color = Color.White,
                 )
@@ -429,83 +419,68 @@ private fun LimitContent(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Gate card container matching PremiumGate.kt / OmniPlusCard
+        // Gate card container matching SettingScreen OmniPlusCard (13.dp, OmniInk, hairline divider)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(CardCorner13))
                 .border(
-                    width = 1.dp,
+                    width = 0.75.dp,
                     brush = Brush.linearGradient(CoachBorderGradient),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(CardCorner13),
                 )
-                .background(
-                    Brush.linearGradient(
-                        0.0f to Color(0xFF383145),
-                        0.35f to Color(0xFF27242F),
-                        1.0f to OmniInk,
-                    ),
-                )
-                .padding(horizontal = 20.dp, vertical = 22.dp),
+                .background(OmniInk)
+                .padding(horizontal = 18.dp, vertical = 16.dp),
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Iridescent Omni Plus Badge
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.10f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Text(
                         text = "Omni Plus",
                         style = TextStyle(
-                            brush = Brush.horizontalGradient(CoachBadgeGradient),
+                            brush = Brush.verticalGradient(*CoachBadgeGradientStops),
                             fontFamily = BodyFont,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 12.5.sp,
-                            letterSpacing = (-0.12).sp,
+                            fontSize = 14.sp,
+                            letterSpacing = (-0.14).sp,
                         ),
                     )
                     Image(
                         painter = painterResource(R.drawable.ic_omniplus_sparkles),
                         contentDescription = null,
-                        modifier = Modifier.size(13.dp),
+                        modifier = Modifier.size(14.dp),
                     )
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(6.dp))
 
                 Text(
                     text = "Daily Session Used Up",
                     style = TextStyle(
                         fontFamily = PlusJakartaSans,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 17.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp,
                     ),
                     color = Color.White,
-                    textAlign = TextAlign.Center,
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
 
                 Text(
-                    text = "Free accounts get 1 coach session daily. Subscribe to Omni+ for unlimited intelligence across nutrition, workouts, and vitals.",
+                    text = "Free accounts include 1 coach session daily. Upgrade to Omni+ for unlimited daily nutrition, workout, and vitals intelligence.",
                     style = TextStyle(
                         fontFamily = BodyFont,
                         fontWeight = FontWeight.Normal,
-                        fontSize = 13.sp,
-                        lineHeight = 18.5.sp,
-                        letterSpacing = (-0.13).sp,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        letterSpacing = (-0.12).sp,
                     ),
                     color = Color(0xFFDADADA),
-                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -548,7 +523,7 @@ private fun FailedContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(CardCorner16))
+                .clip(RoundedCornerShape(CardCorner13))
                 .background(OmniFieldSurface)
                 .padding(horizontal = SummaryPaddingH, vertical = SummaryPaddingV),
             contentAlignment = Alignment.Center,
@@ -655,19 +630,19 @@ private fun focusLabel(focus: String): String = when (focus) {
     else -> "Balance"
 }
 
-private val CoachBadgeGradient = listOf(
-    Color(0xFF8D84F9),
-    Color(0xFFAE96EF),
-    Color(0xFFF1BBDC),
-    Color(0xFFFEEBA9),
-    Color(0xFFAFDFDF),
+private val CoachBadgeGradientStops = arrayOf(
+    0.0277f to Color(0xFF8D84F9),
+    0.1127f to Color(0xFFAE96EF),
+    0.2849f to Color(0xFFF1BBDC),
+    0.5218f to Color(0xFFFEEBA9),
+    1.0f to Color(0xFFAFDFDF),
 )
 
 private val CoachBorderGradient = listOf(
-    Color(0xFFF1BBDC),
-    Color(0xFF8D84F9),
-    Color(0xFFB184E1),
-    Color(0x45B3E1E1),
+    Color(0x66F1BBDC),
+    Color(0x558D84F9),
+    Color(0x44B184E1),
+    Color(0x28AFDFDF),
 )
 
 private val SheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -688,7 +663,7 @@ private val SummaryPaddingH = 16.dp
 private val SummaryPaddingV = 14.dp
 private val TipPaddingH = 14.dp
 private val TipPaddingV = 11.dp
-private val CardCorner16 = 16.dp
+private val CardCorner13 = 13.dp
 private val TipCorner12 = 12.dp
 private val ButtonCorner = 20.dp
 private val ButtonHeight = 50.dp

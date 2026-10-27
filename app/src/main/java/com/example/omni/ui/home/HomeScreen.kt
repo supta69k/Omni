@@ -224,7 +224,11 @@ fun HomeScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap))
+                        Spacer(
+                            Modifier
+                                .navigationBarsPadding()
+                                .height(OmniNavHeight + OmniNavBottomGap + ContentBottomGap),
+                        )
                     }
 
                     OmniHeader(
